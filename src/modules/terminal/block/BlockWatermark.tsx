@@ -52,10 +52,9 @@ export function BlockWatermark({ leafId, subscribe }: Props) {
         <Hint label="Browse your command history" keys="↑" />
         <Hint label="Autocomplete paths and commands" keys="Tab" />
         <Hint
-          label="Switch between Shell and AI"
+          label="Toggle Shell input"
           shortcut="terminal.toggleInput"
         />
-        <Hint label="Open the AI assistant" shortcut="ai.toggle" />
       </div>
     </div>
   );
