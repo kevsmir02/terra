@@ -37,8 +37,3 @@ export type AgentNotification = {
 };
 
 export type NotificationKind = "attention" | "finished" | "error";
-
-export type LocalAgentState = {
-  agent: string;
-  status: AgentStatus;
-} | null;

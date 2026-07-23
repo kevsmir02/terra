@@ -1,10 +1,5 @@
 import { create } from "zustand";
-import type {
-  AgentNotification,
-  AgentSession,
-  AgentStatus,
-  LocalAgentState,
-} from "../lib/types";
+import type { AgentNotification, AgentSession, AgentStatus } from "../lib/types";
 
 const MAX_NOTIFICATIONS = 50;
 
@@ -12,12 +7,10 @@ let notifSeq = 0;
 
 type AgentStoreState = {
   sessions: Record<number, AgentSession>;
-  localAgent: LocalAgentState;
   notifications: AgentNotification[];
   start: (leafId: number, tabId: number, agent: string) => void;
   setStatus: (leafId: number, status: AgentStatus) => void;
   finish: (leafId: number) => void;
-  setLocalAgent: (state: LocalAgentState) => void;
   pushNotification: (
     n: Omit<AgentNotification, "id" | "at" | "read">,
   ) => void;
@@ -27,7 +20,6 @@ type AgentStoreState = {
 
 export const useAgentStore = create<AgentStoreState>((set) => ({
   sessions: {},
-  localAgent: null,
   notifications: [],
 
   start: (leafId, tabId, agent) =>
@@ -73,16 +65,6 @@ export const useAgentStore = create<AgentStoreState>((set) => ({
       const next = { ...s.sessions };
       delete next[leafId];
       return { sessions: next };
-    }),
-
-  setLocalAgent: (state) =>
-    set((s) => {
-      const a = s.localAgent;
-      if (a === state) return s;
-      if (a && state && a.status === state.status && a.agent === state.agent) {
-        return s;
-      }
-      return { localAgent: state };
     }),
 
   pushNotification: (n) =>
