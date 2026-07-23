@@ -53,6 +53,24 @@ describe("serializeTabs", () => {
     expect(out.map((t) => t.kind)).toEqual(["terminal", "editor"]);
   });
 
+  it("drops startup-command terminals", () => {
+    const tabs: Tab[] = [
+      term({ id: 1 }),
+      term({ id: 2, startupCommand: "pnpm dev" }),
+      {
+        id: 9,
+        kind: "editor",
+        spaceId: "s1",
+        title: "x",
+        path: "/a/x.ts",
+        dirty: false,
+        preview: false,
+      },
+    ];
+    const out = serializeTabs(tabs);
+    expect(out.map((t) => t.kind)).toEqual(["terminal", "editor"]);
+  });
+
   it("marks the active leaf in a split tree", () => {
     const tree: PaneNode = {
       kind: "split",

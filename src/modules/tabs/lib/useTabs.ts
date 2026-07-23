@@ -38,6 +38,8 @@ export type TerminalTab = TabBase & {
   private?: boolean;
   /** User-set label that overrides the cwd-derived name. Survives cd. */
   customTitle?: string;
+  /** Terminal auto-created to run a space startup command; never serialized. */
+  startupCommand?: string;
 };
 
 export type EditorTab = TabBase & {
@@ -286,24 +288,30 @@ export function useTabs(initial?: Partial<TerminalTab>) {
 
   // Appends a cold terminal tab to a space without stealing focus, so the
   // overview can populate a space in place; it spawns when first opened.
-  const newTabInSpace = useCallback((spaceId: string, cwd?: string) => {
-    const tabId = nextIdRef.current++;
-    const leafId = nextIdRef.current++;
-    setTabs((curr) => [
-      ...curr,
-      {
-        id: tabId,
-        kind: "terminal",
-        spaceId,
-        cold: true,
-        title: cwd ? basename(cwd) : "shell",
-        cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
-        activeLeafId: leafId,
-      },
-    ]);
-    return tabId;
-  }, []);
+  // The optional startupCommand stamps a runtime-only marker so the tab is
+  // excluded from serialization and identified by the startup hook.
+  const newTabInSpace = useCallback(
+    (spaceId: string, cwd?: string, startupCommand?: string) => {
+      const tabId = nextIdRef.current++;
+      const leafId = nextIdRef.current++;
+      setTabs((curr) => [
+        ...curr,
+        {
+          id: tabId,
+          kind: "terminal",
+          spaceId,
+          cold: true,
+          title: cwd ? basename(cwd) : "shell",
+          cwd,
+          paneTree: { kind: "leaf", id: leafId, cwd },
+          activeLeafId: leafId,
+          ...(startupCommand !== undefined && { startupCommand }),
+        },
+      ]);
+      return tabId;
+    },
+    [],
+  );
 
   // Reassigns a tab to another space. Returns true when the moved tab was active
   // and emptied its source space, so the caller should follow it into the target.

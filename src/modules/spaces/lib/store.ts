@@ -9,6 +9,8 @@ export type SpaceMeta = {
   env: WorkspaceEnv;
   /** Opt-in accent, index into SPACE_COLORS. Undefined = theme primary. */
   color?: number;
+  /** Shell commands auto-run in dedicated terminal tabs on first per-session space activation. */
+  startupCommands?: string[];
   createdAt: number;
   updatedAt: number;
 };
@@ -16,6 +18,8 @@ export type SpaceMeta = {
 export type SpaceState = {
   tabs: SerializedTab[];
   activeTabIndex: number;
+  /** [sidebarPct, workspacePct] for the main sidebar|workspace split. Undefined = use global pref. */
+  panelSizes?: number[];
 };
 
 const STORE_PATH = "terax-spaces.json";
