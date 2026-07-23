@@ -62,6 +62,10 @@ The themes below frame every scope decision.
 - [x] Image, PDF, and Markdown preview panes
 - [x] Sandboxed iframe
 
+### Device Preview
+
+- [x] **Embedded Android Device Preview**: Dock and render running system Android emulator/AVD displays directly inside a Terra panel without bundling an emulator. Bundles `scrcpy-server.jar` (Apache-2.0); streams raw H.264 via ADB and decodes with MSE. Input via `adb shell input` in v1.
+
 ### Themes & Customization
 
 - [x] Custom theme builder & bundled presets
@@ -83,7 +87,7 @@ The themes below frame every scope decision.
 
 - [ ] **Terminal <-> Editor Quick Bridge**: Click file/error paths in terminal output to jump straight to the line in CodeMirror; send paths from Explorer to active PTY.
 - [ ] **Smart Dev Server Auto-Docking**: Sniff PTY output for `http://localhost:\d+` and auto-dock/open the web preview tab.
-- [ ] **Embedded Android Device Preview**: Dock and render running system Android emulator/AVD displays directly inside a Terra panel without bundling an emulator.
+
 - [ ] **SSH & Remote Workspace Support**: PTY remote terminal management.
 - [ ] **Inline Terminal Auto-Suggestions**: History-based terminal completions.
 - [ ] **Persistent Session Restore**: Restore terminal scrollback & workspace state on reboot.
