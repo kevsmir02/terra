@@ -2,7 +2,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import type { DevicePreviewTab } from "@/modules/tabs";
 import { MsePlayer } from "./MsePlayer";
-import { inputBridge } from "./inputBridge";
+import { DeviceControlBridge } from "./controlBridge";
 import { AdbMissing, NoDevices, UnauthorizedDevice, ServerFailed } from "./emptyStates";
 
 type Frame = {
@@ -14,6 +14,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<MsePlayer | null>(null);
   const handleRef = useRef<number | null>(null);
+  const bridgeRef = useRef<DeviceControlBridge | null>(null);
   const [status, setStatus] = useState<
     | { kind: "idle" }
     | { kind: "adb-missing" }
@@ -77,6 +78,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
         try {
           [devW, devH] = await invoke<[number, number]>("device_screen_size", { serial: tab.serial });
         } catch { /* keep video fallback in deviceCoords */ }
+        bridgeRef.current = new DeviceControlBridge(handle, devW || 1080, devH || 1920);
         setStatus({ kind: "streaming", devW, devH });
       } catch (e) {
         if (disposed) return;
@@ -92,6 +94,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     void start();
     return () => {
       disposed = true;
+      bridgeRef.current = null;
       if (handleRef.current !== null) {
         const handle = handleRef.current;
         handleRef.current = null;
@@ -108,8 +111,6 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     return <UnauthorizedDevice serial={status.serial} onRefresh={() => location.reload()} />;
   if (status.kind === "error") return <ServerFailed message={status.message} />;
 
-  const { devW = 0, devH = 0 } = status.kind === "streaming" ? status : {};
-
   return (
     <div className="relative h-full w-full">
       <video
@@ -118,9 +119,9 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
         autoPlay
         muted
         playsInline
-        onPointerDown={inputBridge.onPointerDown(tab.serial, devW, devH)}
-        onPointerMove={inputBridge.onPointerMove(tab.serial)}
-        onPointerUp={inputBridge.onPointerUp(tab.serial, devW, devH)}
+        onPointerDown={(e) => bridgeRef.current?.handlePointerDown(e)}
+        onPointerMove={(e) => bridgeRef.current?.handlePointerMove(e)}
+        onPointerUp={(e) => bridgeRef.current?.handlePointerUp(e)}
       />
     </div>
   );
