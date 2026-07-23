@@ -1,7 +1,8 @@
 # Design: Device Preview Pane — ADB/scrcpy Stream Docking
 
 **Date:** 2026-07-23
-**Status:** Approved (brainstorming complete, pending implementation plan)
+**Status:** Approved (spec amended 2026-07-23: v1 uses `control=false` with `adb shell input`;
+binary scrcpy control protocol is v2. Implementation plan written.)
 
 ## Goal
 
@@ -60,15 +61,19 @@ tabs (out of scope for this spec; tracked separately).
    decoder-feeding and message-serialization logic we need into Terra's own
    `src/modules/device/` module, in Terra's style.
 
-4. **Input via scrcpy's binary control protocol; `adb shell input` is the
-   runtime auto-fallback, not an implementation-time choice.** The control
-   protocol is the path of record: pointer/keyboard events become
-   `TouchControlMessage`/`KeyCodeControlMessage` frames written to scrcpy's
-   control socket — multi-touch, drags, pinch, keyboard, sub-50ms latency. The
-   `adb shell input tap / swipe / keyevent` fallback fires *at runtime* per
-   session only when the control socket is closed/malformed/unexpected-version
-   (single-touch, ~50-100ms per event, no gesture composition). It is never
-   chosen at implementation time as "ship the simple one" — see Input Bridge.
+4. **v1 input via `adb shell input`; scrcpy's binary control protocol is v2.**
+   The v1 standalone-server invocation uses `control=false` (required by
+   scrcpy's `raw_stream=true` mode to emit clean Annex-B NALs), so no control
+   socket exists. Pointer/keyboard events become `adb shell input tap <x> <y>`
+   / `adb shell input swipe …` / `adb shell input keyevent <key>` commands
+   dispatched from the frontend to Rust (single-touch, ~50-100ms per event, no
+   gesture composition). This is NOT chosen as "ship the simple one at
+    implementation time" — it is the only path that does not require faking
+    control-protocol bytes against a non-existent socket (see Input Bridge).
+    scrcpy's binary `TouchControlMessage`/`KeyCodeControlMessage` protocol —
+    ported from `ws-scrcpy`'s reference — is a planned v2 enhancement; its
+    serializers are structurally reserved in the architecture but not shipped
+    in v1. See Input Bridge.
 
 5. **Hard YAGNI guards for v1:**
    - One device per pane. Device switching is a dropdown, not multi-pane.
@@ -106,7 +111,8 @@ tabs (out of scope for this spec; tracked separately).
   sequence).
 - `session.rs` — one `DeviceSession` per active preview tab:
   - Fields: `device_serial`, `local_port`, `server_child: tokio::process::Child`,
-    `video_socket`, `control_socket: Option<TcpStream>`, `frame_rx`.
+    `video_socket`, `frame_rx`. v1 runs `control=false` (no control socket —
+    see Decisions §4); a control socket is reserved for v2.
   - Lifecycle: spawn on tab-open, terminate on tab-close (mirrors the lazy
     ref-counted lifecycle of `lsp::session` — spawn while a tab consumes the
     device, kill the server child when the last consumer closes).
@@ -115,14 +121,15 @@ tabs (out of scope for this spec; tracked separately).
 - `remux.rs` — wraps Annex-B NAL units into fragmented MP4 (fMP4) init segment +
   media segments. Implement against a single, pinned scrcpy server version, so
     the demuxer/parser stays version-coupled and trivial. ~50-150 LOC.
-- `control.rs` — writes binary `TouchControlMessage`/`KeyCodeControlMessage`
-  frames to scrcpy's control socket. Port the message-format constants from
-  `ws-scrcpy`'s `ControlMessage` classes (not a dependency — copied, in Terra
-  style, with a `// ported from ws-scrcpy (Apache-2.0)` header).
-- `commands.rs` — `#[tauri::command]` layer: `device_list`, `device_open(serial,
-  on_frame: Channel) -> DeviceHandle`, `device_send_control(handle, msg)`,
-  `device_close(handle)`. Bound to capabilities in
-  `src-tauri/capabilities/default.json`.
+- `commands.rs` — `#[tauri::command]` layer: `device_list`,
+  `device_open(serial, on_frame: Channel) -> DeviceHandle`, `device_close(handle)`,
+  and v1 input dispatch: `device_input_tap(serial, x, y)`,
+  `device_input_swipe(serial, x1, y1, x2, y2, duration_ms)`,
+  `device_input_key(serial, keyevent)`. Each invokes `adb shell input …`
+  via the host `adb`. The binary scrcpy control protocol — ported from
+  `ws-scrcpy`'s `TouchControlMessage`/`KeyCodeControlMessage` classes
+  (Apache-2.0) — is structurally reserved for v2 but not shipped in v1.
+  Bound to capabilities in `src-tauri/capabilities/default.json`.
 
 **Frontend (`src/modules/device/` — new module, shadow of `src/modules/preview/`):**
 - `DevicePreviewPane.tsx` — host the `<video>` element + MSE `SourceBuffer`,
@@ -134,10 +141,11 @@ tabs (out of scope for this spec; tracked separately).
   codecs="avc1.<profile>.<level>"` decoded from the SPS of the first NAL.
 - `DeviceDropdown.tsx` — dropdown of `adb devices -l` results; "Refresh"
   re-polls. Empty states handled in `DevicePreviewPane` (see Empty States).
-- `controlBridge.ts` — canvas pointer/keyboard events → `ControlMessage`
-  binary frames → `invoke('device_send_control', {handle, msg})`. Coordinate
-  mapping (canvas → device-resolution) reuses the size-ratio pattern from
-  `ws-scrcpy`'s `Position`/`Point`/`Size`.
+- `controlBridge.ts` — canvas pointer/keyboard events → `invoke('device_input_tap',
+  {serial, x, y})` / `device_input_swipe` / `device_input_key` (v1: `adb shell
+  input` only; binary scrcpy control protocol is v2). Coordinate mapping (canvas
+  → device-resolution) reuses the size-ratio pattern from `ws-scrcpy`'s
+  `Position`/`Point`/`Size`.
 - `DeviceStack.tsx` — parallel of `preview/PreviewStack.tsx` + `MarkdownStack.tsx`
   for multi-tab render mirroring.
 - `index.ts` — exports.
@@ -214,20 +222,22 @@ tabs (out of scope for this spec; tracked separately).
 [ <video> in DevicePreviewPane.tsx ] <-- user clicks/drags/types
         |
         v
-[ src/modules/device/controlBridge.ts ]
+[ src/modules/device/controlBridge.ts ]   (v1: adb shell input only)
    pointer coords -> device-resolution coords (canvas W x H -> device W x H)
-   pointerdown -> TouchControlMessage{action:DOWN, pointerId, point, pressure}
-   pointermove -> TouchControlMessage{action:MOVE, ...}
-   pointerup   -> TouchControlMessage{action:UP,   ...}
-   keydown     -> KeyCodeControlMessage{action:DOWN, keycode, metaState}
+   pointerdown -> invoke('device_input_tap', {serial, x, y})
+   pointerup   -> if distance > dead-zone: invoke('device_input_swipe',
+                     {serial, x1, y1, x2, y2, durationMs})
+   keydown     -> invoke('device_input_key', {serial, keyevent})
         |
         v
-[ invoke('device_send_control', {handle, msg}) ]
-        |
-        v
-[ src-tauri/modules/device/control.rs ]
-   Write ControlMessage binary frame to control socket
-   -> scrcpy server injects into the device InputManager
+[ src-tauri/modules/device/commands.rs ]   (v1: adb shell input wrappers)
+   device_input_tap  -> Command::new("adb").args(["-s", serial, "shell",
+                         "input", "tap", x, y]).output()
+   device_input_swipe -> Command::new("adb").args(["-s", serial, "shell",
+                         "input", "swipe", x1, y1, x2, y2, durationMs]).output()
+   device_input_key  -> Command::new("adb").args(["-s", serial, "shell",
+                         "input", "keyevent", keyevent]).output()
+   (single-touch, ~50-100ms per event; binary scrcpy control protocol is v2)
 
 [ DevicePreviewTab closed ]
    useTabs close hook -> DeviceHandle.release()
@@ -267,24 +277,24 @@ how `portable-pty`, `xterm.js`, and CodeMirror are attributed.
 codec support, lower-latency control protocol), bump all three version-coupled
 files in one Terra release. Ship notes mention the bundled scrcpy-server version.
 
-## Input Bridge: scrcpy Control Protocol
+## Input Bridge (v1: `adb shell input`; v2: scrcpy binary control protocol)
 
-`ws-scrcpy`'s `TouchControlMessage`/`KeyCodeControlMessage` are binary frames
-matching scrcpy's control protocol (`doc/develop.md`), each ≤ ~25 bytes. Tap,
-drag, pinch, and keyboard work natively through scrcpy's `InputManager` with
-sub-50ms latency. ws-scrcpy's reference TypeScript implementations are the port
-target; the binary layout (`writeInt8`/`writeInt32BE` offsets) is documented in
-the `ws-scrcpy` source as referenced in the audit.
+**v1 input path:** pointer events on the `<video>` are translated to device-space
+coordinates (canvas→device ratio) and dispatched as `adb shell input tap <x> <y>`
+/ `adb shell input swipe <x1 y1 x2 y2> <duration_ms>` / `adb shell input keyevent
+<key>`. Single-touch only, ~50-100ms per event, no drag/pinch/gesture
+composition. This is the path shipped in v1 because the standalone server runs
+with `control=false` (required by `raw_stream=true` to emit clean Annex-B NALs
+without metadata framing), so no control socket exists for the binary protocol.
 
-**Fallback (auto, not user-facing):** the control protocol is the path of record.
-`control.rs` attempts the binary-frame write; on a closed/malformed/unexpected-
-version control socket it transparently degrades per session to `adb shell input
-tap <x> <y>` / `adb shell input swipe <x1 y1 x2 y2>` / `adb shell input keyevent
-<key>`. Single-touch only, ~50-100ms per event, no pinch/drag-composition. There
-is no user-facing toggle: fallback fires when the control socket is unusable, not
-on a config switch. If the implementation finds the control socket path reliable
-across all tested devices/emulators, the `adb shell input` branch becomes dead
-code that can be deleted in a follow-up — recorded here, not silently dropped.
+**v2 target (not shipped):** `ws-scrcpy`'s `TouchControlMessage` /
+`KeyCodeControlMessage` binary frames (each ≤ ~28 bytes) matching scrcpy's
+control protocol. Tap, drag, pinch, and keyboard work natively through scrcpy's
+`InputManager` with sub-50ms latency. This becomes viable when Terra ships a
+server configuration that keeps a control socket alive alongside the raw stream;
+shipping binary control-protocol code against the v1 `control=false` socket
+topology would be faking it. The serializers are reserved but unimplemented in
+v1. Reach for this when multi-touch latency becomes the top user complaint.
 
 ## Empty States & Error Handling
 
