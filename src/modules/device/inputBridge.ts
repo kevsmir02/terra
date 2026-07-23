@@ -43,7 +43,7 @@ export const inputBridge = {
       const { x, y } = deviceCoords(e.currentTarget, e.clientX, e.clientY, devW, devH);
       active = { startSerial: serial, startX: x, startY: y, downAt: Date.now() };
       e.currentTarget.setPointerCapture(e.pointerId);
-      void invoke("device_input_tap", { serial, x, y }).catch(() => {});
+      // Defer tap to pointerup — firing a tap on mousedown breaks hold+drag.
     };
   },
   onPointerMove(serial: string) {
