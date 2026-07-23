@@ -304,6 +304,8 @@ pub fn run() {
             history::history_record,
             history::history_list,
             device::commands::device_list,
+            device::commands::device_list_avds,
+            device::commands::device_launch_avd,
             device::commands::device_open,
             device::commands::device_close,
             device::commands::device_input_tap,

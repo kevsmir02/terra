@@ -1,7 +1,7 @@
 use tauri::ipc::Channel;
 use tauri::State;
 
-use super::adb::{list_devices, resolve_adb_path, DeviceEntry};
+use super::adb::{launch_avd, list_avds, list_devices, resolve_adb_path, resolve_emulator_path, DeviceEntry};
 use super::session::{DeviceFrame, DeviceSession};
 use super::state::DeviceState;
 
@@ -11,6 +11,22 @@ pub async fn device_list() -> Result<Vec<DeviceEntry>, String> {
     tauri::async_runtime::spawn_blocking(move || list_devices(&adb))
         .await
         .map_err(|e| format!("device_list join: {e}"))?
+}
+
+#[tauri::command]
+pub async fn device_list_avds() -> Result<Vec<String>, String> {
+    let emulator = resolve_emulator_path()?;
+    tauri::async_runtime::spawn_blocking(move || list_avds(&emulator))
+        .await
+        .map_err(|e| format!("device_list_avds join: {e}"))?
+}
+
+#[tauri::command]
+pub async fn device_launch_avd(name: String) -> Result<(), String> {
+    let emulator = resolve_emulator_path()?;
+    tauri::async_runtime::spawn_blocking(move || launch_avd(&emulator, &name))
+        .await
+        .map_err(|e| format!("device_launch_avd join: {e}"))?
 }
 
 /// Pick an ephemeral localhost port for the session's adb forward. Not

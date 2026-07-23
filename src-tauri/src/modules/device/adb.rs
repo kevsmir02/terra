@@ -16,6 +16,54 @@ pub fn resolve_adb_path() -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+pub fn resolve_emulator_path() -> Result<PathBuf, String> {
+    if let Ok(path) = which::which("emulator") {
+        return Ok(path);
+    }
+    if let Ok(home) = std::env::var("ANDROID_HOME").or_else(|_| std::env::var("ANDROID_SDK_ROOT")) {
+        let p = PathBuf::from(home).join("emulator").join("emulator");
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+    if let Some(home_dir) = dirs::home_dir() {
+        let candidate = home_dir.join("Android").join("Sdk").join("emulator").join("emulator");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("emulator CLI not found on PATH or Android SDK directory".to_string())
+}
+
+pub fn list_avds(emulator: &std::path::Path) -> Result<Vec<String>, String> {
+    let out = std::process::Command::new(emulator)
+        .arg("-list-avds")
+        .output()
+        .map_err(|e| format!("emulator -list-avds failed: {e}"))?;
+    if !out.status.success() {
+        return Err("emulator -list-avds failed".to_string());
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let avds = stdout
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    Ok(avds)
+}
+
+pub fn launch_avd(emulator: &std::path::Path, name: &str) -> Result<(), String> {
+    std::process::Command::new(emulator)
+        .arg("-avd")
+        .arg(name)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("failed to launch AVD '{name}': {e}"))?;
+    Ok(())
+}
+
 pub fn parse_devices_output(stdout: &str) -> Vec<DeviceEntry> {
     let mut out = Vec::new();
     let mut past_header = false;
