@@ -1,14 +1,14 @@
 # Roadmap
 
-Terax direction, what's shipped, what's coming, and what's deliberately out of scope.
+Terra direction, what's shipped, what's coming, and what's deliberately out of scope.
 
-## What Terax is
+## What Terra is
 
-Terax is a fast, lightweight terminal IDE designed for developers who run CLI agent harnesses (Pi, OpenCode, Antigravity CLI, Claude Code) directly in the terminal. It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor (CodeMirror 6), a file explorer, source control with git graph, and a web preview pane, eliminating the need to Alt-Tab between tools. Under 10 MB on disk. No telemetry.
+Terra is a fast, lightweight Terminal IDE (agentic development workspace) designed for developers who run CLI agent harnesses (Pi, OpenCode, Antigravity CLI, Claude Code) directly in the terminal. It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor (CodeMirror 6), a file explorer, source control with git graph, and a web preview pane—eliminating the need to Alt-Tab between tools. Under 10 MB on disk. No telemetry.
 
 The product is opinionated: terminal-first, zero-bloat, CLI-agent workflow optimized, lightweight always, cross-platform without compromise.
 
-## What Terax is not
+## What Terra is not
 
 - Not a full IDE replacement. Heavy IDE features that overlap with VS Code / Cursor / Zed are out of scope.
 - Not a browser. Web preview exists for local dev servers and lightweight doc viewing only.
