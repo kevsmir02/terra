@@ -391,12 +391,13 @@ mod tests {
             width: 1080,
             height: 1920,
             pressure: 0xFFFF,
+            action_button: 1,
             buttons: 1,
         }).unwrap();
 
         let mut buf = [0u8; 32];
         let n = socket.read(&mut buf).unwrap();
-        assert_eq!(n, 28);
+        assert_eq!(n, 32);
         assert_eq!(buf[0], 2); // TYPE_INJECT_TOUCH = 2
         assert_eq!(buf[1], 0); // Action = Down = 0
 

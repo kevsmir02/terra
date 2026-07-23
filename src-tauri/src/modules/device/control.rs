@@ -28,6 +28,7 @@ pub enum ControlMessage {
         width: u16,
         height: u16,
         pressure: u16,
+        action_button: u32,
         buttons: u32,
     },
     InjectKeycode {
@@ -41,8 +42,8 @@ pub enum ControlMessage {
         y: u32,
         width: u16,
         height: u16,
-        h: i32,
-        v: i32,
+        h: i16,
+        v: i16,
         buttons: u32,
     },
 }
@@ -57,9 +58,10 @@ pub fn serialize_control_message(msg: &ControlMessage) -> Vec<u8> {
             width,
             height,
             pressure,
+            action_button,
             buttons,
         } => {
-            let mut buf = Vec::with_capacity(28);
+            let mut buf = Vec::with_capacity(32);
             buf.push(2); // Type 2 = INJECT_TOUCH_EVENT
             buf.push(*action as u8);
             buf.extend_from_slice(&pointer_id.to_be_bytes());
@@ -68,6 +70,7 @@ pub fn serialize_control_message(msg: &ControlMessage) -> Vec<u8> {
             buf.extend_from_slice(&width.to_be_bytes());
             buf.extend_from_slice(&height.to_be_bytes());
             buf.extend_from_slice(&pressure.to_be_bytes());
+            buf.extend_from_slice(&action_button.to_be_bytes());
             buf.extend_from_slice(&buttons.to_be_bytes());
             buf
         }
@@ -94,7 +97,7 @@ pub fn serialize_control_message(msg: &ControlMessage) -> Vec<u8> {
             v,
             buttons,
         } => {
-            let mut buf = Vec::with_capacity(25);
+            let mut buf = Vec::with_capacity(21);
             buf.push(3); // Type 3 = INJECT_SCROLL_EVENT
             buf.extend_from_slice(&x.to_be_bytes());
             buf.extend_from_slice(&y.to_be_bytes());
@@ -122,10 +125,11 @@ mod tests {
             width: 1080,
             height: 1920,
             pressure: 0xFFFF,
+            action_button: 1,
             buttons: 1,
         };
         let bytes = serialize_control_message(&msg);
-        assert_eq!(bytes.len(), 28);
+        assert_eq!(bytes.len(), 32);
         assert_eq!(bytes[0], 2); // Type 2 = INJECT_TOUCH_EVENT
         assert_eq!(bytes[1], 0); // Action 0 = Down
         assert_eq!(&bytes[2..10], &(-1i64).to_be_bytes());
@@ -135,6 +139,7 @@ mod tests {
         assert_eq!(&bytes[20..22], &1920u16.to_be_bytes());
         assert_eq!(&bytes[22..24], &0xFFFFu16.to_be_bytes());
         assert_eq!(&bytes[24..28], &1u32.to_be_bytes());
+        assert_eq!(&bytes[28..32], &1u32.to_be_bytes());
     }
 
     #[test]
@@ -166,14 +171,14 @@ mod tests {
             buttons: 0,
         };
         let bytes = serialize_control_message(&msg);
-        assert_eq!(bytes.len(), 25);
+        assert_eq!(bytes.len(), 21);
         assert_eq!(bytes[0], 3); // Type 3 = INJECT_SCROLL_EVENT
         assert_eq!(&bytes[1..5], &100u32.to_be_bytes());
         assert_eq!(&bytes[5..9], &200u32.to_be_bytes());
         assert_eq!(&bytes[9..11], &1080u16.to_be_bytes());
         assert_eq!(&bytes[11..13], &1920u16.to_be_bytes());
-        assert_eq!(&bytes[13..17], &0i32.to_be_bytes());
-        assert_eq!(&bytes[17..21], &(-5i32).to_be_bytes());
-        assert_eq!(&bytes[21..25], &0u32.to_be_bytes());
+        assert_eq!(&bytes[13..15], &0i16.to_be_bytes());
+        assert_eq!(&bytes[15..17], &(-5i16).to_be_bytes());
+        assert_eq!(&bytes[17..21], &0u32.to_be_bytes());
     }
 }

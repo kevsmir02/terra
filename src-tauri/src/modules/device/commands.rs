@@ -96,6 +96,8 @@ pub(crate) async fn device_send_touch_impl(
         1 => TouchAction::Up,
         _ => TouchAction::Move,
     };
+    let action_button = if matches!(act, TouchAction::Down | TouchAction::Up) { 1 } else { 0 };
+    let buttons = if matches!(act, TouchAction::Down | TouchAction::Move) { 1 } else { 0 };
     let msg = ControlMessage::InjectTouch {
         action: act,
         pointer_id,
@@ -104,7 +106,8 @@ pub(crate) async fn device_send_touch_impl(
         width,
         height,
         pressure: 0xFFFF,
-        buttons: 1,
+        action_button,
+        buttons,
     };
 
     let serial = {
