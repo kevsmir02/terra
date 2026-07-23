@@ -14,11 +14,13 @@ import {
   Delete02Icon,
   PencilEdit02Icon,
   PlusSignIcon,
+  Settings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { InlineRename } from "./components/InlineRename";
+import { SpaceSettingsPopover } from "./components/SpaceSettingsPopover";
 import { accentFor } from "./lib/spaceColor";
 import type { SpaceMeta } from "./lib/store";
 import { useSpaces } from "./lib/useSpaces";
@@ -454,6 +456,16 @@ function SpaceRow({
               data-no-drag
               className="hidden shrink-0 items-center gap-0.5 group-hover:flex"
             >
+              <SpaceSettingsPopover
+                space={space}
+                trigger={
+                  <RowAction
+                    icon={Settings01Icon}
+                    label="Space settings"
+                    onClick={() => {}}
+                  />
+                }
+              />
               <RowAction
                 icon={PencilEdit02Icon}
                 label="Rename space"
