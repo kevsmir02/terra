@@ -21,6 +21,7 @@ import {
   useApplyEditorFontSize,
   useEditorFileSync,
 } from "@/modules/editor";
+import { DeviceDropdown } from "@/modules/device";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import {
@@ -113,6 +114,7 @@ export default function App() {
     openFileTab,
     pinTab,
     newPreviewTab,
+    newDevicePreviewTab,
     newMarkdownTab,
     setMarkdownView,
     setOverrideLanguage,
@@ -1098,7 +1100,7 @@ export default function App() {
                         onPathDeleted={handlePathDeleted}
                         onRevealInTerminal={cdInNewTab}
                       />
-                    ) : (
+                    ) : sidebarView === "source-control" ? (
                       <SourceControlPanel
                         open
                         sourceControl={sourceControl}
@@ -1107,6 +1109,8 @@ export default function App() {
                         onOpenFile={handleOpenFile}
                         onNavigateToPath={cdInNewTab}
                       />
+                    ) : (
+                      <DeviceDropdown onPick={(serial) => newDevicePreviewTab(serial)} />
                     )}
                   </div>
                   <SidebarRail

@@ -580,6 +580,22 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return id;
   }, []);
 
+  const newDevicePreviewTab = useCallback((serial: string) => {
+    const id = nextIdRef.current++;
+    setTabs((t) => [
+      ...t,
+      {
+        id,
+        kind: "device-preview" as const,
+        spaceId: activeSpaceIdRef.current,
+        serial,
+        deviceHandle: null,
+      },
+    ]);
+    setActiveId(id);
+    return id;
+  }, []);
+
   const newMarkdownTab = useCallback((path: string) => {
     let targetId: number | null = null;
     setTabs((curr) => {
@@ -1092,6 +1108,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     openFileTab,
     pinTab,
     newPreviewTab,
+    newDevicePreviewTab,
     newMarkdownTab,
     setMarkdownView,
     openGitDiffTab,

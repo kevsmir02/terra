@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
+import { DeviceStack } from "@/modules/device";
 import { EditorStack, GitDiffStack } from "@/modules/editor";
 import { GitHistoryStack } from "@/modules/git-history";
 import { MarkdownStack } from "@/modules/markdown";
@@ -61,6 +62,7 @@ export function WorkspaceSurface({
   const isMarkdownTab = kind === "markdown";
   const isGitDiffTab = kind === "git-diff" || kind === "git-commit-file";
   const isGitHistoryTab = kind === "git-history";
+  const isDevicePreviewTab = kind === "device-preview";
 
   return (
     <div className="relative h-full min-h-0">
@@ -146,6 +148,15 @@ export function WorkspaceSurface({
           onOpenCommitFile={onOpenCommitFile}
           onSearchHandle={onGitHistorySearchHandle}
         />
+      </div>
+      <div
+        className={cn(
+          "absolute inset-0",
+          !isDevicePreviewTab && "invisible pointer-events-none",
+        )}
+        aria-hidden={!isDevicePreviewTab}
+      >
+        <DeviceStack tabs={tabs} activeId={activeId} />
       </div>
     </div>
   );
