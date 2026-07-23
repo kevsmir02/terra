@@ -8,7 +8,7 @@
     "src/styles/globals.css"
   ],
   "project": ["src/**/*.{ts,tsx}"],
-  "ignore": ["src/components/ui/**", "src/components/ai-elements/**"],
+  "ignore": ["src/components/ui/**"],
   "ignoreDependencies": [
     "@size-limit/file",
     "@tauri-apps/plugin-log",
