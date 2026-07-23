@@ -26,7 +26,7 @@ The themes below frame every scope decision.
 
 ## Shipped
 
-### Terminal
+### Terminal & Spaces
 
 - [x] Multi-tab terminal with WebGL renderer
 - [x] Native PTY backend (zsh, bash, pwsh, fish, cmd)
@@ -36,6 +36,7 @@ The themes below frame every scope decision.
 - [x] Drag and drop in terminal (files as quoted paths)
 - [x] OSC 777 terminal agent detection & status notifications for CLI agents
 - [x] WSL bridge as workspace environment
+- [x] **Project Profiles & Auto-Launch**: Extended Spaces to save resizable panel split ratios (`panelSizes`) and auto-run startup commands (`startupCommands: ["pnpm dev", "pi"]`).
 
 ### Editor
 
@@ -79,9 +80,9 @@ The themes below frame every scope decision.
 
 ### Coming next
 
-- [ ] **Project Profiles & Auto-Launch**: Extend Spaces to save resizable panel split ratios and auto-run startup commands (`pnpm dev`, `pi`, etc.).
 - [ ] **Terminal <-> Editor Quick Bridge**: Click file/error paths in terminal output to jump straight to the line in CodeMirror; send paths from Explorer to active PTY.
 - [ ] **Smart Dev Server Auto-Docking**: Sniff PTY output for `http://localhost:\d+` and auto-dock/open the web preview tab.
+- [ ] **Hybrid Diagnostics & Lazy-Loaded LSP**: Option 2 on-save diagnostics by default; opt-in master LSP toggle with auto-kill session lifecycle.
 - [ ] **SSH & Remote Workspace Support**: PTY remote terminal management.
 - [ ] **Inline Terminal Auto-Suggestions**: History-based terminal completions.
 - [ ] **Persistent Session Restore**: Restore terminal scrollback & workspace state on reboot.
