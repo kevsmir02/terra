@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, fs, git, history, lsp, pty, shell, workspace};
+use modules::{agent, device, fs, git, history, lsp, pty, shell, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -223,6 +223,7 @@ pub fn run() {
         .manage(fs::watch::FsWatchState::default())
         .manage(history::HistoryState::default())
         .manage(lsp::LspState::default())
+        .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
@@ -302,6 +303,12 @@ pub fn run() {
             history::history_commands,
             history::history_record,
             history::history_list,
+            device::commands::device_list,
+            device::commands::device_open,
+            device::commands::device_close,
+            device::commands::device_input_tap,
+            device::commands::device_input_swipe,
+            device::commands::device_input_key,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
