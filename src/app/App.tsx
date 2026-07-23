@@ -52,6 +52,7 @@ import {
   SpaceSwitcher,
   useSpacePersistence,
   useSpaces,
+  useSpaceStartup,
   useSpacesBoot,
 } from "@/modules/spaces";
 import { StatusBar } from "@/modules/statusbar";
@@ -212,11 +213,17 @@ export default function App() {
     adoptWorkspaceEnv,
   });
 
+  const activeSidebarPctRef = useRef<number | undefined>(undefined);
+  const [activeSidebarPct, setActiveSidebarPct] = useState<number | undefined>(
+    undefined,
+  );
+
   useSpacePersistence({
     tabs,
     activeId,
     activeSpaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
     enabled: spacesHydrated,
+    activeSidebarPct,
   });
 
   const prevSpaceRef = useRef(activeSpaceId);
@@ -264,6 +271,17 @@ export default function App() {
     persistSidebarWidth,
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
+
+  useSpaceStartup({
+    ready: spacesHydrated,
+    activeSpaceId,
+    tabsRef,
+    setActiveId,
+    newTerminalInSpace: newTabInSpace,
+    sidebarRef,
+    sidebarMinPct: Math.round((SIDEBAR_MIN_WIDTH / window.innerWidth) * 100) || 10,
+    sidebarMaxPct: Math.round((SIDEBAR_MAX_WIDTH / window.innerWidth) * 100) || 50,
+  });
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1055,6 +1073,11 @@ export default function App() {
                 onResize={(size) => {
                   if (size.inPixels > 0) persistSidebarWidth(size.inPixels);
                   persistSidebarCollapsed(size.inPixels <= 0);
+                  if (size.inPixels > 0 && size.asPercentage > 0) {
+                    const pct = size.asPercentage;
+                    activeSidebarPctRef.current = pct;
+                    setActiveSidebarPct(pct);
+                  }
                 }}
               >
                 <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-card">
