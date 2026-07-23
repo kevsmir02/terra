@@ -43,6 +43,7 @@ The themes below frame every scope decision.
 - [x] Multi-language support (TypeScript / JavaScript, Rust, Python, HTML / CSS, JSON, Markdown, Go, C / C++ / Java / C#, PHP)
 - [x] Vim mode
 - [x] Prebuilt & custom editor themes
+- [x] **Hybrid Diagnostics & Lazy-Loaded LSP**: Default zero-RAM on-save diagnostics & statusbar indicator; ref-counted lazy LSP session lifecycle with idle shutdown.
 
 ### File Explorer
 
@@ -82,7 +83,6 @@ The themes below frame every scope decision.
 
 - [ ] **Terminal <-> Editor Quick Bridge**: Click file/error paths in terminal output to jump straight to the line in CodeMirror; send paths from Explorer to active PTY.
 - [ ] **Smart Dev Server Auto-Docking**: Sniff PTY output for `http://localhost:\d+` and auto-dock/open the web preview tab.
-- [ ] **Hybrid Diagnostics & Lazy-Loaded LSP**: Option 2 on-save diagnostics by default; opt-in master LSP toggle with auto-kill session lifecycle.
 - [ ] **SSH & Remote Workspace Support**: PTY remote terminal management.
 - [ ] **Inline Terminal Auto-Suggestions**: History-based terminal completions.
 - [ ] **Persistent Session Restore**: Restore terminal scrollback & workspace state on reboot.
