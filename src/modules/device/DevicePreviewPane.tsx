@@ -5,9 +5,9 @@ import { MsePlayer } from "./MsePlayer";
 import { inputBridge } from "./inputBridge";
 import { AdbMissing, NoDevices, UnauthorizedDevice, ServerFailed } from "./emptyStates";
 
-type Frame = { kind: number; bytes: Uint8Array };
+type Frame = { kind: number; bytes: ArrayBuffer };
 
-export function DevicePreviewPane({ tab, visible }: { tab: DevicePreviewTab; visible: boolean }) {
+export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<MsePlayer | null>(null);
   const [status, setStatus] = useState<
@@ -21,7 +21,6 @@ export function DevicePreviewPane({ tab, visible }: { tab: DevicePreviewTab; vis
 
   useEffect(() => {
     let disposed = false;
-    let frameChannel: Channel | null = null;
 
     async function start() {
       try {
@@ -34,7 +33,6 @@ export function DevicePreviewPane({ tab, visible }: { tab: DevicePreviewTab; vis
 
         // Open the channel + session.
         const ch = new Channel<Frame>();
-        frameChannel = ch;
         ch.onmessage = (frame) => {
           // bytes arrive as a Uint8Array (Tauri's Uint8Array wire form).
           playerRef.current?.pushData(frame.kind, frame.bytes);
