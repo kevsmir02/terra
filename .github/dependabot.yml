@@ -3,10 +3,10 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     cooldown:
-      default-days: 3
+      default-days: 7
     groups:
       npm-dev:
         dependency-type: development
@@ -22,10 +22,10 @@ updates:
   - package-ecosystem: cargo
     directory: "/src-tauri"
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     cooldown:
-      default-days: 3
+      default-days: 7
     groups:
       cargo:
         patterns:
@@ -37,7 +37,7 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       github-actions:
         patterns:
