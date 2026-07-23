@@ -18,16 +18,22 @@ export class MsePlayer {
   }
 
   private onSourceOpen = () => {
-    if (!this.codecString) {
-      // Codec discovered from the init segment; until then we cannot add a
-      // SourceBuffer. Buffer the bytes — the init segment arrives first.
-      return;
+    if (this.codecString && !this.sourceBuffer) {
+      this.initSourceBuffer();
     }
-    this.sourceBuffer = this.mediaSource.addSourceBuffer(this.codecString);
-    this.sourceBuffer.mode = "segments";
-    this.sourceBuffer.addEventListener("updateend", this.onUpdateEnd);
-    this.flushPending();
   };
+
+  private initSourceBuffer() {
+    if (!this.codecString || this.sourceBuffer) return;
+    try {
+      this.sourceBuffer = this.mediaSource.addSourceBuffer(this.codecString);
+      this.sourceBuffer.mode = "segments";
+      this.sourceBuffer.addEventListener("updateend", this.onUpdateEnd);
+      this.flushPending();
+    } catch (e) {
+      console.error("[device] addSourceBuffer failed:", e);
+    }
+  }
 
   private onUpdateEnd = () => this.flushPending();
 
@@ -47,6 +53,9 @@ export class MsePlayer {
       );
       const remainder = bytes.slice(4 + len);
       this.pending.push(remainder);
+      if (!this.sourceBuffer && this.mediaSource.readyState === "open") {
+        this.initSourceBuffer();
+      }
     } else {
       this.pending.push(bytes);
     }

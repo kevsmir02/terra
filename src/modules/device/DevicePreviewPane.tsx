@@ -5,7 +5,10 @@ import { MsePlayer } from "./MsePlayer";
 import { inputBridge } from "./inputBridge";
 import { AdbMissing, NoDevices, UnauthorizedDevice, ServerFailed } from "./emptyStates";
 
-type Frame = { kind: number; bytes: ArrayBuffer };
+type Frame = {
+  kind: number;
+  bytes: ArrayBuffer | Uint8Array | number[] | Record<string, number>;
+};
 
 export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -34,8 +37,20 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
         // Open the channel + session.
         const ch = new Channel<Frame>();
         ch.onmessage = (frame) => {
-          // bytes arrive as a Uint8Array (Tauri's Uint8Array wire form).
-          playerRef.current?.pushData(frame.kind, frame.bytes);
+          let raw: ArrayBuffer;
+          const bytes: unknown = frame.bytes;
+          if (bytes instanceof ArrayBuffer) {
+            raw = bytes;
+          } else if (bytes instanceof Uint8Array) {
+            raw = new Uint8Array(bytes).slice().buffer;
+          } else if (Array.isArray(bytes)) {
+            raw = new Uint8Array(bytes).buffer;
+          } else if (bytes && typeof bytes === "object") {
+            raw = new Uint8Array(Object.values(bytes as Record<string, number>)).buffer;
+          } else {
+            return;
+          }
+          playerRef.current?.pushData(frame.kind, raw);
         };
         const handle = await invoke<number>("device_open", {
           serial: tab.serial,
