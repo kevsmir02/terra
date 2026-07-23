@@ -72,6 +72,9 @@ export const inputBridge = {
           y2: y,
           durationMs: duration,
         }).catch(() => {});
+      } else {
+        // No significant movement → pure tap.
+        void invoke("device_input_tap", { serial, x, y }).catch(() => {});
       }
       active = null;
     };
