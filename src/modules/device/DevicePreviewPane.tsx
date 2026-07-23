@@ -13,6 +13,7 @@ type Frame = {
 export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<MsePlayer | null>(null);
+  const handleRef = useRef<number | null>(null);
   const [status, setStatus] = useState<
     | { kind: "idle" }
     | { kind: "adb-missing" }
@@ -29,6 +30,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
       try {
         // Pre-flight: ensure devices list contains our serial and is authorized.
         const devices = await invoke<{ serial: string; state: string }[]>("device_list");
+        if (disposed) return;
         const match = devices.find((d) => d.serial === tab.serial);
         if (!match) return setStatus({ kind: "no-devices" });
         if (match.state === "unauthorized") return setStatus({ kind: "unauthorized", serial: tab.serial });
@@ -36,7 +38,12 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
 
         // Open the channel + session.
         const ch = new Channel<Frame>();
+        let frameCount = 0;
         ch.onmessage = (frame) => {
+          frameCount++;
+          if ((frameCount & 0x7) === 0) {
+            console.info("[device] channel frames received:", frameCount, "kind=", frame.kind);
+          }
           let raw: ArrayBuffer;
           const bytes: unknown = frame.bytes;
           if (bytes instanceof ArrayBuffer) {
@@ -48,6 +55,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
           } else if (bytes && typeof bytes === "object") {
             raw = new Uint8Array(Object.values(bytes as Record<string, number>)).buffer;
           } else {
+            console.warn("[device] channel: unknown frame.bytes shape; dropping");
             return;
           }
           playerRef.current?.pushData(frame.kind, raw);
@@ -60,15 +68,10 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
           void invoke("device_close", { handle }).catch(() => {});
           return;
         }
-        // Store the handle on the tab via a patch; the parent owns the tab state.
-        // For v1 we keep this as a local mutation via a callback prop OR through
-        // the parent's tab-patch pipeline (pattern used by other tab kinds).
-        // The wire-side glue is filled in Task 7 step 2's close handler: it
-        // expects tab.deviceHandle to be set. The simplest path is to have the
-        // parent wire device_open/device_close so the pane never touches the
-        // handle directly; for v1 we lean on the parent wiring done in Task 9.
+        handleRef.current = handle;
         setStatus({ kind: "streaming" });
       } catch (e) {
+        if (disposed) return;
         const msg = String(e);
         if (msg.includes("adb not found")) setStatus({ kind: "adb-missing" });
         else setStatus({ kind: "error", message: msg });
@@ -81,6 +84,11 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     void start();
     return () => {
       disposed = true;
+      if (handleRef.current !== null) {
+        const handle = handleRef.current;
+        handleRef.current = null;
+        void invoke("device_close", { handle }).catch(() => {});
+      }
       playerRef.current?.dispose();
       playerRef.current = null;
     };

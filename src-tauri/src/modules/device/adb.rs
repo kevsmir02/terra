@@ -11,9 +11,22 @@ pub struct DeviceEntry {
 }
 
 pub fn resolve_adb_path() -> Result<PathBuf, String> {
-    let candidate = which::which("adb")
-        .map_err(|_| "adb not found on PATH — install Android Platform Tools".to_string())?;
-    Ok(candidate)
+    if let Ok(path) = which::which("adb") {
+        return Ok(path);
+    }
+    if let Ok(home) = std::env::var("ANDROID_HOME").or_else(|_| std::env::var("ANDROID_SDK_ROOT")) {
+        let p = PathBuf::from(home).join("platform-tools").join("adb");
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+    if let Some(home_dir) = dirs::home_dir() {
+        let candidate = home_dir.join("Android").join("Sdk").join("platform-tools").join("adb");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("adb not found on PATH or Android SDK directory — install Android Platform Tools".to_string())
 }
 
 pub fn resolve_emulator_path() -> Result<PathBuf, String> {

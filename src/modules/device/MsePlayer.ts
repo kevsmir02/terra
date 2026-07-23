@@ -8,6 +8,7 @@ export class MsePlayer {
   private sourceBuffer: SourceBuffer | null = null;
   private pending: ArrayBuffer[] = [];
   private codecString: string | null = null;
+  private appendCount = 0;
   readonly video: HTMLVideoElement;
 
   constructor(video: HTMLVideoElement) {
@@ -18,6 +19,7 @@ export class MsePlayer {
   }
 
   private onSourceOpen = () => {
+    console.info("[device] MSE: sourceopen, readyState=", this.mediaSource.readyState);
     if (this.codecString && !this.sourceBuffer) {
       this.initSourceBuffer();
     }
@@ -26,12 +28,18 @@ export class MsePlayer {
   private initSourceBuffer() {
     if (!this.codecString || this.sourceBuffer) return;
     try {
-      this.sourceBuffer = this.mediaSource.addSourceBuffer(this.codecString);
-      this.sourceBuffer.mode = "segments";
+      const mimeType = this.codecString.startsWith("video/")
+        ? this.codecString
+        : `video/mp4; codecs="${this.codecString}"`;
+      console.info("[device] MSE: addSourceBuffer", mimeType);
+      this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
+      // ponytail: "sequence" (default) is more tolerant than "segments" — Chrome
+      // doesn't require styp/sidx boxes between our per-NAL moof+mdat fragments.
+      // Switch to "segments" only when we batch full access units + add styp.
       this.sourceBuffer.addEventListener("updateend", this.onUpdateEnd);
       this.flushPending();
     } catch (e) {
-      console.error("[device] addSourceBuffer failed:", e);
+      console.error("[device] MSE: addSourceBuffer FAILED:", e);
     }
   }
 
@@ -52,6 +60,10 @@ export class MsePlayer {
         new Uint8Array(bytes, 4, len),
       );
       const remainder = bytes.slice(4 + len);
+      console.info(
+        "[device] MSE: recv INIT kind=0 codec=", this.codecString,
+        "frameLen=", bytes.byteLength, "moovLen=", remainder.byteLength,
+      );
       this.pending.push(remainder);
       if (!this.sourceBuffer && this.mediaSource.readyState === "open") {
         this.initSourceBuffer();
@@ -67,10 +79,38 @@ export class MsePlayer {
     const next = this.pending.shift();
     if (next === undefined) return;
     try {
+      // DIAGNOSTIC: hex-dump first 32 bytes of the first 3 fragments so we can
+      // verify fMP4 box structure byte-for-byte vs the ISO spec on disk.
+      if (this.appendCount < 2) {
+        const v = new Uint8Array(next, 0, Math.min(next.byteLength, 64));
+        const hex = Array.from(v).map(b => b.toString(16).padStart(2, '0')).join(' ');
+        console.info(`[device] MSE append #${this.appendCount} hex[0..${v.length}]=`, hex);
+      }
       this.sourceBuffer.appendBuffer(next);
+      // DIAGNOSTIC: report the MSE buffered range (where currentTime lives) on
+      // every other successful append. The black-video bug = this range stuck at
+      // 0..0 or absent → nothing to paint.
+      if ((this.appendCount & 0x3) === 0) {
+        try {
+          const ranges = this.sourceBuffer.buffered;
+          const r = ranges.length ? `${ranges.start(0).toFixed(3)}..${ranges.end(0).toFixed(3)}` : "(empty)";
+          console.info(
+            "[device] MSE appended #" + this.appendCount,
+            "len=" + next.byteLength,
+            "buffered=" + r,
+            "currentTime=" + this.video.currentTime.toFixed(3),
+            "readyState=" + this.video.readyState,
+          );
+        } catch {}
+      }
+      this.appendCount++;
+      if (this.video.paused) {
+        void this.video.play().catch(() => {});
+      }
     } catch (e) {
-      console.error("[device] sourceBuffer.appendBuffer failed:", e);
-      // Drop the fragment on a queue-full; next updateend re-tries.
+      console.error("[device] MSE: appendBuffer FAILED:", e,
+        "(buffered.checkLength=" + this.sourceBuffer.buffered.length,
+        "updating=" + this.sourceBuffer.updating, ")");
     }
   }
 

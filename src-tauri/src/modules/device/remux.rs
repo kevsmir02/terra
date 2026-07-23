@@ -89,11 +89,15 @@ pub struct Fmp4Builder {
     codec_string: String,
     init_segment: Vec<u8>,
     sequence_number: u32,
+    /// Cumulative `baseMediaDecodeTime` (units = track timescale, 1000 = ms).
+    /// scrcpy `raw_stream=true` strips per-frame PTS, so we synthesize a
+    /// monotonic timeline ourselves: each fragment adds the nominal duration.
+    decode_time: u64,
 }
 
 impl Fmp4Builder {
     pub fn new(codec_string: String) -> Self {
-        Self { codec_string, init_segment: Vec::new(), sequence_number: 0 }
+        Self { codec_string, init_segment: Vec::new(), sequence_number: 0, decode_time: 0 }
     }
 
     pub fn codec_string(&self) -> &str { &self.codec_string }
@@ -111,7 +115,8 @@ impl Fmp4Builder {
     /// Wrap a single NAL (no start code) in its own fMP4 media fragment
     /// (`moof`+`mdat`). The `mdat` body is `[u32 BE length][nal]` (AVC length
     /// prefix = 4 bytes, matching the `lengthSizeMinusOne=3` stored in `avcC`).
-    /// `mfhd` carries a per-session incrementing `sequence_number`.
+    /// `mfhd` carries a per-session incrementing `sequence_number`; `tfdt`
+    /// carries an incrementing `baseMediaDecodeTime` so MSE can chain fragments.
     ///
     /// Sizes are constant for v1 (one sample per fragment, fixed box layout),
     /// so `trun`'s `data_offset` is a compile-time constant pointing at the
@@ -120,29 +125,40 @@ impl Fmp4Builder {
         self.sequence_number = self.sequence_number.wrapping_add(1);
         let seq = self.sequence_number;
 
+        // ponytail: raw_stream strips PTS; we synthesize a nominal 33ms/frame
+        // (~30fps, matching max_fps=30) so the MSE buffered range is non-zero
+        // and currentTime can advance. Without tfdt + nonzero duration every
+        // fragment maps to t=0 → buffered collapses to zero length → black
+        // `<video>`. Upgrade: derive real fps from the SPS VUI / slice header.
+        const NOMINAL_FRAME_DURATION_MS: u32 = 33;
+
         let mfhd = fullbox(b"mfhd", 0, 0, &seq.to_be_bytes());
 
-        // default-base-is-moof (0x010000): trun data_offset is measured from the
-        // first byte of the `moof` box, so we need no base_data_offset field.
+        // default-base-is-moof (0x020000): trun data_offset is measured from the
+        // first byte of the enclosing `moof` box, so no base_data_offset is needed.
         let mut tfhd_p = Vec::with_capacity(4);
         tfhd_p.extend_from_slice(&1u32.to_be_bytes()); // track_ID = 1
-        let tfhd = fullbox(b"tfhd", 0, 0x010000, &tfhd_p);
+        let tfhd = fullbox(b"tfhd", 0, 0x020000, &tfhd_p);
+
+        // tfdt (version 1, u64 baseMediaDecodeTime): the decode-time anchor MSE
+        // needs to place this fragment on the timeline. Without it (and with a
+        // zero duration) the <video> never paints — the original black-screen bug.
+        let tfdt = fullbox(b"tfdt", 1, 0, &self.decode_time.to_be_bytes());
 
         // trun flags: data-offset-present (0x000001) | sample-duration-present
         // (0x000100) | sample-size-present (0x000200) = 0x000301.
-        // ponytail: sample_duration is a nominal 0 — we don't parse the slice
-        // header for real timing; MSE tolerates this for a live append stream.
-        // Upgrade path: extract frame-rate from the SPS VUI / slice header.
-        const DATA_OFFSET: u32 = 84; // moof_total(76) + mdat header(8)
+        // moof = box(8)+mfhd(16)+traf[box(8)+tfhd(16)+tfdt(20)+trun(28)] = 96.
+        const DATA_OFFSET: u32 = 104; // moof(96) + mdat header(8) → start of mdat body
         let mut trun_p = Vec::with_capacity(16);
         trun_p.extend_from_slice(&1u32.to_be_bytes()); // sample_count
         trun_p.extend_from_slice(&DATA_OFFSET.to_be_bytes()); // data_offset
-        trun_p.extend_from_slice(&0u32.to_be_bytes()); // sample_duration (nominal)
+        trun_p.extend_from_slice(&NOMINAL_FRAME_DURATION_MS.to_be_bytes()); // sample_duration (nominal, non-zero)
         trun_p.extend_from_slice(&((nal.len() as u32) + 4).to_be_bytes()); // sample_size (4-byte len + nal)
         let trun = fullbox(b"trun", 0, 0x000301, &trun_p);
 
         let mut traf_p = Vec::new();
         traf_p.extend_from_slice(&tfhd);
+        traf_p.extend_from_slice(&tfdt);
         traf_p.extend_from_slice(&trun);
         let traf = box_(b"traf", &traf_p);
 
@@ -160,6 +176,8 @@ impl Fmp4Builder {
         let mut out = Vec::with_capacity(moof.len() + mdat.len());
         out.extend_from_slice(&moof);
         out.extend_from_slice(&mdat);
+
+        self.decode_time += NOMINAL_FRAME_DURATION_MS as u64;
         out
     }
 }
@@ -327,7 +345,25 @@ fn build_moov(sps: &[u8], pps: &[u8]) -> Vec<u8> {
     let mut moov_p = Vec::new();
     moov_p.extend_from_slice(&mvhd);
     moov_p.extend_from_slice(&trak);
+    // mvex (Movie Extends Box) is REQUIRED by Chrome's fMP4 parser — without it
+    // the moov declares a regular (non-fragmented) movie and the browser silently
+    // rejects all moof+mdat media fragments. Contains a trex per track.
+    moov_p.extend_from_slice(&build_mvex());
     box_(b"moov", &moov_p)
+}
+
+/// `mvex` + one `trex` for track_ID=1. Chrome requires this to know the movie
+/// is fragmented before accepting any moof+mdat data.
+fn build_mvex() -> Vec<u8> {
+    // trex: track_ID=1, all defaults set to 0 (trun provides per-sample values).
+    let mut trex_p = Vec::with_capacity(20);
+    trex_p.extend_from_slice(&1u32.to_be_bytes()); // track_ID
+    trex_p.extend_from_slice(&1u32.to_be_bytes()); // default_sample_description_index
+    trex_p.extend_from_slice(&0u32.to_be_bytes()); // default_sample_duration
+    trex_p.extend_from_slice(&0u32.to_be_bytes()); // default_sample_size
+    trex_p.extend_from_slice(&0u32.to_be_bytes()); // default_sample_flags
+    let trex = fullbox(b"trex", 0, 0, &trex_p);
+    box_(b"mvex", &trex)
 }
 
 /// `avc1` VisualSampleEntry containing an `avcC` (AVCDecoderConfigurationRecord).
@@ -429,5 +465,37 @@ mod tests {
         let mut buf = vec![0x00, 0x00, 0x00, 0x01, 0x65, 0xAA];
         assert!(drain_complete_nals(&mut buf).is_empty());
         assert_eq!(buf, vec![0x00, 0x00, 0x00, 0x01, 0x65, 0xAA]);
+    }
+
+    /// Regression guard for the black-video bug: scrcpy `raw_stream=true`
+    /// strips per-frame PTS, so the muxer must synthesize a timeline itself.
+    /// If every media fragment has `sample_duration=0` and no `tfdt`, the MSE
+    /// `buffered` range collapses to zero length and the `<video>` paints
+    /// nothing (pure `bg-black`). This test pins the fixed moof layout:
+    ///   moof[box(8) + mfhd(16) + traf(box(8) + tfhd(16) + tfdt(20) + trun(28))]
+    ///     + mdat header(8) + mdat body.
+    #[test]
+    fn append_nal_advances_tfdt_and_emits_nonzero_duration() {
+        let mut b = Fmp4Builder::new("avc1.42c01e".to_string());
+        let nal = vec![0x65u8, 0x88, 0x84, 0x00, 0x33]; // an IDR-ish slice NAL
+        let f1 = b.append_nal(&nal);
+        let f2 = b.append_nal(&nal);
+
+        // A `moof` must open the fragment.
+        assert_eq!(&f1[4..8], b"moof");
+        // A `tfdt` subbox (v1, payload u64) lives at fragment offset 48..68;
+        // its baseMediaDecodeTime u64 is at 60..68.
+        assert_eq!(&f1[52..56], b"tfdt", "no tfdt box — MSE has no fragment time base");
+        let tfdt = |f: &[u8]| u64::from_be_bytes(f[60..68].try_into().unwrap());
+        assert_eq!(tfdt(&f1), 0, "first fragment must start at decode time 0");
+        assert_eq!(tfdt(&f2), 33, "fragment decode time must advance by the nominal duration");
+        // `trun` sample_duration (u32) at offset 88..92 must be non-zero or the
+        // MSE buffered range collapses to zero length → black video.
+        assert_eq!(&f1[72..76], b"trun");
+        let duration = u32::from_be_bytes(f1[88..92].try_into().unwrap());
+        assert!(duration > 0, "sample_duration=0 produces a zero-length buffered range");
+        // data_offset (u32 at 84..88) must point at the mdat body: moof(96)+mdat header(8)=104.
+        let data_offset = u32::from_be_bytes(f1[84..88].try_into().unwrap());
+        assert_eq!(data_offset, 104, "data_offset must point past the (now tfdt-bearing) moof");
     }
 }

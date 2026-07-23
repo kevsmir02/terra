@@ -20,6 +20,7 @@ pub struct DeviceSession {
     pub id: u32,
     pub serial: String,
     pub local_port: u16,
+    pub adb: PathBuf,
     /// Owns the `adb shell app_process ...` process. Dropping kills it.
     pub server_child: Option<Child>,
     /// The stdout pipe of the adb process; this is the raw Annex-B H.264 stream.
@@ -52,6 +53,7 @@ impl DeviceSession {
             id,
             serial,
             local_port,
+            adb,
             server_child: Some(child),
             video_stream: None,
             stopping,
@@ -64,6 +66,9 @@ impl DeviceSession {
             let _ = child.kill();
             let _ = child.wait();
         }
+        let _ = std::process::Command::new(&self.adb)
+            .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{}", self.local_port)])
+            .output();
     }
 }
 
@@ -83,21 +88,63 @@ fn run_read_loop(
     channel: Channel<DeviceFrame>,
     stopping: Arc<AtomicBool>,
 ) {
-    let mut stream = None;
-    for _ in 0..30 {
+    log::info!("[device] read_loop start: connecting to TCP 127.0.0.1:{local_port}");
+    // adb forward maps the local TCP port IMMEDIATELY (before the scrcpy server
+    // has even bound its abstract socket), so `connect()` succeeds right away even
+    // when the remote side isn't ready: the first `read()` then returns 0 (EOF)
+    // because adb closed the pipe. We must retry the full connect+probe cycle,
+    // not just connect.
+    let mut stream: Option<std::net::TcpStream> = None;
+    let mut probe = [0u8; 1];
+    for attempt in 1..=60 {
         if stopping.load(Ordering::Relaxed) {
+            log::info!("[device] read_loop: stopping before connect");
             return;
         }
-        if let Ok(s) = std::net::TcpStream::connect(("127.0.0.1", local_port)) {
-            stream = Some(s);
-            break;
+        match std::net::TcpStream::connect(("127.0.0.1", local_port)) {
+            Ok(s) => {
+                // \/ Wait up to 100ms for the first byte; if nothing arrives the
+                // remote side isn't alive yet (scrcpy hasn't accept()-ed or the
+                // MediaCodec hasn't produced its startup SPS/PPS).
+                s.set_read_timeout(Some(std::time::Duration::from_millis(100)))
+                    .ok();
+                match s.peek(&mut probe) {
+                    Ok(0) => {
+                        // adb accepted our local connection but the remote
+                        // abstract socket isn't ready — close and retry.
+                        log::debug!("[device] read_loop attempt {attempt}/60: port open, remote not ready (peek=0)");
+                        drop(s);
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        continue;
+                    }
+                    Ok(_) | Err(_) => {
+                        // Data arrived or peek() isn't supported on this platform;
+                        // either way we'll find out in the read loop. Switch back
+                        // to blocking reads.
+                        s.set_read_timeout(None).ok();
+                        log::info!("[device] read_loop: TCP connected + alive on attempt {attempt}/60");
+                        stream = Some(s);
+                        break;
+                    }
+                }
+            }
+            Err(e) => {
+                log::debug!("[device] read_loop attempt {attempt}/60: connect failed: {e}");
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     let mut stream = match stream {
         Some(s) => s,
-        None => return,
+        None => {
+            log::error!(
+                "[device] read_loop: TCP connect FAILED after 60×~200ms (~12s); \
+                 scrcpy server never became ready on 127.0.0.1:{local_port} — \
+                 check the 'scrcpy-server stderr' lines above"
+            );
+            return;
+        }
     };
 
     let mut buf: Vec<u8> = Vec::new();
@@ -108,32 +155,58 @@ fn run_read_loop(
     let mut pps: Option<Vec<u8>> = None;
     let mut pending_slices: Vec<Vec<u8>> = Vec::new(); // slices that arrived before init.
 
+    // DIAGNOSTIC counters per run_loop lifetime.
+    let mut total_bytes: u64 = 0;
+    let mut reads: u64 = 0;
+    let mut nals_sps: u32 = 0;
+    let mut nals_pps: u32 = 0;
+    let mut nals_idr: u32 = 0;
+    let mut nals_nonidr: u32 = 0;
+    let mut nals_other: u32 = 0;
+    let mut media_sent: u64 = 0;
+
     let emit_init = |builder: &Fmp4Builder, channel: &Channel<DeviceFrame>| {
         let cs = builder.codec_string();
         let mut frame = Vec::with_capacity(4 + cs.len() + builder.init_segment().len());
         frame.extend_from_slice(&(cs.len() as u32).to_be_bytes());
         frame.extend_from_slice(cs.as_bytes());
         frame.extend_from_slice(builder.init_segment());
+        let frame_len = frame.len();
         let _ = channel.send(DeviceFrame { kind: 0, bytes: frame });
+        log::info!("[device] read_loop: EMIT INIT segment codec={cs} bytes={frame_len}");
     };
-    let emit_media = |builder: &mut Fmp4Builder, channel: &Channel<DeviceFrame>, nal: &[u8]| {
+    let emit_media = |builder: &mut Fmp4Builder, channel: &Channel<DeviceFrame>, nal: &[u8], media_sent: &mut u64| {
         let frag = builder.append_nal(nal);
         let _ = channel.send(DeviceFrame { kind: 1, bytes: frag });
+        *media_sent += 1;
     };
 
     loop {
         if stopping.load(Ordering::Relaxed) {
+            log::info!("[device] read_loop: stopping (reads={reads} bytes={total_bytes} \
+                       sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
+                       other={nals_other} media_sent={media_sent})");
             break;
         }
         let n = match stream.read(&mut read_buf) {
             Ok(0) => 0, // EOF: flush below
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(_) => break,
+            Err(e) => {
+                log::warn!("[device] read_loop: stream read error after {total_bytes} bytes: {e}");
+                break;
+            }
         };
+        reads += 1;
+        total_bytes += n as u64;
 
         if n == 0 {
             // End of stream: everything currently in `buf` is complete. Flush it.
+            log::info!(
+                "[device] read_loop: stream EOF at {total_bytes} bytes \
+                 (sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
+                 other={nals_other}) — flushing trailing NALs"
+            );
             for nal in split_nal_units(&buf) {
                 if nal.is_empty() {
                     continue;
@@ -141,10 +214,9 @@ fn run_read_loop(
                 let t = nal[0] & 0x1F;
                 if let Some(b) = builder.as_mut() {
                     if t == 7 || t == 8 {
-                        // Repeated SPS/PPS in-band: init already sent; ignore.
                         continue;
                     }
-                    emit_media(b, &channel, &nal);
+                    emit_media(b, &channel, &nal, &mut media_sent);
                 }
             }
             break;
@@ -159,31 +231,66 @@ fn run_read_loop(
             }
             let t = nal[0] & 0x1F;
             match t {
-                7 => sps = Some(nal),
-                8 => pps = Some(nal),
-                _ => {
-                    if let Some(b) = builder.as_mut() {
-                        emit_media(b, &channel, &nal);
-                    } else {
-                        pending_slices.push(nal);
-                    }
-                    continue;
-                }
+                7 => { nals_sps += 1; sps = Some(nal); }
+                8 => { nals_pps += 1; pps = Some(nal); }
+                5 => { nals_idr += 1; emit_or_pending(&mut builder, &channel, &nal, &mut pending_slices, &mut media_sent); continue; }
+                1 => { nals_nonidr += 1; emit_or_pending(&mut builder, &channel, &nal, &mut pending_slices, &mut media_sent); continue; }
+                _ => { nals_other += 1; emit_or_pending(&mut builder, &channel, &nal, &mut pending_slices, &mut media_sent); continue; }
             }
             // After storing SPS or PPS, try to bootstrap the init segment once
             // both are available, then flush any pending slices.
             if builder.is_none() {
                 if let (Some(s), Some(p)) = (sps.as_ref(), pps.as_ref()) {
                     let codec = format!("avc1.{:02x}{:02x}{:02x}", s[1], s[2], s[3]);
+                    log::info!(
+                        "[device] read_loop: bootstrap ready — codec={codec} \
+                         sps_len={} pps_len={} total_bytes={total_bytes}",
+                        s.len(), p.len()
+                    );
                     let mut b = Fmp4Builder::new(codec);
                     b.set_init_segment(s, p);
                     emit_init(&b, &channel);
                     for ps in pending_slices.drain(..) {
-                        emit_media(&mut b, &channel, &ps);
+                        emit_media(&mut b, &channel, &ps, &mut media_sent);
                     }
                     builder = Some(b);
+                    log::info!(
+                        "[device] read_loop: bootstrap done, continuing live stream"
+                    );
                 }
             }
         }
+
+        // Throttled heartbeat so the user can watch frames flow without log spam.
+        if reads.is_multiple_of(60) {
+            log::info!(
+                "[device] read_loop heartbeat: reads={reads} bytes={total_bytes} \
+                 sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
+                 other={nals_other} media_sent={media_sent}"
+            );
+        }
+    }
+    log::info!(
+        "[device] read_loop EXIT — reads={reads} bytes={total_bytes} \
+         sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
+         other={nals_other} media_sent={media_sent}"
+    );
+}
+
+/// Emit a slice NAL if the init segment has been sent, else queue it for the
+/// post-bootstrap flush.
+fn emit_or_pending(
+    builder: &mut Option<Fmp4Builder>,
+    channel: &Channel<DeviceFrame>,
+    nal: &[u8],
+    pending: &mut Vec<Vec<u8>>,
+    media_sent: &mut u64,
+) {
+    if let Some(b) = builder.as_mut() {
+        let frag = b.append_nal(nal);
+        let _ = channel.send(DeviceFrame { kind: 1, bytes: frag });
+        *media_sent += 1;
+    } else {
+        pending.push(nal.to_vec());
     }
 }
