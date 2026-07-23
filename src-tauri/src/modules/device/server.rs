@@ -19,6 +19,11 @@ pub fn build_server_command(adb: &Path, _jar: &Path, serial: &str, _local_port: 
 }
 
 pub fn push_jar_and_forward(adb: &Path, jar: &Path, serial: &str, local_port: u16) -> Result<(), String> {
+    // Kill any leftover scrcpy server instance on the device to avoid "Address already in use"
+    let _ = Command::new(adb)
+        .args(["-s", serial, "shell", "pkill -9 -f /data/local/tmp/terax-scrcpy.jar || true"])
+        .output();
+
     let push = Command::new(adb)
         .args(["-s", serial, "push"])
         .arg(jar)
