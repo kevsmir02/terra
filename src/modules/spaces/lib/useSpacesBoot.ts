@@ -107,9 +107,14 @@ export function useSpacesBoot({
         );
 
         const initialActiveIndex: Record<string, number> = {};
-        for (const [id, st] of states)
+        const panelSizesBySpace: Record<string, number[]> = {};
+        for (const [id, st] of states) {
           initialActiveIndex[id] = st.activeTabIndex;
-        useSpaces.getState().hydrate(spaces, active, initialActiveIndex);
+          if (st.panelSizes && Array.isArray(st.panelSizes)) {
+            panelSizesBySpace[id] = st.panelSizes;
+          }
+        }
+        useSpaces.getState().hydrate(spaces, active, initialActiveIndex, panelSizesBySpace);
 
         const inActive = restored.filter((t) => t.spaceId === active);
         const idx = states.get(active)?.activeTabIndex ?? 0;

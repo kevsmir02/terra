@@ -26,15 +26,22 @@ type State = {
   // Per-space active tab index loaded from disk, so persistence preserves it
   // for spaces the user never visits this session.
   initialActiveIndex: Record<string, number>;
+  // Per-space sidebar|workspace split ratios, seeded at boot from SpaceState.panelSizes
+  // and kept in sync by useSpacePersistence so switch-time apply is synchronous.
+  panelSizesBySpace: Record<string, number[]>;
   hydrate: (
     spaces: SpaceMeta[],
     activeId: string | null,
     initialActiveIndex?: Record<string, number>,
+    panelSizesBySpace?: Record<string, number[]>,
   ) => void;
   create: (input: CreateInput) => SpaceMeta;
   rename: (id: string, name: string) => void;
   setEnv: (id: string, env: WorkspaceEnv) => void;
   setColor: (id: string, color: number | undefined) => void;
+  setRoot: (id: string, root: string | null) => void;
+  setStartupCommands: (id: string, cmds: string[]) => void;
+  setPanelSizes: (spaceId: string, sizes: number[]) => void;
   reorder: (orderedIds: string[]) => void;
   remove: (id: string) => string | null;
   setActive: (id: string) => void;
@@ -45,9 +52,10 @@ export const useSpaces = create<State>((set, get) => ({
   activeId: null,
   hydrated: false,
   initialActiveIndex: {},
+  panelSizesBySpace: {},
 
-  hydrate: (spaces, activeId, initialActiveIndex = {}) => {
-    set({ spaces, activeId, initialActiveIndex, hydrated: true });
+  hydrate: (spaces, activeId, initialActiveIndex = {}, panelSizesBySpace = {}) => {
+    set({ spaces, activeId, initialActiveIndex, panelSizesBySpace, hydrated: true });
   },
 
   create: (input) => {
@@ -94,6 +102,28 @@ export const useSpaces = create<State>((set, get) => ({
     void saveSpacesList(spaces);
   },
 
+  setRoot: (id, root) => {
+    const spaces = get().spaces.map((s) =>
+      s.id === id ? { ...s, root, updatedAt: Date.now() } : s,
+    );
+    set({ spaces });
+    void saveSpacesList(spaces);
+  },
+
+  setStartupCommands: (id, cmds) => {
+    const spaces = get().spaces.map((s) =>
+      s.id === id ? { ...s, startupCommands: cmds, updatedAt: Date.now() } : s,
+    );
+    set({ spaces });
+    void saveSpacesList(spaces);
+  },
+
+  setPanelSizes: (spaceId, sizes) => {
+    set({
+      panelSizesBySpace: { ...get().panelSizesBySpace, [spaceId]: sizes },
+    });
+  },
+
   reorder: (orderedIds) => {
     const byId = new Map(get().spaces.map((s) => [s.id, s]));
     const next: SpaceMeta[] = [];
@@ -114,7 +144,9 @@ export const useSpaces = create<State>((set, get) => ({
     const spaces = prev.spaces.filter((s) => s.id !== id);
     let activeId = prev.activeId;
     if (activeId === id) activeId = spaces[0]?.id ?? null;
-    set({ spaces, activeId });
+    const panelSizesBySpace = { ...prev.panelSizesBySpace };
+    delete panelSizesBySpace[id];
+    set({ spaces, activeId, panelSizesBySpace });
     void saveSpacesList(spaces);
     void deleteSpaceData(id);
     if (activeId !== prev.activeId) void saveActiveId(activeId);
