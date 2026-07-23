@@ -13,6 +13,7 @@ export function labelFor(t: Tab): string {
   if (t.kind === "git-diff") return t.title;
   if (t.kind === "git-history") return t.title;
   if (t.kind === "git-commit-file") return t.title;
+  if (t.kind === "device-preview") return t.serial;
   if (t.customTitle) return t.customTitle;
   if (!t.cwd) return t.title;
   const parts = t.cwd.split(/[\\/]/).filter(Boolean);

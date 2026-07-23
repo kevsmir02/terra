@@ -18,6 +18,7 @@ export {
   type GitDiffTab,
   type GitHistoryTab,
   type GitCommitFileDiffTab,
+  type DevicePreviewTab,
   type TabPatch,
 } from "./lib/useTabs";
 export { useWorkspaceCwd } from "./lib/useWorkspaceCwd";

@@ -17,6 +17,7 @@ function tabLabel(tab: Tab | undefined): string {
     const cwd = findLeafCwd(tab.paneTree, tab.activeLeafId) ?? tab.cwd;
     return cwd ? basename(cwd) : tab.title;
   }
+  if (tab.kind === "device-preview") return tab.serial;
   return tab.title;
 }
 

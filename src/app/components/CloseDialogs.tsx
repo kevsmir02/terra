@@ -67,11 +67,13 @@ export function CloseDialogs({
           <AlertDialogHeader>
             <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
             <AlertDialogDescription>
-              {tabs.find((t) => t.id === pendingCloseTab)?.title
-                ? `"${
-                    tabs.find((t) => t.id === pendingCloseTab)?.title
-                  }" has unsaved changes. Close anyway?`
-                : "This file has unsaved changes. Close anyway?"}
+              {((): string => {
+                const tab = tabs.find((t) => t.id === pendingCloseTab);
+                const title = tab && tab.kind === "editor" ? tab.title : undefined;
+                return title
+                  ? `"${title}" has unsaved changes. Close anyway?`
+                  : "This file has unsaved changes. Close anyway?";
+              })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -117,9 +119,11 @@ export function CloseDialogs({
             <AlertDialogDescription>
               {pendingDeleteTabs?.length === 1
                 ? (() => {
-                    const title = tabs.find(
+                    const tab = tabs.find(
                       (t) => t.id === pendingDeleteTabs[0],
-                    )?.title;
+                    );
+                    const title =
+                      tab && tab.kind === "editor" ? tab.title : undefined;
                     return title
                       ? `"${title}" has unsaved changes. The file has been deleted. Close anyway?`
                       : "This file has unsaved changes. The file has been deleted. Close anyway?";

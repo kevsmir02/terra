@@ -168,7 +168,7 @@ describe("hydrateTabs", () => {
     ];
     const out = hydrateTabs(serialized, "s1", counter());
     expect(out.every((t) => t.cold === true)).toBe(true);
-    expect(out.map((t) => t.title)).toEqual([
+    expect(out.map((t) => (t as { title: string }).title)).toEqual([
       "foo.ts",
       "localhost:5173",
       "README.md",
