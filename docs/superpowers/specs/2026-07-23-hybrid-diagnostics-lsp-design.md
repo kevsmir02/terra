@@ -8,7 +8,7 @@
 During implementation auditing, it was verified that the hybrid diagnostics & lazy-loaded LSP architecture is **already fully shipped** in the codebase:
 
 1. **Option 2 (Default On-Save Diagnostics & Statusbar Badge):**
-   - `src/modules/editor/lib/diagnosticsReporter.ts` already wires CodeMirror 6's `@codemirror/lint` (`lintGutter`) and reports errors/warnings per file.
+   - `src/modules/editor/lib/extensions.ts` wires CodeMirror 6's `@codemirror/lint` (`lintGutter`) and `src/modules/editor/lib/diagnosticsReporter.ts` handles updateListener count reporting per file.
    - `src/modules/statusbar/DiagnosticsBadge.tsx` already renders active file error/warning counts (`🔴 2 errors, ⚠️ 1 warning`) reading from `useDiagnosticsStore`.
    - Zero background RAM overhead out of the box.
 
