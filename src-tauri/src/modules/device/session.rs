@@ -53,13 +53,14 @@ impl DeviceSession {
         let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
         let control_port = local_port + 1;
         let stop_control = stopping.clone();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
 
         tauri::async_runtime::spawn_blocking(move || {
-            run_read_loop(local_port, channel, stop_clone);
+            run_read_loop(local_port, channel, stop_clone, Some(ready_tx));
         });
 
         tauri::async_runtime::spawn_blocking(move || {
-            run_control_loop(control_port, &mut rx, stop_control);
+            run_control_loop(control_port, &mut rx, stop_control, ready_rx);
         });
 
         Ok(Self {
@@ -104,6 +105,7 @@ fn run_read_loop(
     local_port: u16,
     channel: Channel<DeviceFrame>,
     stopping: Arc<AtomicBool>,
+    mut ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
 ) {
     log::info!("[device] read_loop start: connecting to TCP 127.0.0.1:{local_port}");
     // adb forward maps the local TCP port IMMEDIATELY (before the scrcpy server
@@ -140,6 +142,9 @@ fn run_read_loop(
                         // to blocking reads.
                         s.set_read_timeout(None).ok();
                         log::info!("[device] read_loop: TCP connected + alive on attempt {attempt}/60");
+                        if let Some(tx) = ready_tx.take() {
+                            let _ = tx.send(());
+                        }
                         stream = Some(s);
                         break;
                     }
@@ -316,8 +321,12 @@ fn run_control_loop(
     control_port: u16,
     rx: &mut mpsc::Receiver<ControlMessage>,
     stopping: Arc<AtomicBool>,
+    ready_rx: tokio::sync::oneshot::Receiver<()>,
 ) {
     use std::io::Write;
+    // Wait until video_stream socket is connected first to preserve scrcpy's accept() order.
+    let _ = ready_rx.blocking_recv();
+
     let mut stream: Option<std::net::TcpStream> = None;
     for _attempt in 1..=30 {
         if stopping.load(Ordering::Relaxed) {
@@ -365,9 +374,11 @@ mod tests {
         let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
         let stopping = Arc::new(AtomicBool::new(false));
         let stop_clone = stopping.clone();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let _ = ready_tx.send(());
 
         let handle = std::thread::spawn(move || {
-            run_control_loop(port, &mut rx, stop_clone);
+            run_control_loop(port, &mut rx, stop_clone, ready_rx);
         });
 
         let (mut socket, _) = listener.accept().unwrap();
