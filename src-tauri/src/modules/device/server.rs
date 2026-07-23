@@ -4,7 +4,7 @@ use std::process::Command;
 use super::scrcpy_server_version::SCRCPY_SERVER_VERSION;
 
 const DEVICE_JAR_PATH: &str = "/data/local/tmp/terax-scrcpy.jar";
-const LOCAL_ABSTRACT_NAME: &str = "terax-scrcpy";
+const LOCAL_ABSTRACT_NAME: &str = "scrcpy";
 
 pub fn build_server_command(adb: &Path, _jar: &Path, serial: &str, _local_port: u16) -> Command {
     let classpath_arg = format!("CLASSPATH={DEVICE_JAR_PATH}");

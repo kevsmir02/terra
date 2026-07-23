@@ -42,19 +42,18 @@ impl DeviceSession {
         local_port: u16,
         channel: Channel<DeviceFrame>,
     ) -> Result<Self, String> {
-        let mut child = super::server::spawn_server(&adb, &jar, &serial, local_port)?;
-        let stdout = child.stdout.take();
+        let child = super::server::spawn_server(&adb, &jar, &serial, local_port)?;
         let stopping = Arc::new(AtomicBool::new(false));
         let stop_clone = stopping.clone();
         let _handle = tauri::async_runtime::spawn_blocking(move || {
-            run_read_loop(stdout, channel, stop_clone);
+            run_read_loop(local_port, channel, stop_clone);
         });
         Ok(Self {
             id,
             serial,
             local_port,
             server_child: Some(child),
-            video_stream: None, // moved into the read loop thread
+            video_stream: None,
             stopping,
         })
     }
@@ -74,17 +73,29 @@ impl Drop for DeviceSession {
     }
 }
 
-/// Read the raw Annex-B H.264 stream off `stdout`, split it into NAL units,
-/// bootstrap an `Fmp4Builder` from the first SPS+PPS (deriving the `avc1.*`
-/// codec string), then emit every slice NAL as an fMP4 media fragment on
+/// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)`, split
+/// it into NAL units, bootstrap an `Fmp4Builder` from the first SPS+PPS (deriving the
+/// `avc1.*` codec string), then emit every slice NAL as an fMP4 media fragment on
 /// `channel`. `Channel::send` is synchronous (it just queues for the webview),
 /// so no async runtime is needed in this thread.
 fn run_read_loop(
-    mut stdout: Option<std::process::ChildStdout>,
+    local_port: u16,
     channel: Channel<DeviceFrame>,
     stopping: Arc<AtomicBool>,
 ) {
-    let some_stdout = match stdout.as_mut() {
+    let mut stream = None;
+    for _ in 0..30 {
+        if stopping.load(Ordering::Relaxed) {
+            return;
+        }
+        if let Ok(s) = std::net::TcpStream::connect(("127.0.0.1", local_port)) {
+            stream = Some(s);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    let mut stream = match stream {
         Some(s) => s,
         None => return,
     };
@@ -114,7 +125,7 @@ fn run_read_loop(
         if stopping.load(Ordering::Relaxed) {
             break;
         }
-        let n = match some_stdout.read(&mut read_buf) {
+        let n = match stream.read(&mut read_buf) {
             Ok(0) => 0, // EOF: flush below
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
