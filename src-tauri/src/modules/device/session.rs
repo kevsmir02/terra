@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tauri::ipc::Channel;
+use tokio::sync::mpsc;
 
+use super::control::{serialize_control_message, ControlMessage};
 use super::remux::{drain_complete_nals, split_nal_units, Fmp4Builder};
 
 #[derive(serde::Serialize, Clone)]
@@ -26,6 +28,7 @@ pub struct DeviceSession {
     /// The stdout pipe of the adb process; this is the raw Annex-B H.264 stream.
     pub video_stream: Option<ChildStdout>,
     pub stopping: Arc<AtomicBool>,
+    pub control_tx: mpsc::Sender<ControlMessage>,
 }
 
 impl DeviceSession {
@@ -46,9 +49,19 @@ impl DeviceSession {
         let child = super::server::spawn_server(&adb, &jar, &serial, local_port)?;
         let stopping = Arc::new(AtomicBool::new(false));
         let stop_clone = stopping.clone();
-        let _handle = tauri::async_runtime::spawn_blocking(move || {
+
+        let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
+        let control_port = local_port + 1;
+        let stop_control = stopping.clone();
+
+        tauri::async_runtime::spawn_blocking(move || {
             run_read_loop(local_port, channel, stop_clone);
         });
+
+        tauri::async_runtime::spawn_blocking(move || {
+            run_control_loop(control_port, &mut rx, stop_control);
+        });
+
         Ok(Self {
             id,
             serial,
@@ -57,6 +70,7 @@ impl DeviceSession {
             server_child: Some(child),
             video_stream: None,
             stopping,
+            control_tx: tx,
         })
     }
 
@@ -68,6 +82,9 @@ impl DeviceSession {
         }
         let _ = std::process::Command::new(&self.adb)
             .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{}", self.local_port)])
+            .output();
+        let _ = std::process::Command::new(&self.adb)
+            .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{}", self.local_port + 1)])
             .output();
     }
 }
@@ -292,5 +309,87 @@ fn emit_or_pending(
         *media_sent += 1;
     } else {
         pending.push(nal.to_vec());
+    }
+}
+
+fn run_control_loop(
+    control_port: u16,
+    rx: &mut mpsc::Receiver<ControlMessage>,
+    stopping: Arc<AtomicBool>,
+) {
+    use std::io::Write;
+    let mut stream: Option<std::net::TcpStream> = None;
+    for _attempt in 1..=30 {
+        if stopping.load(Ordering::Relaxed) {
+            return;
+        }
+        if let Ok(s) = std::net::TcpStream::connect(("127.0.0.1", control_port)) {
+            stream = Some(s);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    let mut stream = match stream {
+        Some(s) => s,
+        None => {
+            log::warn!("[device] control_loop: TCP connect failed for 127.0.0.1:{control_port}");
+            return;
+        }
+    };
+
+    while !stopping.load(Ordering::Relaxed) {
+        if let Ok(msg) = rx.try_recv() {
+            let bytes = serialize_control_message(&msg);
+            if stream.write_all(&bytes).is_err() {
+                log::warn!("[device] control_loop write failed");
+                break;
+            }
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+    use super::super::control::TouchAction;
+
+    #[test]
+    fn run_control_loop_sends_messages_over_tcp() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
+        let stopping = Arc::new(AtomicBool::new(false));
+        let stop_clone = stopping.clone();
+
+        let handle = std::thread::spawn(move || {
+            run_control_loop(port, &mut rx, stop_clone);
+        });
+
+        let (mut socket, _) = listener.accept().unwrap();
+
+        tx.try_send(ControlMessage::InjectTouch {
+            action: TouchAction::Down,
+            pointer_id: -1,
+            x: 100,
+            y: 200,
+            width: 1080,
+            height: 1920,
+            pressure: 0xFFFF,
+            buttons: 1,
+        }).unwrap();
+
+        let mut buf = [0u8; 32];
+        let n = socket.read(&mut buf).unwrap();
+        assert_eq!(n, 28);
+        assert_eq!(buf[0], 2); // TYPE_INJECT_TOUCH = 2
+        assert_eq!(buf[1], 0); // Action = Down = 0
+
+        stopping.store(true, Ordering::Relaxed);
+        handle.join().unwrap();
     }
 }

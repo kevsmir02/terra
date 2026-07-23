@@ -308,6 +308,8 @@ pub fn run() {
             device::commands::device_launch_avd,
             device::commands::device_open,
             device::commands::device_close,
+            device::commands::device_send_touch,
+            device::commands::device_send_key,
             device::commands::device_input_tap,
             device::commands::device_input_swipe,
             device::commands::device_input_key,

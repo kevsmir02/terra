@@ -41,6 +41,7 @@ tauri-plugin-notification = "2"
 tempfile = "3"
 notify = "8.2.0"
 which = "8.0.4"
+tokio = "1"
 
 [dev-dependencies]
 proptest = "1"

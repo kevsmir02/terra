@@ -2,6 +2,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use super::adb::{launch_avd, list_avds, list_devices, resolve_adb_path, resolve_emulator_path, DeviceEntry};
+use super::control::{ControlMessage, KeyAction, TouchAction};
 use super::session::{DeviceFrame, DeviceSession};
 use super::state::DeviceState;
 
@@ -61,6 +62,60 @@ pub fn device_close(state: State<'_, DeviceState>, handle: u32) -> Result<(), St
     if let Some(mut s) = state.take(handle) {
         s.shutdown();
     }
+    Ok(())
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn device_send_touch(
+    state: State<'_, DeviceState>,
+    handle: u32,
+    action: u8,
+    pointer_id: i64,
+    x: u32,
+    y: u32,
+    width: u16,
+    height: u16,
+) -> Result<(), String> {
+    let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+    let session = sessions.get(&handle).ok_or("session not found")?;
+    let act = match action {
+        0 => TouchAction::Down,
+        1 => TouchAction::Up,
+        _ => TouchAction::Move,
+    };
+    let msg = ControlMessage::InjectTouch {
+        action: act,
+        pointer_id,
+        x,
+        y,
+        width,
+        height,
+        pressure: 0xFFFF,
+        buttons: 1,
+    };
+    let _ = session.control_tx.try_send(msg);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn device_send_key(
+    state: State<'_, DeviceState>,
+    handle: u32,
+    action: u8,
+    keycode: u32,
+    metastate: u32,
+) -> Result<(), String> {
+    let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+    let session = sessions.get(&handle).ok_or("session not found")?;
+    let act = if action == 0 { KeyAction::Down } else { KeyAction::Up };
+    let msg = ControlMessage::InjectKeycode {
+        action: act,
+        keycode,
+        repeat: 0,
+        metastate,
+    };
+    let _ = session.control_tx.try_send(msg);
     Ok(())
 }
 

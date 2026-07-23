@@ -11,7 +11,7 @@ pub fn build_server_command(adb: &Path, _jar: &Path, serial: &str, _local_port: 
     let classpath_arg = format!("CLASSPATH={DEVICE_JAR_PATH}");
     let server_arg = format!(
         "app_process / com.genymobile.scrcpy.Server {SCRCPY_SERVER_VERSION} \
-         tunnel_forward=true audio=false control=false cleanup=false \
+         tunnel_forward=true audio=false control=true cleanup=false \
          raw_stream=true max_size=1920 max_fps=30 video_codec=h264"
     );
     let mut cmd = Command::new(adb);
@@ -38,18 +38,24 @@ pub fn push_jar_and_forward(adb: &Path, jar: &Path, serial: &str, local_port: u1
             String::from_utf8_lossy(&push.stderr).trim()
         ));
     }
-    let forward_spec = format!("tcp:{local_port}");
+    let forward_spec_video = format!("tcp:{local_port}");
+    let forward_spec_control = format!("tcp:{}", local_port + 1);
     let abstract_spec = format!("localabstract:{LOCAL_ABSTRACT_NAME}");
-    let fwd = Command::new(adb)
-        .args(["-s", serial, "forward", &forward_spec, &abstract_spec])
+
+    let fwd_video = Command::new(adb)
+        .args(["-s", serial, "forward", &forward_spec_video, &abstract_spec])
         .output()
-        .map_err(|e| format!("adb forward failed: {e}"))?;
-    if !fwd.status.success() {
-        return Err(format!(
-            "adb forward exited {}: {}",
-            fwd.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&fwd.stderr).trim()
-        ));
+        .map_err(|e| format!("adb forward video failed: {e}"))?;
+    if !fwd_video.status.success() {
+        return Err(format!("adb forward video failed: {}", String::from_utf8_lossy(&fwd_video.stderr)));
+    }
+
+    let fwd_control = Command::new(adb)
+        .args(["-s", serial, "forward", &forward_spec_control, &abstract_spec])
+        .output()
+        .map_err(|e| format!("adb forward control failed: {e}"))?;
+    if !fwd_control.status.success() {
+        return Err(format!("adb forward control failed: {}", String::from_utf8_lossy(&fwd_control.stderr)));
     }
     Ok(())
 }
@@ -133,7 +139,7 @@ mod tests {
         assert!(args[3].starts_with("CLASSPATH=/data/local/tmp/terax-scrcpy.jar"));
         assert!(args[4].contains("com.genymobile.scrcpy.Server 4.1 "));
         assert!(args[4].contains("tunnel_forward=true"));
-        assert!(args[4].contains("control=false"));
+        assert!(args[4].contains("control=true"));
         assert!(args[4].contains("raw_stream=true"));
         assert!(args[4].contains("audio=false"));
         assert!(args[4].contains("video_codec=h264"));
