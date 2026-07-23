@@ -190,11 +190,9 @@ src-tauri/                  Rust backend
       git/                  Source control commands
       history/              Shell history integration
       mod.rs                Module exports
-      net.rs                HTTP proxy with SSRF guard
       proc.rs               Process utilities
       pty/                  Terminal sessions, shell integration, DA filter
-      secrets.rs            OS keychain access
-      shell/                Oneshot/session/background shell commands
+      shell.rs              One-shot shell command (format-on-save)
       workspace.rs          WSL bridge, workspace env, authorization registry
 
 src/                        React frontend

@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, fs, git, history, lsp, pty, workspace};
+use modules::{agent, fs, git, history, lsp, pty, shell, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -295,6 +295,7 @@ pub fn run() {
             get_launch_dir,
             get_launch_files,
             open_settings_window,
+            shell::shell_run_command,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
             history::history_suggest,

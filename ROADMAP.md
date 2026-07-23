@@ -4,7 +4,7 @@ Terax direction, what's shipped, what's coming, and what's deliberately out of s
 
 ## What Terax is
 
-Terax is a fast, lightweight terminal IDE designed for developers who run CLI agent harnesses (Pi, OpenCode, Antigravity CLI, Claude Code) directly in the terminal. It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor (CodeMirror 6), a file explorer, source control with git graph, and a web preview pane—eliminating the need to Alt-Tab between tools. Under 10 MB on disk. No telemetry.
+Terax is a fast, lightweight terminal IDE designed for developers who run CLI agent harnesses (Pi, OpenCode, Antigravity CLI, Claude Code) directly in the terminal. It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor (CodeMirror 6), a file explorer, source control with git graph, and a web preview pane, eliminating the need to Alt-Tab between tools. Under 10 MB on disk. No telemetry.
 
 The product is opinionated: terminal-first, zero-bloat, CLI-agent workflow optimized, lightweight always, cross-platform without compromise.
 

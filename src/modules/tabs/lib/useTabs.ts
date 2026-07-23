@@ -429,25 +429,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     ).__teraxNewBlockTab = newBlockTab;
   }, [newBlockTab]);
 
-  const newAgentTab = useCallback((cwd: string | undefined, title: string) => {
-    const tabId = nextIdRef.current++;
-    const leafId = nextIdRef.current++;
-    setTabs((t) => [
-      ...t,
-      {
-        id: tabId,
-        kind: "terminal",
-        spaceId: activeSpaceIdRef.current,
-        title,
-        cwd,
-        paneTree: { kind: "leaf", id: leafId, cwd },
-        activeLeafId: leafId,
-      },
-    ]);
-    setActiveId(tabId);
-    return { tabId, leafId };
-  }, []);
-
   const newPrivateTab = useCallback((cwd?: string) => {
     const tabId = nextIdRef.current++;
     const leafId = nextIdRef.current++;
@@ -1083,7 +1064,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     setOverrideLanguage,
     newTab,
     newBlockTab,
-    newAgentTab,
     newPrivateTab,
     openFileTab,
     pinTab,
