@@ -77,8 +77,20 @@ pub async fn device_send_touch(
     width: u16,
     height: u16,
 ) -> Result<(), String> {
-    let sessions = state.sessions.read().map_err(|e| e.to_string())?;
-    let session = sessions.get(&handle).ok_or("session not found")?;
+    device_send_touch_impl(&state, handle, action, pointer_id, x, y, width, height).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn device_send_touch_impl(
+    state: &DeviceState,
+    handle: u32,
+    action: u8,
+    pointer_id: i64,
+    x: u32,
+    y: u32,
+    width: u16,
+    height: u16,
+) -> Result<(), String> {
     let act = match action {
         0 => TouchAction::Down,
         1 => TouchAction::Up,
@@ -94,7 +106,20 @@ pub async fn device_send_touch(
         pressure: 0xFFFF,
         buttons: 1,
     };
-    let _ = session.control_tx.try_send(msg);
+
+    let serial = {
+        let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+        let session = sessions.get(&handle).ok_or("session not found")?;
+        if session.control_tx.try_send(msg).is_ok() {
+            return Ok(());
+        }
+        session.serial.clone()
+    };
+
+    log::warn!("[device] control_tx channel send failed for touch event, using adb shell input fallback");
+    if matches!(act, TouchAction::Down | TouchAction::Move) {
+        run_adb_shell(&serial, &["input", "tap", &x.to_string(), &y.to_string()]).await?;
+    }
     Ok(())
 }
 
@@ -106,8 +131,16 @@ pub async fn device_send_key(
     keycode: u32,
     metastate: u32,
 ) -> Result<(), String> {
-    let sessions = state.sessions.read().map_err(|e| e.to_string())?;
-    let session = sessions.get(&handle).ok_or("session not found")?;
+    device_send_key_impl(&state, handle, action, keycode, metastate).await
+}
+
+pub(crate) async fn device_send_key_impl(
+    state: &DeviceState,
+    handle: u32,
+    action: u8,
+    keycode: u32,
+    metastate: u32,
+) -> Result<(), String> {
     let act = if action == 0 { KeyAction::Down } else { KeyAction::Up };
     let msg = ControlMessage::InjectKeycode {
         action: act,
@@ -115,8 +148,132 @@ pub async fn device_send_key(
         repeat: 0,
         metastate,
     };
-    let _ = session.control_tx.try_send(msg);
-    Ok(())
+
+    let serial = {
+        let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+        let session = sessions.get(&handle).ok_or("session not found")?;
+        if session.control_tx.try_send(msg).is_ok() {
+            return Ok(());
+        }
+        session.serial.clone()
+    };
+
+    log::warn!("[device] control_tx channel send failed for key event, using adb shell input fallback");
+    run_adb_shell(&serial, &["input", "keyevent", &keycode.to_string()]).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn touch_succeeds_via_control_tx() {
+        let state = DeviceState::default();
+        let (tx, mut rx) = mpsc::channel(10);
+        let session = DeviceSession {
+            id: 1,
+            serial: "dummy_serial".into(),
+            local_port: 9999,
+            adb: PathBuf::from("adb"),
+            server_child: None,
+            video_stream: None,
+            stopping: Arc::new(AtomicBool::new(false)),
+            control_tx: tx,
+        };
+        state.sessions.write().unwrap().insert(1, session);
+
+        let res = device_send_touch_impl(&state, 1, 0, 0, 100, 200, 1080, 1920).await;
+        assert!(res.is_ok());
+        let msg = rx.try_recv().unwrap();
+        if let ControlMessage::InjectTouch { x, y, action, .. } = msg {
+            assert_eq!(x, 100);
+            assert_eq!(y, 200);
+            assert_eq!(action, TouchAction::Down);
+        } else {
+            panic!("expected InjectTouch");
+        }
+    }
+
+    #[tokio::test]
+    async fn key_succeeds_via_control_tx() {
+        let state = DeviceState::default();
+        let (tx, mut rx) = mpsc::channel(10);
+        let session = DeviceSession {
+            id: 1,
+            serial: "dummy_serial".into(),
+            local_port: 9999,
+            adb: PathBuf::from("adb"),
+            server_child: None,
+            video_stream: None,
+            stopping: Arc::new(AtomicBool::new(false)),
+            control_tx: tx,
+        };
+        state.sessions.write().unwrap().insert(1, session);
+
+        let res = device_send_key_impl(&state, 1, 0, 66, 0).await;
+        assert!(res.is_ok());
+        let msg = rx.try_recv().unwrap();
+        if let ControlMessage::InjectKeycode { keycode, .. } = msg {
+            assert_eq!(keycode, 66);
+        } else {
+            panic!("expected InjectKeycode");
+        }
+    }
+
+    #[tokio::test]
+    async fn touch_fallback_when_tx_closed() {
+        let state = DeviceState::default();
+        let (tx, rx) = mpsc::channel(10);
+        drop(rx); // Close receiver to trigger try_send error
+
+        let session = DeviceSession {
+            id: 1,
+            serial: "invalid_serial_test".into(),
+            local_port: 9999,
+            adb: PathBuf::from("adb"),
+            server_child: None,
+            video_stream: None,
+            stopping: Arc::new(AtomicBool::new(false)),
+            control_tx: tx,
+        };
+        state.sessions.write().unwrap().insert(1, session);
+
+        // Up action when tx is closed does not call adb shell, so returns Ok(())
+        let res_up = device_send_touch_impl(&state, 1, 1, 0, 100, 200, 1080, 1920).await;
+        assert!(res_up.is_ok());
+
+        // Down action when tx is closed triggers fallback (run_adb_shell), which attempts adb execution
+        let res_down = device_send_touch_impl(&state, 1, 0, 0, 100, 200, 1080, 1920).await;
+        // Since adb shell with invalid_serial_test fails, it should return Err containing adb error
+        assert!(res_down.is_err());
+    }
+
+    #[tokio::test]
+    async fn key_fallback_when_tx_closed() {
+        let state = DeviceState::default();
+        let (tx, rx) = mpsc::channel(10);
+        drop(rx); // Close receiver to trigger try_send error
+
+        let session = DeviceSession {
+            id: 1,
+            serial: "invalid_serial_test".into(),
+            local_port: 9999,
+            adb: PathBuf::from("adb"),
+            server_child: None,
+            video_stream: None,
+            stopping: Arc::new(AtomicBool::new(false)),
+            control_tx: tx,
+        };
+        state.sessions.write().unwrap().insert(1, session);
+
+        // Key action triggers fallback (run_adb_shell), which attempts adb execution
+        let res = device_send_key_impl(&state, 1, 0, 66, 0).await;
+        assert!(res.is_err());
+    }
 }
 
 #[tauri::command]
