@@ -36,10 +36,13 @@ export function useSpacePersistence({
   // with the correct index rather than clobbering it to 0).
   if (enabled && !seeded.current) {
     seeded.current = true;
-    for (const [id, idx] of Object.entries(
-      useSpaces.getState().initialActiveIndex,
-    )) {
-      last.current.set(id, { json: "", activeTabIndex: idx });
+    const { initialActiveIndex, panelSizesBySpace } = useSpaces.getState();
+    for (const [id, idx] of Object.entries(initialActiveIndex)) {
+      last.current.set(id, {
+        json: "",
+        activeTabIndex: idx,
+        panelSizes: panelSizesBySpace[id],
+      });
     }
   }
 
@@ -106,9 +109,9 @@ export function useSpacePersistence({
     if (!enabled) return;
     const onHidden = () => {
       if (document.visibilityState === "hidden")
-        flush(latest.current, activeSidebarPct);
+        flush(latest.current, latest.current.activeSidebarPct);
     };
-    const onLeave = () => flush(latest.current, activeSidebarPct);
+    const onLeave = () => flush(latest.current, latest.current.activeSidebarPct);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("blur", onLeave);
     window.addEventListener("beforeunload", onLeave);
@@ -116,7 +119,7 @@ export function useSpacePersistence({
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener<"blur">("blur", onLeave);
       window.removeEventListener("beforeunload", onLeave);
-      flush(latest.current, activeSidebarPct);
+      flush(latest.current, latest.current.activeSidebarPct);
     };
   }, [enabled, activeSidebarPct, flush]);
 }
