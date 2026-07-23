@@ -37,6 +37,13 @@ pub fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
 /// The init segment is populated from the first SPS+PPS NALs at runtime
 /// (Task 5 stage 2) and cached; this struct's `init_segment` returns whatever
 /// was last computed. See spec §Architecture ("remux.rs ≈50-150 LOC").
+///
+/// CONTRACT (Rust↔TS codec-string handoff): the init segment emitted by this
+/// builder is sent as a `DeviceFrame { kind: 0, data: … }` from the Rust read
+/// loop where `data` is laid out as:
+///   [4-byte BE length] [UTF-8 codec string, e.g. "avc1.42001E"] [fMP4 ftyp+moov bytes]
+/// MsePlayer.pushData reads the length prefix, extracts the codec string for
+/// SourceBuffer construction, and feeds the remainder to SourceBuffer.
 pub struct Fmp4Builder {
     codec_string: String,
     init_segment: Vec<u8>,

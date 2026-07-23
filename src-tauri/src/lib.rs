@@ -320,6 +320,9 @@ pub fn run() {
                     if let Some(state) = app.try_state::<lsp::LspState>() {
                         state.kill_all();
                     }
+                    if let Some(state) = app.try_state::<device::DeviceState>() {
+                        state.kill_all();
+                    }
                 }
                 // macOS delivers "Open With" files here, not as argv (cold and
                 // warm start, several at once). Seed the drain-once state and

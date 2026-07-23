@@ -6,8 +6,7 @@ use super::scrcpy_server_version::SCRCPY_SERVER_VERSION;
 const DEVICE_JAR_PATH: &str = "/data/local/tmp/terax-scrcpy.jar";
 const LOCAL_ABSTRACT_NAME: &str = "terax-scrcpy";
 
-pub fn build_server_command(adb: &Path, jar: &Path, serial: &str, local_port: u16) -> Command {
-    let _ = local_port;
+pub fn build_server_command(adb: &Path, _jar: &Path, serial: &str, _local_port: u16) -> Command {
     let classpath_arg = format!("CLASSPATH={DEVICE_JAR_PATH}");
     let server_arg = format!(
         "app_process / com.genymobile.scrcpy.Server {SCRCPY_SERVER_VERSION} \
@@ -16,7 +15,6 @@ pub fn build_server_command(adb: &Path, jar: &Path, serial: &str, local_port: u1
     );
     let mut cmd = Command::new(adb);
     cmd.args(["-s", serial, "shell", &classpath_arg, &server_arg]);
-    let _ = jar;
     cmd
 }
 

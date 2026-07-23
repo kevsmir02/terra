@@ -35,9 +35,11 @@ export class MsePlayer {
    *        1 = media fragment bytes. */
   pushData(kind: number, bytes: ArrayBuffer) {
     if (kind === 0) {
-      // The init segment carries a 32-byte codec string prefixed at the head
-      // of the frame (see Rust DeviceFrame init emission in Task 5 stage 2).
-      // Extract it here and use it to construct the SourceBuffer.
+      // CONTRACT (Rust↔TS codec-string handoff, see remux.rs Fmp4Builder):
+      // The init segment frame (kind=0) from the Rust read loop is laid out as:
+      //   [4-byte BE length] [UTF-8 codec string, e.g. "avc1.42001E"] [fMP4 ftyp+moov bytes]
+      // We extract the codec string here for SourceBuffer construction and feed
+      // the remainder to SourceBuffer.
       const view = new DataView(bytes);
       const len = view.getUint32(0, /* littleEndian */ false);
       this.codecString = new TextDecoder().decode(
