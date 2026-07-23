@@ -311,6 +311,7 @@ pub fn run() {
             device::commands::device_input_tap,
             device::commands::device_input_swipe,
             device::commands::device_input_key,
+            device::commands::device_screen_size,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

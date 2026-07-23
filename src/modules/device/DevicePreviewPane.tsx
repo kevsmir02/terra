@@ -20,7 +20,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     | { kind: "no-devices" }
     | { kind: "unauthorized"; serial: string }
     | { kind: "error"; message: string }
-    | { kind: "streaming" }
+    | { kind: "streaming"; devW: number; devH: number }
   >({ kind: "idle" });
 
   useEffect(() => {
@@ -69,7 +69,15 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
           return;
         }
         handleRef.current = handle;
-        setStatus({ kind: "streaming" });
+        // Query the physical display size — video.videoWidth reflects the
+        // encoded resolution (may be downscaled), but adb input needs the
+        // physical display dimensions for accurate coordinate mapping.
+        let devW = 0;
+        let devH = 0;
+        try {
+          [devW, devH] = await invoke<[number, number]>("device_screen_size", { serial: tab.serial });
+        } catch { /* keep video fallback in deviceCoords */ }
+        setStatus({ kind: "streaming", devW, devH });
       } catch (e) {
         if (disposed) return;
         const msg = String(e);
@@ -100,6 +108,8 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     return <UnauthorizedDevice serial={status.serial} onRefresh={() => location.reload()} />;
   if (status.kind === "error") return <ServerFailed message={status.message} />;
 
+  const { devW = 0, devH = 0 } = status.kind === "streaming" ? status : {};
+
   return (
     <div className="relative h-full w-full">
       <video
@@ -108,9 +118,9 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
         autoPlay
         muted
         playsInline
-        onPointerDown={inputBridge.onPointerDown(tab.serial)}
+        onPointerDown={inputBridge.onPointerDown(tab.serial, devW, devH)}
         onPointerMove={inputBridge.onPointerMove(tab.serial)}
-        onPointerUp={inputBridge.onPointerUp(tab.serial)}
+        onPointerUp={inputBridge.onPointerUp(tab.serial, devW, devH)}
       />
     </div>
   );

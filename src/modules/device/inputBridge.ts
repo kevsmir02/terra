@@ -19,11 +19,13 @@ function deviceCoords(
   video: HTMLVideoElement,
   clientX: number,
   clientY: number,
-): { x: number; y: number; width: number; height: number } {
+  devW: number,
+  devH: number,
+): { x: number; y: number } {
   const rect = video.getBoundingClientRect();
   // object-contain: letterboxed inside the rect. Compute the displayed rect.
-  const vw = video.videoWidth || rect.width;
-  const vh = video.videoHeight || rect.height;
+  const vw = devW || video.videoWidth || rect.width;
+  const vh = devH || video.videoHeight || rect.height;
   const scale = Math.min(rect.width / vw, rect.height / vh);
   const dispW = vw * scale;
   const dispH = vh * scale;
@@ -31,14 +33,14 @@ function deviceCoords(
   const offY = rect.top + (rect.height - dispH) / 2;
   const x = Math.round(((clientX - offX) / dispW) * vw);
   const y = Math.round(((clientY - offY) / dispH) * vh);
-  return { x: Math.max(0, x), y: Math.max(0, y), width: vw, height: vh };
+  return { x: Math.max(0, x), y: Math.max(0, y) };
 }
 
 export const inputBridge = {
-  onPointerDown(serial: string) {
+  onPointerDown(serial: string, devW: number, devH: number) {
     return (e: React.PointerEvent<HTMLVideoElement>) => {
       if (e.button !== 0) return;
-      const { x, y } = deviceCoords(e.currentTarget, e.clientX, e.clientY);
+      const { x, y } = deviceCoords(e.currentTarget, e.clientX, e.clientY, devW, devH);
       active = { startSerial: serial, startX: x, startY: y, downAt: Date.now() };
       e.currentTarget.setPointerCapture(e.pointerId);
       void invoke("device_input_tap", { serial, x, y }).catch(() => {});
@@ -51,19 +53,17 @@ export const inputBridge = {
       void serial;
     };
   },
-  onPointerUp(serial: string) {
+  onPointerUp(serial: string, devW: number, devH: number) {
     return (e: React.PointerEvent<HTMLVideoElement>) => {
       if (!active || active.startSerial !== serial) {
         active = null;
         return;
       }
-      const { x, y } = deviceCoords(e.currentTarget, e.clientX, e.clientY);
+      const { x, y } = deviceCoords(e.currentTarget, e.clientX, e.clientY, devW, devH);
       const dx = Math.abs(x - active.startX);
       const dy = Math.abs(y - active.startY);
       const duration = Math.max(50, Math.min(500, Date.now() - active.downAt));
       if (dx > 4 || dy > 4) {
-        // The pointer moved past the dead-zone: synthesize a swipe from the
-        // down-position to the up-position.
         void invoke("device_input_swipe", {
           serial,
           x1: active.startX,

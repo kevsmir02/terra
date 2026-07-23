@@ -70,6 +70,28 @@ pub async fn device_input_tap(serial: String, x: u32, y: u32) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub async fn device_screen_size(serial: String) -> Result<(u32, u32), String> {
+    let adb = resolve_adb_path()?;
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new(&adb)
+            .args(["-s", &serial, "shell", "wm", "size"])
+            .output()
+            .map_err(|e| format!("adb wm size: {e}"))
+    })
+    .await
+    .map_err(|e| format!("join: {e}"))??;
+
+    if !output.status.success() { return Err(String::from_utf8_lossy(&output.stderr).into()); }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // "Physical size: 1080x2400" or "Override size: 1080x2400"
+    let line = stdout.lines().next().unwrap_or("");
+    let size = line.rsplit(": ").next().unwrap_or("");
+    let (w, h) = size.split_once('x').ok_or_else(|| format!("parse: {line}"))?;
+    Ok((w.trim().parse().map_err(|e| format!("w: {e}"))?,
+        h.trim().parse().map_err(|e| format!("h: {e}"))?))
+}
+
+#[tauri::command]
 pub async fn device_input_swipe(
     serial: String,
     x1: u32,
