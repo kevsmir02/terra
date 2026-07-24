@@ -49,6 +49,9 @@ export type TerminalPalette = Partial<{
   cursor: string;
   cursorAccent: string;
   selection: string;
+  fontFamily: string;
+  fontWeight: string;
+  fontSize: number;
   ansi: readonly [
     string, string, string, string, string, string, string, string,
     string, string, string, string, string, string, string, string,

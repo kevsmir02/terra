@@ -1,5 +1,4 @@
 import { useBlockController } from "@/modules/terminal/lib/blockController";
-import { useTheme } from "@/modules/theme";
 import { lazy, Suspense } from "react";
 
 const ShellInput = lazy(() => import("@/modules/terminal/block/ShellInput"));
@@ -14,13 +13,7 @@ type Props = {
   home: string | null;
 };
 
-export function WorkspaceInputBar({
-  isBlockTab,
-  activeLeafId,
-}: Props) {
-  const { resolvedMode, themeId, customThemes } = useTheme();
-  const themeKey = `${resolvedMode}:${themeId}:${customThemes.length}`;
-
+export function WorkspaceInputBar({ isBlockTab, activeLeafId }: Props) {
   const controller = useBlockController(isBlockTab ? activeLeafId : null);
   const blockMode = controller?.blockMode ?? "prompt";
 
@@ -36,7 +29,6 @@ export function WorkspaceInputBar({
                 leafId={activeLeafId}
                 mode={blockMode}
                 focused
-                themeKey={themeKey}
                 onSubmit={controller.submitCommand}
                 onInterrupt={controller.interrupt}
                 getCwd={controller.getCwd}

@@ -36,6 +36,7 @@ type ThemeProviderState = {
   mode: ThemePref;
   resolvedMode: "dark" | "light";
   themeId: string;
+  activeTheme: Theme;
   customThemes: Theme[];
   setMode: (mode: ThemePref) => void;
   setThemeId: (id: string) => void;
@@ -135,19 +136,22 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, [resolvedMode]);
 
   const effectiveId = previewId ?? themeId;
+  const activeTheme = useMemo(
+    () => resolveTheme(effectiveId, customThemes),
+    [effectiveId, customThemes],
+  );
   useEffect(() => {
     if (effectiveId === DEFAULT_THEME_ID) {
       clearTheme();
       return;
     }
-    const resolved = resolveTheme(effectiveId, customThemes);
     const fonts =
-      resolved.variants[resolvedMode]?.type?.fonts ??
-      resolved.variants.dark?.type?.fonts ??
-      resolved.variants.light?.type?.fonts;
+      activeTheme.variants[resolvedMode]?.type?.fonts ??
+      activeTheme.variants.dark?.type?.fonts ??
+      activeTheme.variants.light?.type?.fonts;
     if (fonts?.length) void loadFonts(fonts);
-    applyTheme(resolved, resolvedMode);
-  }, [effectiveId, resolvedMode, customThemes]);
+    applyTheme(activeTheme, resolvedMode);
+  }, [effectiveId, activeTheme, resolvedMode]);
 
   const setMode = useCallback((next: ThemePref) => {
     setModeState(next);
@@ -171,12 +175,22 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       mode,
       resolvedMode,
       themeId,
+      activeTheme,
       customThemes,
       setMode,
       setThemeId,
       previewThemeId,
     }),
-    [mode, resolvedMode, themeId, customThemes, setMode, setThemeId, previewThemeId],
+    [
+      mode,
+      resolvedMode,
+      themeId,
+      activeTheme,
+      customThemes,
+      setMode,
+      setThemeId,
+      previewThemeId,
+    ],
   );
 
   return (

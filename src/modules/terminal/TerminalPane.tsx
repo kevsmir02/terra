@@ -66,7 +66,7 @@ export const TerminalPane = memo(
     const containerRef = useRef<HTMLDivElement>(null);
     const downPtRef = useRef<Point | null>(null);
     const copyOnSelect = usePreferencesStore((s) => s.terminalCopyOnSelect);
-    const { resolvedMode, themeId, customThemes } = useTheme();
+    const { resolvedMode, activeTheme } = useTheme();
 
     const session = useTerminalSession({
       leafId,
@@ -121,7 +121,7 @@ export const TerminalPane = memo(
       // Defer one frame so CSS-variable token resolution sees the new class.
       const id = requestAnimationFrame(() => session.applyTheme());
       return () => cancelAnimationFrame(id);
-    }, [resolvedMode, themeId, customThemes, session]);
+    }, [resolvedMode, activeTheme, session]);
 
     useImperativeHandle(
       ref,
