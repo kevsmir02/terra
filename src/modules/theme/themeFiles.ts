@@ -102,6 +102,9 @@ export function starterTheme(): Theme {
           cursor: "#e8e8ea",
           cursorAccent: "#0d0d10",
           selection: "rgba(125,211,252,0.22)",
+          fontFamily: "JetBrains Mono",
+          fontWeight: "normal",
+          fontSize: 14,
           ansi: [
             "#1c1c22", "#f2777a", "#99cc99", "#ffcc66",
             "#6699cc", "#cc99cc", "#66cccc", "#d3d0c8",
@@ -134,6 +137,9 @@ export function starterTheme(): Theme {
           cursor: "#1a1a1f",
           cursorAccent: "#fbfbfd",
           selection: "rgba(3,105,161,0.18)",
+          fontFamily: "JetBrains Mono",
+          fontWeight: "normal",
+          fontSize: 14,
           ansi: [
             "#1a1a1f", "#c7254e", "#4c7a2f", "#8a6116",
             "#2b6cb0", "#8b4a8b", "#2a7f7f", "#5a5a66",

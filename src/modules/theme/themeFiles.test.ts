@@ -28,6 +28,17 @@ describe("starterTheme", () => {
     }
   });
 
+  it("exposes terminal font settings in both variants", () => {
+    const t = starterTheme();
+    for (const mode of ["light", "dark"] as const) {
+      expect(t.variants[mode]?.terminal).toMatchObject({
+        fontFamily: "JetBrains Mono",
+        fontWeight: "normal",
+        fontSize: 14,
+      });
+    }
+  });
+
   it("passes its own validator", () => {
     expect(validateTheme(JSON.parse(JSON.stringify(starterTheme()))).ok).toBe(
       true,
