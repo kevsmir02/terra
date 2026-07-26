@@ -34,6 +34,7 @@ A change to a core subsystem (terminal/shell spawn, workspace auth, git, fs, IPC
 - **Comments**: default to none, the code should explain itself. If genuinely needed, 1-2 lines on *why*, never *what*.
 - **No em-dash** anywhere: code, comments, commits, docs.
 - **No emojis** anywhere.
+- **No AI attribution in commits**: never add `Co-Authored-By:` for Claude or any assistant, and never a "Generated with Claude Code" line. Earlier commits carry these; do not copy them when matching commit style. A `commit-msg` hook strips them as a backstop.
 - **Imports**: always `@/...` on the frontend, never relative across modules.
 - **pnpm only**, never npm/npx/yarn.
 
