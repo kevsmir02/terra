@@ -810,6 +810,286 @@ git commit -m "feat(updater): stage, verify, and install packages behind pkexec"
 
 ---
 
+### Task 4b: Bind the install to verified bytes
+
+Added after the Task 4 review, which raised two Important findings that the
+original plan's name-based handoff made unavoidable. Both were ruled on by the
+project owner.
+
+**Finding 1 — rollback is webview-reachable.** `file_name`, `signature`, and
+the bytes are all webview-supplied. A compromised webview can stage any older
+release from the project's own signed history; `apt-get install -y <local
+file>` will happily downgrade. Ruling: guard using the version read from the
+**verified package metadata**, never the caller-supplied filename.
+
+**Finding 2 — TOCTOU.** `fs::read` and root's installer both open the staged
+path *by name*, from a user-writable directory, and the path is never
+canonicalized. A same-uid process can plant a symlink or win a rename race and
+get an unverified file installed as root. Ruling: reject symlinks and verify
+the bytes read from an open handle, then hand root something that cannot be
+re-pointed between verify and install.
+
+**Files:**
+- Modify: `src-tauri/src/modules/updater/mod.rs`
+
+**Interfaces:**
+- Consumes: `package::{PackageKind, detect, install_command}`, `verify::verify`
+- Produces (private):
+  - `fn open_no_follow(path: &Path) -> Result<(std::fs::File, Vec<u8>), String>`
+  - `fn package_version(kind: PackageKind, path: &str) -> Result<String, String>`
+  - `fn is_newer(candidate: &str, current: &str) -> bool`
+- `updater_install`'s public signature is unchanged.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to the existing `mod tests` block in `src-tauri/src/modules/updater/mod.rs`:
+
+```rust
+    #[test]
+    fn is_newer_accepts_a_higher_patch() {
+        assert!(is_newer("0.8.6", "0.8.5"));
+    }
+
+    #[test]
+    fn is_newer_rejects_an_equal_version() {
+        // A same-version reinstall is a no-op that would still prompt for a
+        // password and then claim success.
+        assert!(!is_newer("0.8.5", "0.8.5"));
+    }
+
+    #[test]
+    fn is_newer_rejects_a_downgrade() {
+        assert!(!is_newer("0.8.4", "0.8.5"));
+    }
+
+    #[test]
+    fn is_newer_compares_numerically_not_lexically() {
+        assert!(is_newer("0.10.0", "0.9.0"));
+    }
+
+    #[test]
+    fn is_newer_rejects_unparseable_input() {
+        // Fail closed: if the package metadata cannot be understood, refuse.
+        assert!(!is_newer("", "0.8.5"));
+        assert!(!is_newer("not-a-version", "0.8.5"));
+    }
+
+    #[test]
+    fn open_no_follow_reads_a_regular_file() {
+        let dir = std::env::temp_dir().join(format!("terra-onf-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("pkg.rpm");
+        fs::write(&f, b"hello").unwrap();
+
+        let (_handle, bytes) = open_no_follow(&f).unwrap();
+        assert_eq!(bytes, b"hello");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn open_no_follow_refuses_a_symlink() {
+        // The whole point: a symlink planted in the user-writable staging dir
+        // must not be followed into a file the attacker controls.
+        let dir = std::env::temp_dir().join(format!("terra-onf-sym-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("real.bin");
+        fs::write(&target, b"evil").unwrap();
+        let link = dir.join("pkg.rpm");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        assert!(open_no_follow(&link).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd src-tauri && cargo test --lib updater::tests`
+Expected: FAIL — `cannot find function is_newer`, `cannot find function open_no_follow`.
+
+- [ ] **Step 3: Implement the helpers**
+
+Add to `src-tauri/src/modules/updater/mod.rs`:
+
+```rust
+use std::os::unix::fs::OpenOptionsExt;
+
+/// Opens the staged package without following a final-component symlink and
+/// reads it through that handle. The returned `File` is kept alive by the
+/// caller so the verified bytes and the installed file are the same inode.
+fn open_no_follow(path: &Path) -> Result<(std::fs::File, Vec<u8>), String> {
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|e| format!("could not open the staged update: {e}"))?;
+
+    let meta = file
+        .metadata()
+        .map_err(|e| format!("could not stat the staged update: {e}"))?;
+    if !meta.is_file() {
+        return Err("staged update is not a regular file".to_string());
+    }
+
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    std::io::Read::read_to_end(&mut file, &mut bytes)
+        .map_err(|e| format!("could not read the staged update: {e}"))?;
+    Ok((file, bytes))
+}
+
+/// Reads the version out of the package itself. The signature covers content,
+/// not the file name, so the name can never be the source of this.
+fn package_version(kind: PackageKind, path: &str) -> Result<String, String> {
+    let (bin, args): (&str, Vec<&str>) = match kind {
+        PackageKind::Rpm => ("rpm", vec!["-qp", "--nosignature", "--qf", "%{VERSION}", path]),
+        PackageKind::Deb => ("dpkg-deb", vec!["-f", path, "Version"]),
+        PackageKind::Unsupported => return Err("unsupported package kind".to_string()),
+    };
+    if which::which(bin).is_err() {
+        return Err(format!("{bin} is not available to read the package version"));
+    }
+    let mut cmd = Command::new(bin);
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::null());
+    hide_console(&mut cmd);
+    let out = cmd
+        .output()
+        .map_err(|e| format!("could not read the package version: {e}"))?;
+    if !out.status.success() {
+        return Err("could not read the package version".to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Strictly-newer comparison that fails closed on anything it cannot parse.
+fn is_newer(candidate: &str, current: &str) -> bool {
+    fn parts(v: &str) -> Option<Vec<u64>> {
+        let core = v.trim().split('-').next()?.trim();
+        if core.is_empty() {
+            return None;
+        }
+        core.split('.').map(|p| p.parse::<u64>().ok()).collect()
+    }
+    let (Some(a), Some(b)) = (parts(candidate), parts(current)) else {
+        return false;
+    };
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x > y;
+        }
+    }
+    false
+}
+```
+
+- [ ] **Step 4: Rewrite the body of `updater_install`**
+
+Replace the `spawn_blocking` closure inside `updater_install` with:
+
+```rust
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = staged_package_path(&dir)?;
+
+        // Hold this handle open for the rest of the function: it pins the
+        // inode that was verified, so a later rename or symlink swap in the
+        // staging dir cannot change what gets installed.
+        let (handle, bytes) = open_no_follow(&path)?;
+        let signature = fs::read_to_string(sig_path(&path))
+            .map_err(|e| format!("staged signature missing: {e}"))?;
+        verify::verify(&pubkey, &bytes, &signature)?;
+
+        let kind = package::detect();
+        let fd_path = format!("/proc/self/fd/{}", std::os::unix::io::AsRawFd::as_raw_fd(&handle));
+
+        let version = package_version(kind, &fd_path)?;
+        let current = env!("CARGO_PKG_VERSION");
+        if !is_newer(&version, current) {
+            return Err(format!(
+                "refusing to install {version} over {current} — updates must move forward"
+            ));
+        }
+
+        let (bin, args) = install_target(kind, &handle, &path)?;
+        let mut cmd = Command::new(bin);
+        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+        hide_console(&mut cmd);
+        let out = cmd
+            .output()
+            .map_err(|e| format!("could not launch the installer: {e}"))?;
+
+        match out.status.code() {
+            Some(0) => {
+                clear_staging(&dir);
+                Ok(())
+            }
+            Some(126) => Err("cancelled".to_string()),
+            Some(127) => Err("not authorized".to_string()),
+            _ => {
+                let err = String::from_utf8_lossy(&out.stderr);
+                let tail: String = err.lines().rev().take(5).collect::<Vec<_>>().join("\n");
+                Err(format!("install failed: {tail}"))
+            }
+        }
+    })
+```
+
+- [ ] **Step 5: Establish how root receives the bytes**
+
+`install_target` decides what path `pkexec` is given. Two candidates, in order
+of preference:
+
+**Preferred — inherited fd.** Clear `FD_CLOEXEC` on the handle and pass
+`/proc/self/fd/N`, so root opens the exact verified inode. Verify empirically
+that (a) the child actually inherits the descriptor through `pkexec`, and
+(b) `dnf`/`apt-get` accept that path as a local package file. You can test
+both **without installing anything and without a password** by running the
+non-privileged equivalents, e.g. `rpm -qp --nosignature --qf '%{VERSION}'
+/proc/self/fd/N` from a child process, and by checking whether `pkexec`
+preserves descriptors above 2 (`pkexec /bin/ls -l /proc/self/fd` requires a
+password — instead consult `pkexec`'s documented fd handling and test
+inheritance through a plain non-setuid child first, reporting what you find).
+
+**Fallback — pipe to a root-owned temp dir.** If fd inheritance through
+`pkexec` cannot be established, do not silently degrade to the original
+name-based handoff. Instead pipe the already-verified bytes to root's stdin
+and have root materialise them somewhere only root can write:
+
+```
+pkexec /bin/sh -c 'set -eu; d=$(mktemp -d); trap "rm -rf \"$d\"" EXIT; cat > "$d/pkg"; dnf install -y "$d/pkg"'
+```
+
+The shell string is a fixed literal — no untrusted data is interpolated into
+it; the only variable input is the byte stream on stdin. `mktemp -d` runs as
+root and yields a 0700 root-owned directory, so there is no user-writable path
+anywhere in the install step.
+
+Whichever you use, **state clearly in your report which one and why**, with the
+evidence that decided it.
+
+- [ ] **Step 6: Run tests and lint**
+
+Run: `cd src-tauri && cargo test --lib updater && cargo clippy --all-targets --locked -- -D warnings`
+Expected: PASS — 32 passed (9 package + 5 verify + 18 mod); clippy clean.
+
+- [ ] **Step 7: Tidy the co-located minors**
+
+From the Task 4 review, all in `mod.rs`:
+- `clear_staging` uses `remove_file` only, so a stray *directory* named `x.sig`
+  permanently pins `staged_package_path` at "more than one staged update".
+  Remove directories too.
+- A failed verify in `updater_stage_finish` leaves the `.sig` behind. Clear it.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src-tauri/src/modules/updater/mod.rs
+git commit -m "fix(updater): bind the privileged install to the verified bytes"
+```
+
+---
+
 ### Task 5: Frontend asset selection
 
 **Files:**
