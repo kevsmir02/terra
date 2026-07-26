@@ -1,6 +1,7 @@
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useTheme } from "@/modules/theme";
 import type { SearchAddon } from "@xterm/addon-search";
+import { toast } from "sonner";
 import {
   forwardRef,
   memo,
@@ -22,6 +23,9 @@ import {
   submitToLeaf,
   useTerminalSession,
 } from "./lib/useTerminalSession";
+
+/** Shared so rapid selections replace one toast rather than stacking. */
+const COPY_TOAST_ID = "terminal-copy-on-select";
 
 export type TerminalPaneHandle = {
   write: (data: string) => void;
@@ -96,7 +100,17 @@ export const TerminalPane = memo(
         downPtRef.current = null;
         if (dragged && copyOnSelect) {
           const text = selectionToCopy(session.getSelection() ?? "");
-          if (text) void writeTerminalClipboard(text);
+          if (text) {
+            void writeTerminalClipboard(text).then((ok) => {
+              // A stable id makes a repeat selection replace the existing
+              // toast instead of stacking one per drag. Only on a confirmed
+              // write — claiming success on a silently failed one is how the
+              // clipboard path stayed invisible before.
+              if (ok) {
+                toast.success("Copied selection", { id: COPY_TOAST_ID });
+              }
+            });
+          }
         }
         return dragged;
       },

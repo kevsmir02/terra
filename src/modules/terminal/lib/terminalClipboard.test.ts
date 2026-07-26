@@ -78,4 +78,47 @@ describe("terminalClipboard", () => {
     expect(native.writeText).toHaveBeenCalledWith("copied");
     expect(web.writeText).not.toHaveBeenCalled();
   });
+
+  // The write result is what lets a caller tell the user "Copied" only when
+  // the text really landed. Reporting success on a silently swallowed failure
+  // is worse than staying quiet.
+  it("reports success after a native write", async () => {
+    platform(LINUX);
+    native.writeText.mockResolvedValue();
+    const { writeTerminalClipboard } = await load();
+    await expect(writeTerminalClipboard("copied")).resolves.toBe(true);
+  });
+
+  it("reports success after a web write", async () => {
+    platform(MAC);
+    web.writeText.mockResolvedValue();
+    const { writeTerminalClipboard } = await load();
+    await expect(writeTerminalClipboard("copied")).resolves.toBe(true);
+  });
+
+  it("reports success when the native write fails but the web write lands", async () => {
+    platform(LINUX);
+    native.writeText.mockRejectedValue(new Error("no ipc"));
+    web.writeText.mockResolvedValue();
+    const { writeTerminalClipboard } = await load();
+    await expect(writeTerminalClipboard("copied")).resolves.toBe(true);
+    expect(web.writeText).toHaveBeenCalledWith("copied");
+  });
+
+  it("reports failure when every write path fails", async () => {
+    platform(LINUX);
+    native.writeText.mockRejectedValue(new Error("no ipc"));
+    web.writeText.mockRejectedValue(new Error("denied"));
+    const { writeTerminalClipboard } = await load();
+    await expect(writeTerminalClipboard("copied")).resolves.toBe(false);
+  });
+
+  it("reports failure when no clipboard is available at all", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { userAgent: MAC },
+    });
+    const { writeTerminalClipboard } = await load();
+    await expect(writeTerminalClipboard("copied")).resolves.toBe(false);
+  });
 });

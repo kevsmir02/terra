@@ -24,15 +24,23 @@ export async function readTerminalClipboard(): Promise<string> {
   }
 }
 
-export async function writeTerminalClipboard(text: string): Promise<void> {
+/** Resolves true when the text actually reached the clipboard. Callers that
+ *  only fire-and-forget can keep ignoring the result; callers that report
+ *  success to the user must not claim it on a silently failed write. */
+export async function writeTerminalClipboard(text: string): Promise<boolean> {
   if (IS_LINUX) {
     try {
       const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
       await writeText(text);
-      return;
+      return true;
     } catch {}
   }
   try {
-    await webClipboard()?.writeText(text);
-  } catch {}
+    const clipboard = webClipboard();
+    if (!clipboard) return false;
+    await clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
