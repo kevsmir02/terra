@@ -55,7 +55,13 @@ export const usePreferencesStore = create<State>((set) => ({
         const prefs = await loadPreferences();
         set({ ...prefs, hydrated: true });
         mirrorBgFastPath(prefs.backgroundKind, prefs.backgroundImageId);
+        // TEMP-COS-DEBUG
+        console.log("[cos] prefs hydrated", {
+          terminalCopyOnSelect: prefs.terminalCopyOnSelect,
+        });
         void onPreferencesChange((key, value) => {
+          // TEMP-COS-DEBUG
+          console.log("[cos] pref change received", { key, value });
           set({ [key]: value } as Partial<State>);
           if (key === "backgroundKind" || key === "backgroundImageId") {
             const s = usePreferencesStore.getState();
