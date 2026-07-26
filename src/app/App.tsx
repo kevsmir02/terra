@@ -21,7 +21,13 @@ import {
   useApplyEditorFontSize,
   useEditorFileSync,
 } from "@/modules/editor";
-import { DeviceDropdown } from "@/modules/device";
+import {
+  DeviceDock,
+  DeviceDropdown,
+  DOCK_MAX_WIDTH,
+  DOCK_MIN_WIDTH,
+  useDeviceDock,
+} from "@/modules/device";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import {
@@ -114,7 +120,6 @@ export default function App() {
     openFileTab,
     pinTab,
     newPreviewTab,
-    newDevicePreviewTab,
     newMarkdownTab,
     setMarkdownView,
     setOverrideLanguage,
@@ -273,6 +278,17 @@ export default function App() {
     persistSidebarWidth,
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
+
+  const {
+    dockRef,
+    dockWidthRef,
+    serial: dockedSerial,
+    initialCollapsed: dockInitialCollapsed,
+    dockDevice,
+    stopDevice,
+    persistDockWidth,
+    persistDockCollapsed,
+  } = useDeviceDock();
 
   useSpaceStartup({
     ready: spacesHydrated,
@@ -1110,7 +1126,7 @@ export default function App() {
                         onNavigateToPath={cdInNewTab}
                       />
                     ) : (
-                      <DeviceDropdown onPick={(serial) => newDevicePreviewTab(serial)} />
+                      <DeviceDropdown onPick={(serial) => dockDevice(serial)} />
                     )}
                   </div>
                   <SidebarRail
@@ -1152,6 +1168,24 @@ export default function App() {
                     home={home}
                   />
                 </div>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel
+                id="device-dock"
+                panelRef={dockRef}
+                defaultSize={
+                  dockInitialCollapsed ? "0px" : `${dockWidthRef.current}px`
+                }
+                minSize={`${DOCK_MIN_WIDTH}px`}
+                maxSize={`${DOCK_MAX_WIDTH}px`}
+                collapsible
+                collapsedSize={0}
+                onResize={(size) => {
+                  if (size.inPixels > 0) persistDockWidth(size.inPixels);
+                  persistDockCollapsed(size.inPixels <= 0);
+                }}
+              >
+                <DeviceDock serial={dockedSerial} onStop={stopDevice} />
               </ResizablePanel>
             </ResizablePanelGroup>
           </main>
