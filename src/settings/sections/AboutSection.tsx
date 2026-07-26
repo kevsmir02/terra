@@ -23,32 +23,43 @@ export function AboutSection() {
   const [version, setVersion] = useState("");
   const [name, setName] = useState("Terra");
   const [build, setBuild] = useState("");
-  const { status, check, install } = useUpdater({ autoCheck: false });
-  const checking = status.kind === "checking";
-  const downloading = status.kind === "downloading";
-  const available = status.kind === "available";
-  const manualAvailable = status.kind === "manual-available";
-  const ready = status.kind === "ready";
-  const checkLabel =
-    status.kind === "uptodate"
-      ? "You're up to date"
-      : status.kind === "error"
-        ? "Check failed — retry"
-        : checking
-          ? "Checking…"
-          : downloading
+  const { status, check, download, install } = useUpdater();
+
+  const busy =
+    status.kind === "checking" ||
+    status.kind === "downloading" ||
+    status.kind === "installing";
+
+  const primaryLabel =
+    status.kind === "checking"
+      ? "Checking…"
+      : status.kind === "uptodate"
+        ? "You're up to date"
+        : status.kind === "available"
+          ? status.info.pair
+            ? `Download v${status.info.version}`
+            : `v${status.info.version} available`
+          : status.kind === "downloading"
             ? "Downloading…"
-            : ready
+            : status.kind === "staged"
               ? "Restart to install"
-              : available
-                ? `Install v${status.update.version}`
-                : manualAvailable
-                  ? `Update to v${status.info.version}`
+              : status.kind === "installing"
+                ? "Installing…"
+                : status.kind === "error"
+                  ? "Check failed — retry"
                   : "Check for updates";
-  const onUpdateClick = () => {
-    if (available) void install();
-    else void check({ manual: true });
+
+  const onPrimary = () => {
+    if (status.kind === "available" && status.info.pair) void download();
+    else if (status.kind === "available") void openUrl(status.info.releaseUrl);
+    else if (status.kind === "staged") void install();
+    else void check();
   };
+
+  const progress =
+    status.kind === "downloading" && status.contentLength
+      ? Math.min(100, Math.round((status.downloaded / status.contentLength) * 100))
+      : null;
 
   useEffect(() => {
     void getVersion().then(setVersion);
@@ -109,12 +120,8 @@ export function AboutSection() {
 
       <div className="flex flex-col gap-1.5">
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            onClick={onUpdateClick}
-            disabled={checking || downloading || ready}
-          >
-            {checkLabel}
+          <Button size="sm" onClick={onPrimary} disabled={busy}>
+            {primaryLabel}
           </Button>
           <Button
             variant="outline"
@@ -138,15 +145,15 @@ export function AboutSection() {
             {status.message}
           </p>
         )}
-        {downloading && status.contentLength ? (
+        {status.kind === "available" && !status.info.pair && (
           <p className="text-[11px] text-muted-foreground">
-            {Math.min(
-              100,
-              Math.round((status.downloaded / status.contentLength) * 100),
-            )}
-            %
+            This install format updates manually — the button opens the release
+            page.
           </p>
-        ) : null}
+        )}
+        {progress !== null && (
+          <p className="text-[11px] text-muted-foreground">{progress}%</p>
+        )}
       </div>
     </div>
   );

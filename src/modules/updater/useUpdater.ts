@@ -1,154 +1,173 @@
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type Update } from "@tauri-apps/plugin-updater";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { IS_LINUX } from "@/lib/platform";
+import {
+  isNewer,
+  selectAsset,
+  type AssetPair,
+  type PackageKind,
+  type ReleaseAsset,
+} from "./assets";
 
-const LAST_CHECK_KEY = "terra:updater:last-check";
-const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const GITHUB_LATEST_RELEASE =
   "https://api.github.com/repos/kevsmir02/terra/releases/latest";
 
-export interface ManualUpdateInfo {
+export interface AvailableUpdate {
   version: string;
   currentVersion: string;
-  body: string;
   releaseUrl: string;
+  /** null when this install format cannot be updated in place. */
+  pair: AssetPair | null;
 }
 
 export type UpdaterStatus =
   | { kind: "idle" }
   | { kind: "checking" }
   | { kind: "uptodate" }
-  | { kind: "available"; update: Update }
-  | { kind: "manual-available"; info: ManualUpdateInfo }
-  | { kind: "downloading"; downloaded: number; contentLength: number | null }
-  | { kind: "ready" }
+  | { kind: "available"; info: AvailableUpdate }
+  | {
+      kind: "downloading";
+      info: AvailableUpdate;
+      downloaded: number;
+      contentLength: number | null;
+    }
+  | { kind: "staged"; info: AvailableUpdate; fileName: string }
+  | { kind: "installing"; info: AvailableUpdate }
   | { kind: "error"; message: string };
 
-function parseVersion(v: string): number[] {
-  return v
-    .replace(/^v/, "")
-    .split("-")[0]
-    .split(".")
-    .map((p) => Number.parseInt(p, 10) || 0);
-}
-
-function isNewer(remote: string, current: string): boolean {
-  const a = parseVersion(remote);
-  const b = parseVersion(current);
-  const len = Math.max(a.length, b.length);
-  for (let i = 0; i < len; i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    if (x !== y) return x > y;
-  }
-  return false;
-}
-
-async function checkLinuxRelease(): Promise<ManualUpdateInfo | null> {
-  const [current, res] = await Promise.all([
+async function fetchLatest(): Promise<{
+  version: string;
+  currentVersion: string;
+  releaseUrl: string;
+  assets: ReleaseAsset[];
+} | null> {
+  const [currentVersion, res] = await Promise.all([
     getVersion(),
     fetch(GITHUB_LATEST_RELEASE, {
       headers: { Accept: "application/vnd.github+json" },
     }),
   ]);
+  if (res.status === 404) {
+    throw new Error("No releases published yet.");
+  }
   if (!res.ok) {
     throw new Error(`GitHub API ${res.status}`);
   }
   const data = (await res.json()) as {
     tag_name: string;
-    body?: string;
     html_url: string;
+    assets?: ReleaseAsset[];
   };
-  const remote = data.tag_name.replace(/^v/, "");
-  if (!isNewer(remote, current)) return null;
+  const version = data.tag_name.replace(/^v/, "");
+  if (!isNewer(version, currentVersion)) return null;
   return {
-    version: remote,
-    currentVersion: current,
-    body: data.body ?? "",
+    version,
+    currentVersion,
     releaseUrl: data.html_url,
+    assets: data.assets ?? [],
   };
 }
 
-interface Options {
-  /** Skip the time-based throttle on automatic startup checks. */
-  manual?: boolean;
-}
-
-interface HookOptions {
-  /** When false, the hook does not run an automatic check on mount. */
-  autoCheck?: boolean;
-}
-
-export function useUpdater({ autoCheck = true }: HookOptions = {}) {
+export function useUpdater() {
   const [status, setStatus] = useState<UpdaterStatus>({ kind: "idle" });
 
-  const runCheck = useCallback(async ({ manual }: Options = {}) => {
-    if (!manual) {
-      const last = Number(localStorage.getItem(LAST_CHECK_KEY) ?? 0);
-      if (Date.now() - last < CHECK_INTERVAL_MS) return;
-    }
+  const check = useCallback(async () => {
     setStatus({ kind: "checking" });
     try {
-      if (IS_LINUX) {
-        const info = await checkLinuxRelease();
-        if (info) {
-          setStatus({ kind: "manual-available", info });
-        } else {
-          localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
-          setStatus({ kind: "uptodate" });
-        }
+      const latest = await fetchLatest();
+      if (!latest) {
+        setStatus({ kind: "uptodate" });
         return;
       }
-      const update = await check();
-      if (update) {
-        setStatus({ kind: "available", update });
-      } else {
-        localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
-        setStatus({ kind: "uptodate" });
+      let pair: AssetPair | null = null;
+      if (IS_LINUX) {
+        const kind = await invoke<PackageKind>("updater_package_kind");
+        pair = selectAsset(kind, latest.assets);
       }
+      setStatus({
+        kind: "available",
+        info: {
+          version: latest.version,
+          currentVersion: latest.currentVersion,
+          releaseUrl: latest.releaseUrl,
+          pair,
+        },
+      });
     } catch (err) {
       setStatus({ kind: "error", message: String(err) });
     }
   }, []);
 
-  const install = useCallback(async () => {
-    if (status.kind !== "available") return;
-    const { update } = status;
-    let total: number | null = null;
-    let downloaded = 0;
-    setStatus({ kind: "downloading", downloaded: 0, contentLength: null });
+  const download = useCallback(async () => {
+    if (status.kind !== "available" || !status.info.pair) return;
+    const { info } = status;
+    const pair = info.pair;
+    if (!pair) return;
+
+    setStatus({ kind: "downloading", info, downloaded: 0, contentLength: null });
     try {
-      await update.downloadAndInstall((event) => {
-        if (event.event === "Started") {
-          total = event.data.contentLength ?? null;
-          setStatus({
-            kind: "downloading",
-            downloaded: 0,
-            contentLength: total,
-          });
-        } else if (event.event === "Progress") {
-          downloaded += event.data.chunkLength;
-          setStatus({ kind: "downloading", downloaded, contentLength: total });
-        } else if (event.event === "Finished") {
-          setStatus({ kind: "ready" });
-        }
+      const res = await fetch(pair.pkg.browser_download_url);
+      if (!res.ok || !res.body) {
+        throw new Error(`download failed (${res.status})`);
+      }
+      const contentLength = Number(res.headers.get("content-length")) || null;
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let downloaded = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        downloaded += value.length;
+        setStatus({ kind: "downloading", info, downloaded, contentLength });
+      }
+      const bytes = new Uint8Array(downloaded);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const sigRes = await fetch(pair.sig.browser_download_url);
+      if (!sigRes.ok) throw new Error(`signature download failed (${sigRes.status})`);
+      const signature = await sigRes.text();
+
+      // Two calls: Tauri sends either JSON args or a raw binary body, never
+      // both. The metadata goes first; the package travels as a raw body so a
+      // ~15 MB download is not re-encoded into a JS number array.
+      await invoke("updater_stage_begin", {
+        fileName: pair.pkg.name,
+        signature,
       });
-      await relaunch();
+      await invoke<string>("updater_stage_finish", bytes);
+      setStatus({ kind: "staged", info, fileName: pair.pkg.name });
     } catch (err) {
       setStatus({ kind: "error", message: String(err) });
     }
   }, [status]);
 
-  const dismiss = useCallback(() => {
-    setStatus({ kind: "idle" });
-  }, []);
+  const install = useCallback(async () => {
+    if (status.kind !== "staged") return;
+    const { info, fileName } = status;
+    setStatus({ kind: "installing", info });
+    try {
+      await invoke("updater_install", { fileName });
+      await relaunch();
+    } catch (err) {
+      const message = String(err);
+      // A dismissed or refused polkit prompt keeps the staged package, so a
+      // retry costs no re-download.
+      setStatus(
+        message.includes("cancelled") || message.includes("not authorized")
+          ? { kind: "staged", info, fileName }
+          : { kind: "error", message },
+      );
+    }
+  }, [status]);
 
-  useEffect(() => {
-    if (!autoCheck) return;
-    void runCheck();
-  }, [autoCheck, runCheck]);
+  const dismiss = useCallback(() => setStatus({ kind: "idle" }), []);
 
-  return { status, check: runCheck, install, dismiss };
+  return { status, check, download, install, dismiss };
 }
