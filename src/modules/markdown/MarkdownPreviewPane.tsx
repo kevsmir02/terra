@@ -1,3 +1,4 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
@@ -59,7 +60,7 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
       )}
     >
       <MarkdownViewToggle mode="rendered" onChange={onSetView} />
-      <div className="flex-1 overflow-auto">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="px-8 py-6">
           {status.kind === "loading" && (
             <p className="text-[12px] text-muted-foreground">Loading…</p>
@@ -89,7 +90,7 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
             </Streamdown>
           )}
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }
