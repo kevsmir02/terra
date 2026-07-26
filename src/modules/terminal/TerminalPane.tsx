@@ -1,3 +1,4 @@
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useTheme } from "@/modules/theme";
 import type { SearchAddon } from "@xterm/addon-search";
 import {
@@ -9,6 +10,12 @@ import {
 } from "react";
 import { BlockOverlay } from "./block/BlockOverlay";
 import { BlockWatermark } from "./block/BlockWatermark";
+import {
+  isDragGesture,
+  type Point,
+  selectionToCopy,
+} from "./lib/copyOnSelect";
+import { writeTerminalClipboard } from "./lib/terminalClipboard";
 import {
   focusLeafInput,
   submitToLeaf,
@@ -52,7 +59,8 @@ export const TerminalPane = memo(
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const downYRef = useRef<number | null>(null);
+    const downPtRef = useRef<Point | null>(null);
+    const copyOnSelect = usePreferencesStore((s) => s.terminalCopyOnSelect);
     const { resolvedMode, themeId, customThemes } = useTheme();
 
     const session = useTerminalSession({
@@ -103,14 +111,25 @@ export const TerminalPane = memo(
               ref={containerRef}
               className="absolute inset-0 z-0"
               onMouseDown={(e) => {
-                downYRef.current = e.clientY;
+                downPtRef.current = { x: e.clientX, y: e.clientY };
               }}
               onMouseUp={(e) => {
-                const moved =
-                  downYRef.current != null &&
-                  Math.abs(e.clientY - downYRef.current) > 4;
-                downYRef.current = null;
-                if (!moved) session.selectBlockAt(e.clientY);
+                const dragged = isDragGesture(downPtRef.current, {
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+                downPtRef.current = null;
+                // The two branches are mutually exclusive on purpose:
+                // selectBlockAt replaces the selection with whole-block lines,
+                // so the copy path must never run where it could observe that.
+                if (dragged) {
+                  if (copyOnSelect) {
+                    const text = selectionToCopy(session.getSelection() ?? "");
+                    if (text) void writeTerminalClipboard(text);
+                  }
+                } else {
+                  session.selectBlockAt(e.clientY);
+                }
                 if (session.blockMode === "prompt") focusLeafInput(leafId);
               }}
             />
