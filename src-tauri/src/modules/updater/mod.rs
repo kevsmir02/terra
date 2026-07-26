@@ -146,6 +146,54 @@ pub async fn updater_stage_finish(
     .map_err(|e| format!("updater_stage_finish join: {e}"))?
 }
 
+/// Reads the version from the package itself rather than its file name: the
+/// signature covers content, not the name it was saved under.
+fn package_version(kind: PackageKind, path: &Path) -> Result<String, String> {
+    let p = path.to_string_lossy().into_owned();
+    let (bin, args): (&str, Vec<String>) = match kind {
+        PackageKind::Rpm => (
+            "rpm",
+            vec!["-qp".into(), "--nosignature".into(), "--qf".into(), "%{VERSION}".into(), p],
+        ),
+        PackageKind::Deb => ("dpkg-deb", vec!["-f".into(), p, "Version".into()]),
+        PackageKind::Unsupported => return Err("unsupported package kind".to_string()),
+    };
+    if which::which(bin).is_err() {
+        return Err(format!("{bin} is not available to read the package version"));
+    }
+    let mut cmd = Command::new(bin);
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::null());
+    hide_console(&mut cmd);
+    let out = cmd
+        .output()
+        .map_err(|e| format!("could not read the package version: {e}"))?;
+    if !out.status.success() {
+        return Err("could not read the package version".to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Strictly-newer comparison that fails closed on anything it cannot parse.
+fn is_newer(candidate: &str, current: &str) -> bool {
+    fn parts(v: &str) -> Option<Vec<u64>> {
+        let core = v.trim().split('-').next()?.trim();
+        if core.is_empty() {
+            return None;
+        }
+        core.split('.').map(|p| p.parse::<u64>().ok()).collect()
+    }
+    let (Some(a), Some(b)) = (parts(candidate), parts(current)) else {
+        return false;
+    };
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x > y;
+        }
+    }
+    false
+}
+
 #[tauri::command]
 pub async fn updater_install(app: AppHandle, file_name: String) -> Result<(), String> {
     let dir = staging_dir(&app)?;
@@ -161,6 +209,14 @@ pub async fn updater_install(app: AppHandle, file_name: String) -> Result<(), St
         verify::verify(&pubkey, &bytes, &signature)?;
 
         let kind = package::detect();
+        let version = package_version(kind, &path)?;
+        let current = env!("CARGO_PKG_VERSION");
+        if !is_newer(&version, current) {
+            return Err(format!(
+                "refusing to install {version} over {current} — updates must move forward"
+            ));
+        }
+
         let (bin, args) = package::install_command(kind, &path)
             .ok_or_else(|| "this install format cannot be updated in place".to_string())?;
 
@@ -267,5 +323,34 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         assert!(staged_package_path(&dir).is_err());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn is_newer_accepts_a_higher_patch() {
+        assert!(is_newer("0.8.6", "0.8.5"));
+    }
+
+    #[test]
+    fn is_newer_rejects_an_equal_version() {
+        // The bug this task exists for: an equal version means dnf exits 0
+        // having done nothing, after prompting for a password.
+        assert!(!is_newer("0.8.5", "0.8.5"));
+    }
+
+    #[test]
+    fn is_newer_rejects_a_downgrade() {
+        assert!(!is_newer("0.8.4", "0.8.5"));
+    }
+
+    #[test]
+    fn is_newer_compares_numerically_not_lexically() {
+        assert!(is_newer("0.10.0", "0.9.0"));
+    }
+
+    #[test]
+    fn is_newer_fails_closed_on_unparseable_input() {
+        assert!(!is_newer("", "0.8.5"));
+        assert!(!is_newer("not-a-version", "0.8.5"));
+        assert!(!is_newer("0.8.6", ""));
     }
 }
