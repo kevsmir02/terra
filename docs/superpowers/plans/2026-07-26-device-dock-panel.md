@@ -560,18 +560,9 @@ Immediately after the closing `</ResizablePanel>` of the `workspace` panel (`src
 </ResizablePanel>
 ```
 
-Add the constants to the `@/modules/device` import:
-
-```ts
-import {
-  DeviceDock,
-  DeviceDropdown,
-  useDeviceDock,
-} from "@/modules/device";
-import { DOCK_MAX_WIDTH, DOCK_MIN_WIDTH } from "@/modules/device/useDeviceDock";
-```
-
-Then add them to the barrel in `src/modules/device/index.ts`:
+The panel needs `DOCK_MIN_WIDTH` and `DOCK_MAX_WIDTH`. Export them from the
+barrel by replacing the `useDeviceDock` line in `src/modules/device/index.ts`
+(added in Step 2) with:
 
 ```ts
 export {
@@ -582,7 +573,7 @@ export {
 } from "./useDeviceDock";
 ```
 
-and simplify the `App.tsx` import to a single line:
+Then the `App.tsx` import from Step 3 becomes, in full:
 
 ```ts
 import {
@@ -639,9 +630,12 @@ const repoRoot = path.resolve(here, "../../..");
 describe("the dock is the only device surface", () => {
   // Two mount sites racing over one scrcpy session is the failure this
   // refactor could reintroduce, and it would not surface as a type error.
+  // `--exclude` is load-bearing: these patterns are string literals in THIS
+  // file, which lives under src/, so an unfiltered grep matches itself and the
+  // assertion can never pass.
   it("mounts DevicePreviewPane in exactly one place", () => {
     const hits = execSync(
-      "grep -rl '<DevicePreviewPane' src/ || true",
+      "grep -rl '<DevicePreviewPane' src/ --exclude=useDeviceDock.test.ts || true",
       { cwd: repoRoot, encoding: "utf8" },
     )
       .split("\n")
@@ -651,7 +645,7 @@ describe("the dock is the only device surface", () => {
 
   it("has no device-preview tab kind left in the codebase", () => {
     const hits = execSync(
-      "grep -rn 'device-preview\\|DevicePreviewTab\\|newDevicePreviewTab' src/ || true",
+      "grep -rn 'device-preview\\|DevicePreviewTab\\|newDevicePreviewTab' src/ --exclude=useDeviceDock.test.ts || true",
       { cwd: repoRoot, encoding: "utf8" },
     ).trim();
     expect(hits).toBe("");
