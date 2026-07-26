@@ -4,7 +4,7 @@ Terra direction, what's shipped, what's coming, and what's deliberately out of s
 
 ## What Terra is
 
-Terra is a fast, lightweight Terminal IDE (agentic development workspace) designed for developers who run CLI agent harnesses (Pi, OpenCode, Antigravity CLI, Claude Code) directly in the terminal. It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor (CodeMirror 6), a file explorer, source control with git graph, and a web preview pane—eliminating the need to Alt-Tab between tools. Under 10 MB on disk. No telemetry.
+Terra is a fast, lightweight Terminal IDE (agentic development workspace) designed for developers who run CLI agent harnesses (Pi, OpenCode, Antigravity CLI, Claude Code) directly in the terminal. It pairs a native PTY backend with a modern UI: multi-tab terminals, an integrated code editor (CodeMirror 6), a file explorer, source control with git graph, a web preview pane, and an Android device preview dock—eliminating the need to Alt-Tab between tools. Under 10 MB on disk. No telemetry.
 
 The product is opinionated: terminal-first, zero-bloat, CLI-agent workflow optimized, lightweight always, cross-platform without compromise.
 
@@ -37,6 +37,9 @@ The themes below frame every scope decision.
 - [x] OSC 777 terminal agent detection & status notifications for CLI agents
 - [x] WSL bridge as workspace environment
 - [x] **Project Profiles & Auto-Launch**: Extended Spaces to save resizable panel split ratios (`panelSizes`) and auto-run startup commands (`startupCommands: ["pnpm dev", "pi"]`).
+- [x] **Block-Mode Shell Input**: OSC 133-driven prompt/running/alt-screen mode machine backing a dedicated CodeMirror shell input bar, with block decorations and per-block output caps.
+- [x] **History-Based Inline Suggestions**: Persisted command history with ghost-text completion, history popover, and filesystem path completion in the shell input.
+- [x] Command palette with command history
 
 ### Editor
 
@@ -58,13 +61,18 @@ The themes below frame every scope decision.
 
 ### Web Preview & Viewers
 
-- [x] Auto-detected local dev server preview
-- [x] Image, PDF, and Markdown preview panes
+- [x] Local dev server preview with one-click common-port presets
+- [x] Dev server detection with one-click preview
+- [x] Markdown preview pane with rendered/raw toggle
+- [x] Inline image, PDF, video, and audio viewers for binary files
 - [x] Sandboxed iframe
 
 ### Device Preview
 
-- [x] **Embedded Android Device Preview**: Dock and render running system Android emulator/AVD displays directly inside a Terra panel without bundling an emulator. Bundles `scrcpy-server.jar` (Apache-2.0); streams raw H.264 via ADB and decodes with MSE. Input via `adb shell input` in v1.
+- [x] **Embedded Android Device Preview**: Render running system Android emulator/AVD displays directly inside Terra without bundling an emulator. Bundles `scrcpy-server.jar` (Apache-2.0); streams raw H.264 via ADB and decodes with MSE.
+- [x] **Android Emulator Device Preview Pane**: Resizable, collapsible right-hand device dock with persisted width, serial header, device picker, and stop control; the preview pane resets on device switch and gates not-yet-booted emulators.
+- [x] **Binary Touch Control Bridge**: Low-latency scrcpy binary control protocol over a dedicated socket (multi-touch, scroll, keys), with `adb shell input` as the fallback when the control channel drops.
+- [x] **1-Click AVD Launch**: List, boot, and stop system AVDs headless from the Devices panel with cross-platform Android SDK discovery and owned emulator lifecycle.
 
 ### Themes & Customization
 
@@ -86,16 +94,14 @@ The themes below frame every scope decision.
 ### Coming next
 
 - [ ] **Terminal <-> Editor Quick Bridge**: Click file/error paths in terminal output to jump straight to the line in CodeMirror; send paths from Explorer to active PTY.
-- [ ] **Smart Dev Server Auto-Docking**: Sniff PTY output for `http://localhost:\d+` and auto-dock/open the web preview tab.
 
 - [ ] **SSH & Remote Workspace Support**: PTY remote terminal management.
-- [ ] **Inline Terminal Auto-Suggestions**: History-based terminal completions.
-- [ ] **Persistent Session Restore**: Restore terminal scrollback & workspace state on reboot.
+- [ ] **Terminal Scrollback Restore**: Workspace, tab, and pane-tree state already restore on reboot; scrollback contents do not.
 
 ### Longer horizon
 
-- [ ] Release automation (CHANGELOG, version bump, tag flow)
-- [ ] Bundle optimization (lazy-load language packs, tree-shake)
+- [ ] Release automation: CHANGELOG generation and version bump. Tag-triggered multi-platform build and publish already ships in `release.yml`.
+- [ ] Bundle optimization: tree-shake audit. Language packs and heavy panes are already lazy-loaded.
 - [ ] Selective TS → Rust migration where profiler shows wins
 - [ ] Live filesystem update enhancements in explorer and editor
 

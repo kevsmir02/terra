@@ -36,7 +36,7 @@ import {
   type SearchTarget,
 } from "@/modules/header";
 import { setLspNavigator } from "@/modules/lsp";
-import type { PreviewPaneHandle } from "@/modules/preview";
+import { setDevServerOpener, type PreviewPaneHandle } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -572,6 +572,10 @@ export default function App() {
     },
     [newPreviewTab],
   );
+
+  useEffect(() => {
+    setDevServerOpener(openPreviewTab);
+  }, [openPreviewTab]);
 
   const splitActivePaneInActiveTab = useCallback(
     (dir: "row" | "col") => {

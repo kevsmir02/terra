@@ -5,9 +5,11 @@ import {
 } from "@/components/ui/resizable";
 import type { SearchAddon } from "@xterm/addon-search";
 import { Fragment } from "react";
+import { DevServerChip } from "@/modules/preview/DevServerChip";
 import { useTerminalDropStore } from "./lib/dropStore";
 import { firstLeafSlotId, type PaneNode } from "./lib/panes";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
+
 
 type LeafBundle = {
   setRef: (h: TerminalPaneHandle | null) => void;
@@ -56,6 +58,7 @@ export function PaneTreeView(props: Props) {
           onExit={b.onExit}
         />
         <DropOverlay leafId={node.id} />
+        <DevServerChip leafId={node.id} />
       </div>
     );
   }
