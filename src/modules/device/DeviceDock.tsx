@@ -3,22 +3,20 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { DevicePreviewPane } from "./DevicePreviewPane";
 
 type Props = {
-  serial: string | null;
+  serial: string;
   onStop: () => void;
 };
 
 /**
- * Right-docked device surface. Renders nothing until a device is picked; the
- * panel itself stays collapsed at zero width until then, so there is no empty
- * state to design.
+ * Right-docked device surface. Only ever mounted with a picked device
+ * (DeviceDockLazy holds the no-device guard); the panel itself stays collapsed
+ * at zero width until then, so there is no empty state to design.
  *
  * `overflow-hidden` matters: react-resizable-panels sets `overflow: visible`
  * on the panel element, so without it the video would spill over the workspace
  * while the dock is collapsed to zero width.
  */
 export function DeviceDock({ serial, onStop }: Props) {
-  if (!serial) return null;
-
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border/60 bg-card">
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2">

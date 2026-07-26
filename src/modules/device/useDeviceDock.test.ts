@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import {
   clampDockWidth,
   DOCK_DEFAULT_WIDTH,
@@ -86,6 +87,16 @@ describe("the dock is the only device surface", () => {
       .split("\n")
       .filter(Boolean);
     expect(hits).toEqual(["src/modules/device/DeviceDock.tsx"]);
+  });
+
+  // App imports the barrel at module scope, so a direct re-export of either
+  // surface drags the MSE player and control bridge into the eager chunk and
+  // they get parsed at first paint even when no device is ever docked.
+  it("exports both surfaces through their Lazy wrappers", () => {
+    const barrel = readFileSync(path.join(repoRoot, "src/modules/device/index.ts"), "utf8");
+    expect(barrel).toContain('from "./DeviceDockLazy"');
+    expect(barrel).toContain('from "./DeviceDropdownLazy"');
+    expect(barrel).not.toMatch(/from "\.\/(DeviceDock|DeviceDropdown|controlBridge|MsePlayer)"/);
   });
 
   it("has no device-preview tab kind left in the codebase", () => {
