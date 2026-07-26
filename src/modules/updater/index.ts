@@ -1,2 +1,3 @@
-export { UpdaterDialog } from "./UpdaterDialog";
+export { UpdaterDialog } from "./UpdaterDialogLazy";
 export { useUpdater } from "./useUpdater";
+
