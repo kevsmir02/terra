@@ -130,6 +130,28 @@ jobs:
           gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
             --clobber --repo "$GITHUB_REPOSITORY"
 
+      - name: Sign and upload rpm/deb for the in-app updater
+        if: matrix.platform == 'ubuntu-22.04' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+
+          for pkg in \
+            src-tauri/target/release/bundle/rpm/*.rpm \
+            src-tauri/target/release/bundle/deb/*.deb
+          do
+            test -e "$pkg" || { echo "missing bundle: $pkg"; exit 1; }
+            rm -f "$pkg.sig"
+            pnpm tauri signer sign "$pkg"
+            test -s "$pkg.sig" || { echo "signing produced no .sig for $pkg"; exit 1; }
+            gh release upload "$TAG" "$pkg" "$pkg.sig" \
+              --clobber --repo "$GITHUB_REPOSITORY"
+          done
+
   patch-appimage-updater:
     needs: publish-tauri
     if: startsWith(github.ref, 'refs/tags/')
