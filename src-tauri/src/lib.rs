@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, workspace};
+use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -292,6 +292,10 @@ pub fn run() {
             git::commands::git_remote_url,
             git::commands::git_list_branches,
             git::commands::git_checkout_branch,
+            updater::updater_package_kind,
+            updater::updater_stage_begin,
+            updater::updater_stage_finish,
+            updater::updater_install,
             workspace::wsl_list_distros,
             workspace::wsl_default_distro,
             workspace::wsl_home,
