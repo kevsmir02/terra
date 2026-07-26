@@ -1,10 +1,33 @@
-use tauri::ipc::Channel;
-use tauri::State;
+use std::time::{Duration, Instant};
 
-use super::adb::{launch_avd, list_avds, list_devices, resolve_adb_path, resolve_emulator_path, DeviceEntry};
+use tauri::ipc::Channel;
+use tauri::{Emitter, Manager, State};
+
+use super::adb::{
+    boot_completed, create_avd, emu_kill, free_emulator_port, host_has_display, launch_avd,
+    list_avd_names, list_devices, list_system_images, log_tail, resolve_adb_path,
+    resolve_avdmanager_path, resolve_emulator_path, running_avds, AvdEntry, DeviceEntry,
+    SystemImage, GPU_FALLBACK,
+};
 use super::control::{ControlMessage, KeyAction, TouchAction};
 use super::session::{DeviceFrame, DeviceSession};
 use super::state::DeviceState;
+
+/// A cold boot on a slow machine genuinely can take this long; a quick-boot
+/// from snapshot is usually a few seconds.
+const BOOT_TIMEOUT: Duration = Duration::from_secs(240);
+const BOOT_POLL_INTERVAL: Duration = Duration::from_millis(750);
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvdBootEvent {
+    pub name: String,
+    pub serial: String,
+    /// `starting` | `waiting-for-device` | `booting` | `ready` | `failed`
+    pub phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
 
 #[tauri::command]
 pub async fn device_list() -> Result<Vec<DeviceEntry>, String> {
@@ -14,20 +37,246 @@ pub async fn device_list() -> Result<Vec<DeviceEntry>, String> {
         .map_err(|e| format!("device_list join: {e}"))?
 }
 
+/// Lists every AVD, annotated with the serial of its running instance (so the
+/// UI can attach instead of failing on a relaunch) and whether Terax owns it.
 #[tauri::command]
-pub async fn device_list_avds() -> Result<Vec<String>, String> {
+pub async fn device_list_avds(state: State<'_, DeviceState>) -> Result<Vec<AvdEntry>, String> {
     let emulator = resolve_emulator_path()?;
-    tauri::async_runtime::spawn_blocking(move || list_avds(&emulator))
-        .await
-        .map_err(|e| format!("device_list_avds join: {e}"))?
+    // adb may legitimately be absent while the emulator package is installed;
+    // fall back to reporting every AVD as not-running rather than erroring.
+    let adb = resolve_adb_path().ok();
+    let entries = tauri::async_runtime::spawn_blocking(move || {
+        let names = list_avd_names(&emulator)?;
+        let running = match &adb {
+            Some(adb) => list_devices(adb)
+                .map(|devices| running_avds(adb, &devices))
+                .unwrap_or_default(),
+            None => Default::default(),
+        };
+        Ok::<_, String>(
+            names
+                .into_iter()
+                .map(|name| {
+                    let serial = running.get(&name).cloned();
+                    AvdEntry {
+                        name,
+                        serial,
+                        managed: false,
+                    }
+                })
+                .collect::<Vec<_>>(),
+        )
+    })
+    .await
+    .map_err(|e| format!("device_list_avds join: {e}"))??;
+
+    Ok(entries
+        .into_iter()
+        .map(|mut e| {
+            e.managed = e.serial.as_deref().map(|s| state.is_managed(s)).unwrap_or(false);
+            e
+        })
+        .collect())
 }
 
 #[tauri::command]
-pub async fn device_launch_avd(name: String) -> Result<(), String> {
-    let emulator = resolve_emulator_path()?;
-    tauri::async_runtime::spawn_blocking(move || launch_avd(&emulator, &name))
+pub async fn device_list_system_images() -> Result<Vec<SystemImage>, String> {
+    tauri::async_runtime::spawn_blocking(list_system_images)
         .await
-        .map_err(|e| format!("device_launch_avd join: {e}"))?
+        .map_err(|e| format!("device_list_system_images join: {e}"))
+}
+
+#[tauri::command]
+pub async fn device_create_avd(name: String, package: String) -> Result<(), String> {
+    let avdmanager = resolve_avdmanager_path()?;
+    tauri::async_runtime::spawn_blocking(move || create_avd(&avdmanager, &name, &package))
+        .await
+        .map_err(|e| format!("device_create_avd join: {e}"))?
+}
+
+/// Starts an AVD headless and returns its serial immediately; boot progress
+/// arrives as `device:avd-boot` events so the caller never has to guess how
+/// long a cold boot takes.
+#[tauri::command]
+pub async fn device_launch_avd(
+    app: tauri::AppHandle,
+    state: State<'_, DeviceState>,
+    name: String,
+    gpu: Option<String>,
+) -> Result<String, String> {
+    let emulator = resolve_emulator_path()?;
+    let adb = resolve_adb_path()?;
+
+    let devices = list_devices(&adb).unwrap_or_default();
+    let port = free_emulator_port(&devices)?;
+    let log_path = std::env::temp_dir().join(format!("terax-emulator-{port}.log"));
+    let launched = launch_avd(&emulator, &name, port, gpu.as_deref(), log_path.clone())?;
+    let serial = launched.serial.clone();
+    state.track_launched(serial.clone(), name.clone(), launched.child);
+
+    let app_for_thread = app.clone();
+    let serial_for_thread = serial.clone();
+    std::thread::Builder::new()
+        .name("terax-avd-boot".into())
+        .spawn(move || {
+            await_boot(
+                app_for_thread,
+                adb,
+                emulator,
+                name,
+                serial_for_thread,
+                port,
+                gpu,
+                log_path,
+            );
+        })
+        .map_err(|e| format!("spawn boot watcher: {e}"))?;
+
+    Ok(serial)
+}
+
+fn emit_boot(app: &tauri::AppHandle, name: &str, serial: &str, phase: &str, message: Option<String>) {
+    let _ = app.emit(
+        "device:avd-boot",
+        AvdBootEvent {
+            name: name.to_string(),
+            serial: serial.to_string(),
+            phase: phase.to_string(),
+            message,
+        },
+    );
+}
+
+/// Polls until Android reports `sys.boot_completed`.
+///
+/// If the emulator dies first, retrying on software rendering is only correct
+/// when the host genuinely cannot provide GL — i.e. there is no display server.
+/// On a desktop the AVD's own renderer is right and forcing a different one is
+/// what breaks it, so there we fail fast and report the emulator's own log
+/// rather than crashing a second time.
+#[allow(clippy::too_many_arguments)]
+fn await_boot(
+    app: tauri::AppHandle,
+    adb: std::path::PathBuf,
+    emulator: std::path::PathBuf,
+    name: String,
+    serial: String,
+    port: u16,
+    gpu: Option<String>,
+    log_path: std::path::PathBuf,
+) {
+    emit_boot(&app, &name, &serial, "starting", None);
+    let deadline = Instant::now() + BOOT_TIMEOUT;
+    // Only meaningful on a headless host, and pointless if a mode was pinned.
+    let mut may_retry_on_software_gpu =
+        gpu.is_none() && !host_has_display() && GPU_FALLBACK != gpu.as_deref().unwrap_or("");
+    let mut announced_booting = false;
+
+    while Instant::now() < deadline {
+        // A dead child means the emulator bailed out; nothing will ever boot.
+        let exited = {
+            let state = app.state::<DeviceState>();
+            let mut guard = state.launched.lock().unwrap();
+            match guard.get_mut(&serial) {
+                Some(avd) => avd.child.try_wait().ok().flatten().is_some(),
+                // Stopped from under us (device_stop_avd, or app exit).
+                None => return,
+            }
+        };
+
+        if exited {
+            let state = app.state::<DeviceState>();
+            state.take_launched(&serial);
+            let reason = log_tail(&log_path, 3);
+
+            if !may_retry_on_software_gpu {
+                let detail = match reason {
+                    Some(r) => format!("emulator exited before Android finished booting — {r}"),
+                    None => "emulator exited before Android finished booting".to_string(),
+                };
+                log::warn!("[device] {serial}: {detail}");
+                emit_boot(&app, &name, &serial, "failed", Some(detail));
+                return;
+            }
+
+            may_retry_on_software_gpu = false;
+            log::warn!(
+                "[device] emulator {serial} exited with no display present; retrying on {GPU_FALLBACK}"
+            );
+            emit_boot(
+                &app,
+                &name,
+                &serial,
+                "starting",
+                Some(format!("no display detected; retrying with {GPU_FALLBACK}")),
+            );
+            match launch_avd(
+                &emulator,
+                &name,
+                port,
+                Some(GPU_FALLBACK),
+                log_path.clone(),
+            ) {
+                Ok(relaunched) => {
+                    state.track_launched(serial.clone(), name.clone(), relaunched.child);
+                }
+                Err(e) => {
+                    emit_boot(&app, &name, &serial, "failed", Some(e));
+                    return;
+                }
+            }
+            std::thread::sleep(BOOT_POLL_INTERVAL);
+            continue;
+        }
+
+        let visible = list_devices(&adb)
+            .map(|d| d.iter().any(|e| e.serial == serial && e.state == "device"))
+            .unwrap_or(false);
+        if visible {
+            if !announced_booting {
+                announced_booting = true;
+                emit_boot(&app, &name, &serial, "booting", None);
+            }
+            if boot_completed(&adb, &serial) {
+                emit_boot(&app, &name, &serial, "ready", None);
+                return;
+            }
+        } else if !announced_booting {
+            emit_boot(&app, &name, &serial, "waiting-for-device", None);
+        }
+        std::thread::sleep(BOOT_POLL_INTERVAL);
+    }
+
+    emit_boot(
+        &app,
+        &name,
+        &serial,
+        "failed",
+        Some(format!(
+            "timed out after {}s waiting for Android to finish booting",
+            BOOT_TIMEOUT.as_secs()
+        )),
+    );
+}
+
+/// Only stops emulators Terax started. One launched from Android Studio is the
+/// user's to manage, and killing it would be hostile.
+#[tauri::command]
+pub async fn device_stop_avd(state: State<'_, DeviceState>, serial: String) -> Result<(), String> {
+    let Some(mut avd) = state.take_launched(&serial) else {
+        return Err(format!("{serial} was not launched by Terax"));
+    };
+    let adb = resolve_adb_path()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if emu_kill(&adb, &serial).is_err() {
+            log::warn!("[device] emu kill failed for {serial}; killing process");
+            let _ = avd.child.kill();
+        }
+        let _ = avd.child.wait();
+        Ok::<_, String>(())
+    })
+    .await
+    .map_err(|e| format!("device_stop_avd join: {e}"))?
 }
 
 /// Pick an ephemeral localhost port for the session's adb forward. Not
@@ -121,9 +370,31 @@ pub(crate) async fn device_send_touch_impl(
 
     log::warn!("[device] control_tx channel send failed for touch event, using adb shell input fallback");
     if matches!(act, TouchAction::Down | TouchAction::Move) {
-        run_adb_shell(&serial, &["input", "tap", &x.to_string(), &y.to_string()]).await?;
+        // x/y arrive in the encoded-video space scrcpy requires, but
+        // `input tap` addresses the physical panel — scale across or the tap
+        // lands short on any device where max_size downscaled the stream.
+        let (tx, ty) = to_physical(&serial, x, y, width, height).await;
+        run_adb_shell(&serial, &["input", "tap", &tx.to_string(), &ty.to_string()]).await?;
     }
     Ok(())
+}
+
+/// Convert a point from the encoded-video space into physical display pixels.
+/// Falls back to the input unchanged when the physical size can't be read.
+async fn to_physical(serial: &str, x: u32, y: u32, width: u16, height: u16) -> (u32, u32) {
+    if width == 0 || height == 0 {
+        return (x, y);
+    }
+    match device_screen_size(serial.to_string()).await {
+        Ok((pw, ph)) => (
+            (x as u64 * pw as u64 / width as u64) as u32,
+            (y as u64 * ph as u64 / height as u64) as u32,
+        ),
+        Err(e) => {
+            log::warn!("[device] physical size unavailable for fallback tap: {e}");
+            (x, y)
+        }
+    }
 }
 
 #[tauri::command]
@@ -163,6 +434,57 @@ pub(crate) async fn device_send_key_impl(
 
     log::warn!("[device] control_tx channel send failed for key event, using adb shell input fallback");
     run_adb_shell(&serial, &["input", "keyevent", &keycode.to_string()]).await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn device_send_scroll(
+    state: State<'_, DeviceState>,
+    handle: u32,
+    x: u32,
+    y: u32,
+    width: u16,
+    height: u16,
+    h: i16,
+    v: i16,
+) -> Result<(), String> {
+    device_send_scroll_impl(&state, handle, x, y, width, height, h, v).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn device_send_scroll_impl(
+    state: &DeviceState,
+    handle: u32,
+    x: u32,
+    y: u32,
+    width: u16,
+    height: u16,
+    h: i16,
+    v: i16,
+) -> Result<(), String> {
+    let msg = ControlMessage::InjectScroll {
+        x,
+        y,
+        width,
+        height,
+        h,
+        v,
+        buttons: 0,
+    };
+
+    {
+        let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+        let session = sessions.get(&handle).ok_or("session not found")?;
+        if session.control_tx.try_send(msg).is_ok() {
+            return Ok(());
+        }
+    }
+
+    // Unlike touch and key there is no faithful `adb shell input` equivalent
+    // for a wheel tick; approximating it with a swipe would fire unintended
+    // gestures, so a dropped scroll is preferable to a wrong one.
+    log::warn!("[device] control_tx channel send failed for scroll event; dropping");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -225,6 +547,58 @@ mod tests {
         } else {
             panic!("expected InjectKeycode");
         }
+    }
+
+    #[tokio::test]
+    async fn scroll_succeeds_via_control_tx() {
+        let state = DeviceState::default();
+        let (tx, mut rx) = mpsc::channel(10);
+        let session = DeviceSession {
+            id: 1,
+            serial: "dummy_serial".into(),
+            local_port: 9999,
+            adb: PathBuf::from("adb"),
+            server_child: None,
+            video_stream: None,
+            stopping: Arc::new(AtomicBool::new(false)),
+            control_tx: tx,
+        };
+        state.sessions.write().unwrap().insert(1, session);
+
+        let res = device_send_scroll_impl(&state, 1, 100, 200, 1080, 1920, 0, -3).await;
+        assert!(res.is_ok());
+        let msg = rx.try_recv().unwrap();
+        if let ControlMessage::InjectScroll { x, y, v, .. } = msg {
+            assert_eq!(x, 100);
+            assert_eq!(y, 200);
+            assert_eq!(v, -3);
+        } else {
+            panic!("expected InjectScroll");
+        }
+    }
+
+    // No faithful `adb shell input` equivalent exists, so a dead channel must
+    // drop the wheel tick rather than surface an error or fake a swipe.
+    #[tokio::test]
+    async fn scroll_drops_when_tx_closed() {
+        let state = DeviceState::default();
+        let (tx, rx) = mpsc::channel(10);
+        drop(rx);
+
+        let session = DeviceSession {
+            id: 1,
+            serial: "invalid_serial_test".into(),
+            local_port: 9999,
+            adb: PathBuf::from("adb"),
+            server_child: None,
+            video_stream: None,
+            stopping: Arc::new(AtomicBool::new(false)),
+            control_tx: tx,
+        };
+        state.sessions.write().unwrap().insert(1, session);
+
+        let res = device_send_scroll_impl(&state, 1, 100, 200, 1080, 1920, 0, -3).await;
+        assert!(res.is_ok());
     }
 
     #[tokio::test]

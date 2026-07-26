@@ -7,10 +7,21 @@ use tauri::Manager;
 
 use super::session::DeviceSession;
 
+/// An emulator this process started. Tracked so Terax can stop what it started
+/// and clean up on exit — and, just as importantly, so it can tell those apart
+/// from emulators the user launched from Android Studio, which it must leave
+/// strictly alone.
+pub struct LaunchedAvd {
+    pub name: String,
+    pub child: std::process::Child,
+}
+
 pub struct DeviceState {
     pub sessions: RwLock<HashMap<u32, DeviceSession>>,
     pub next_id: AtomicU32,
     pub jar_path: Mutex<Option<PathBuf>>,
+    /// Keyed by adb serial (`emulator-<port>`).
+    pub launched: Mutex<HashMap<String, LaunchedAvd>>,
 }
 
 impl Default for DeviceState {
@@ -19,6 +30,7 @@ impl Default for DeviceState {
             sessions: RwLock::new(HashMap::new()),
             next_id: AtomicU32::new(1),
             jar_path: Mutex::new(None),
+            launched: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -34,6 +46,48 @@ impl DeviceState {
             self.sessions.write().unwrap().drain().map(|(_, s)| s).collect();
         for mut s in drained {
             s.shutdown();
+        }
+    }
+
+    pub fn is_managed(&self, serial: &str) -> bool {
+        self.launched.lock().unwrap().contains_key(serial)
+    }
+
+    pub fn managed_serials(&self) -> Vec<String> {
+        self.launched.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub fn track_launched(&self, serial: String, name: String, child: std::process::Child) {
+        self.launched
+            .lock()
+            .unwrap()
+            .insert(serial, LaunchedAvd { name, child });
+    }
+
+    pub fn take_launched(&self, serial: &str) -> Option<LaunchedAvd> {
+        self.launched.lock().unwrap().remove(serial)
+    }
+
+    /// Shut down only the emulators this process started. Tries the console's
+    /// graceful `emu kill` first so the AVD's disk image isn't left dirty,
+    /// falling back to killing the process if that fails or the binary is gone.
+    pub fn kill_launched_avds(&self) {
+        let drained: Vec<(String, LaunchedAvd)> =
+            self.launched.lock().unwrap().drain().collect();
+        if drained.is_empty() {
+            return;
+        }
+        let adb = super::adb::resolve_adb_path().ok();
+        for (serial, mut avd) in drained {
+            let stopped = adb
+                .as_ref()
+                .map(|adb| super::adb::emu_kill(adb, &serial).is_ok())
+                .unwrap_or(false);
+            if !stopped {
+                log::warn!("[device] emu kill failed for {serial}; killing process");
+                let _ = avd.child.kill();
+            }
+            let _ = avd.child.wait();
         }
     }
 

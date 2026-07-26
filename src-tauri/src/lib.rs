@@ -306,10 +306,14 @@ pub fn run() {
             device::commands::device_list,
             device::commands::device_list_avds,
             device::commands::device_launch_avd,
+            device::commands::device_stop_avd,
+            device::commands::device_list_system_images,
+            device::commands::device_create_avd,
             device::commands::device_open,
             device::commands::device_close,
             device::commands::device_send_touch,
             device::commands::device_send_key,
+            device::commands::device_send_scroll,
             device::commands::device_input_tap,
             device::commands::device_input_swipe,
             device::commands::device_input_key,
@@ -327,6 +331,9 @@ pub fn run() {
                     }
                     if let Some(state) = app.try_state::<device::DeviceState>() {
                         state.kill_all();
+                        // Only tears down emulators Terax started; ones the
+                        // user launched elsewhere are left running.
+                        state.kill_launched_avds();
                     }
                 }
                 // macOS delivers "Open With" files here, not as argv (cold and
