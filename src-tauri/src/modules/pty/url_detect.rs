@@ -16,7 +16,6 @@ pub struct DevServerSignal {
     pub url: String,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     /// Accumulating (or ignoring) ordinary bytes.
@@ -38,7 +37,6 @@ enum State {
 /// current candidate, and the last emitted URL is remembered so a repainting
 /// TUI does not flood IPC. All further policy (per-session dedup, dismissal)
 /// belongs to the frontend.
-#[allow(dead_code)]
 pub struct UrlDetector {
     state: State,
     cand: Vec<u8>,
@@ -48,7 +46,6 @@ pub struct UrlDetector {
     last: Option<String>,
 }
 
-#[allow(dead_code)]
 impl UrlDetector {
     pub fn new() -> Self {
         UrlDetector {
@@ -125,7 +122,6 @@ impl UrlDetector {
 /// Bytes allowed inside a candidate. Square brackets are included because the
 /// `[::1]` literal needs them; quotes, parens and angle brackets are excluded
 /// so prose wrapping a URL terminates it.
-#[allow(dead_code)]
 fn is_url_byte(b: u8) -> bool {
     matches!(b,
         b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9'
@@ -136,7 +132,6 @@ fn is_url_byte(b: u8) -> bool {
 }
 
 /// Returns the normalized URL if `cand` is a loopback dev-server URL.
-#[allow(dead_code)]
 fn normalize(cand: &[u8]) -> Option<String> {
     let s = std::str::from_utf8(cand).ok()?;
     let (scheme, rest) = if let Some(r) = s.strip_prefix("http://") {
