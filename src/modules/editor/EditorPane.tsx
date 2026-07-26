@@ -46,6 +46,7 @@ import {
 } from "./lib/externalFormat";
 import { detectIndentUnit } from "./lib/indent";
 import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
+import type { DiskState } from "./lib/diskState";
 import { FORCE_READ_LIMIT, useDocument } from "./lib/useDocument";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
@@ -85,6 +86,42 @@ type Props = {
 // parse tree and a didOpen of that size cost far more than they give.
 const SYNTAX_MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Surfaces disk divergence that `useDocument` detects but cannot resolve on its
+ * own. A dirty buffer blocks the automatic reload, so the choice is the user's:
+ * keep editing and overwrite on save, or take the disk copy and lose the edits.
+ * Anchored above the editor rather than shown as a toast, because the condition
+ * persists until acted on and a toast would expire while it is still true.
+ */
+function DiskStateBanner({
+  state,
+  onReload,
+  onSave,
+}: {
+  state: DiskState;
+  onReload: () => void;
+  onSave: () => void;
+}) {
+  if (state === "in-sync") return null;
+  const missing = state === "missing";
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-1.5 text-xs">
+      <span className="text-muted-foreground">
+        {missing
+          ? "This file no longer exists on disk."
+          : "This file changed on disk."}
+      </span>
+      <button
+        type="button"
+        onClick={missing ? onSave : onReload}
+        className="ml-auto rounded-md border border-border bg-background px-2 py-0.5 text-foreground hover:bg-accent"
+      >
+        {missing ? "Save to recreate" : "Reload from disk"}
+      </button>
+    </div>
+  );
+}
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -97,11 +134,20 @@ export const EditorPane = memo(
   forwardRef<EditorPaneHandle, Props>(function EditorPane(props, ref) {
     const { path, overrideLanguage, onDirtyChange, onSaved, onClose } = props;
 
-    const { doc, onChange, save, reload, adoptDiskText, openAnyway } =
-      useDocument({
-        path,
-        onDirtyChange,
-      });
+    const {
+      doc,
+      diskState,
+      onChange,
+      save,
+      reload,
+      discardAndReload,
+      recreateOnDisk,
+      adoptDiskText,
+      openAnyway,
+    } = useDocument({
+      path,
+      onDirtyChange,
+    });
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
     const adoptDiskTextRef = useRef(adoptDiskText);
@@ -500,6 +546,11 @@ export const EditorPane = memo(
 
     return (
       <div className="flex h-full min-h-0 flex-col zoom-exempt">
+        <DiskStateBanner
+          state={diskState}
+          onReload={discardAndReload}
+          onSave={recreateOnDisk}
+        />
         <CodeMirror
           ref={cmRef}
           value={doc.content}
