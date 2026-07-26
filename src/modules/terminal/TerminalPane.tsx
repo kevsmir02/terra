@@ -81,12 +81,6 @@ export const TerminalPane = memo(
       // buttons stops a right- or middle-button release from being measured
       // against a stale origin and copying.
       downPtRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
-      // TEMP-COS-DEBUG
-      console.log("[cos] mousedown", {
-        button: e.button,
-        origin: downPtRef.current,
-        target: (e.target as HTMLElement)?.className,
-      });
     }, []);
 
     // Copies the selection when the gesture was a drag and the preference is
@@ -95,23 +89,11 @@ export const TerminalPane = memo(
     // from having to remember it.
     const copySelectionIfDragged = useCallback(
       (e: React.MouseEvent): boolean => {
-        const origin = downPtRef.current;
         const dragged = isDragGesture(downPtRef.current, {
           x: e.clientX,
           y: e.clientY,
         });
         downPtRef.current = null;
-        // TEMP-COS-DEBUG
-        const rawSel = session.getSelection();
-        console.log("[cos] mouseup", {
-          origin,
-          up: { x: e.clientX, y: e.clientY },
-          dragged,
-          copyOnSelect,
-          rawSelection: rawSel,
-          rawSelectionLen: rawSel?.length ?? 0,
-          willCopy: dragged && copyOnSelect && !!selectionToCopy(rawSel ?? ""),
-        });
         if (dragged && copyOnSelect) {
           const text = selectionToCopy(session.getSelection() ?? "");
           if (text) void writeTerminalClipboard(text);
