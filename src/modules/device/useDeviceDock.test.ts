@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import {
   clampDockWidth,
   DOCK_DEFAULT_WIDTH,
@@ -73,5 +76,33 @@ describe("readDockCollapsed", () => {
     expect(readDockCollapsed()).toBe(true);
     stubStorage({ "terax.deviceDock.collapsed": "0" });
     expect(readDockCollapsed()).toBe(false);
+  });
+});
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "../../..");
+
+describe("the dock is the only device surface", () => {
+  // Two mount sites racing over one scrcpy session is the failure this
+  // refactor could reintroduce, and it would not surface as a type error.
+  // `--exclude` is load-bearing: these patterns are string literals in THIS
+  // file, which lives under src/, so an unfiltered grep matches itself and the
+  // assertion can never pass.
+  it("mounts DevicePreviewPane in exactly one place", () => {
+    const hits = execSync(
+      "grep -rl '<DevicePreviewPane' src/ --exclude=useDeviceDock.test.ts || true",
+      { cwd: repoRoot, encoding: "utf8" },
+    )
+      .split("\n")
+      .filter(Boolean);
+    expect(hits).toEqual(["src/modules/device/DeviceDock.tsx"]);
+  });
+
+  it("has no device-preview tab kind left in the codebase", () => {
+    const hits = execSync(
+      "grep -rn 'device-preview\\|DevicePreviewTab\\|newDevicePreviewTab' src/ --exclude=useDeviceDock.test.ts || true",
+      { cwd: repoRoot, encoding: "utf8" },
+    ).trim();
+    expect(hits).toBe("");
   });
 });

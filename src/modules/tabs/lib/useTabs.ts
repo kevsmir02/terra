@@ -14,7 +14,6 @@ import {
   splitLeaf,
   swapLeafInDirection,
 } from "@/modules/terminal/lib/panes";
-import { invoke } from "@tauri-apps/api/core";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -101,14 +100,6 @@ export type GitCommitFileDiffTab = TabBase & {
   originalPath: string | null;
 };
 
-export type DevicePreviewTab = TabBase & {
-  id: number;
-  kind: "device-preview";
-  serial: string;
-  /** Handle returned by `device_open`; null until the open resolves. */
-  deviceHandle?: number | null;
-};
-
 export type Tab =
   | TerminalTab
   | EditorTab
@@ -116,8 +107,7 @@ export type Tab =
   | MarkdownTab
   | GitDiffTab
   | GitHistoryTab
-  | GitCommitFileDiffTab
-  | DevicePreviewTab;
+  | GitCommitFileDiffTab;
 
 export type TabPatch = Partial<{
   title: string;
@@ -580,22 +570,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return id;
   }, []);
 
-  const newDevicePreviewTab = useCallback((serial: string) => {
-    const id = nextIdRef.current++;
-    setTabs((t) => [
-      ...t,
-      {
-        id,
-        kind: "device-preview" as const,
-        spaceId: activeSpaceIdRef.current,
-        serial,
-        deviceHandle: null,
-      },
-    ]);
-    setActiveId(id);
-    return id;
-  }, []);
-
   const newMarkdownTab = useCallback((path: string) => {
     let targetId: number | null = null;
     setTabs((curr) => {
@@ -830,11 +804,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       if (target?.kind === "terminal") {
         toDispose = leafIds(target.paneTree);
       }
-      if (target?.kind === "device-preview" && target.deviceHandle != null) {
-        void invoke("device_close", { handle: target.deviceHandle }).catch(
-          () => {},
-        );
-      }
       const next = curr.filter((t) => t.id !== id);
       setActiveId((active) => (id === active ? fallback : active));
       return next;
@@ -873,7 +842,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             ...(patch.title !== undefined && { title: patch.title }),
           };
         }
-        if (x.kind === "device-preview") return x;
         // editor tab: auto-promote from preview the moment the file becomes dirty.
         const autoPin =
           patch.dirty === true && (x as EditorTab).preview
@@ -1108,7 +1076,6 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     openFileTab,
     pinTab,
     newPreviewTab,
-    newDevicePreviewTab,
     newMarkdownTab,
     setMarkdownView,
     openGitDiffTab,

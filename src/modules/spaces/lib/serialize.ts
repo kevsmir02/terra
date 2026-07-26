@@ -62,8 +62,6 @@ export function isSerializableTab(tab: Tab): boolean {
     case "preview":
     case "markdown":
       return true;
-    case "device-preview":
-      return false;
     default:
       return false;
   }
