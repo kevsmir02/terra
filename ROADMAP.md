@@ -102,8 +102,6 @@ The themes below frame every scope decision.
 - [ ] **Rebindable Terminal Keys**: Terminal copy, paste, and Shift+Enter are hardcoded in the xterm key handler and bypass the shortcut system that already covers the other 40 actions.
 - [ ] **Shortcut Conflict Detection**: Binding a chord already claimed by another action silently shadows it; the shortcut editor should surface the clash while recording.
 - [ ] **Relative Paths on Drop**: Dropping a file into a pane pastes its absolute path; paste it relative to that pane's shell cwd when the file sits under it, so the path stays short for the shell and for CLI agents.
-- [ ] **Markdown Preview Scrollbar**: The preview scrolls but shows no affordance — it uses raw `overflow-auto` while the global stylesheet hides native scrollbars, and it was never given the `<ScrollArea>` every other scrollable pane uses.
-- [ ] **Multi-Monitor Window Fixes**: Moving the window to a second monitor can shrink it to near the 420x280 minimum and leave the sidebar toggle unresponsive; the collapse check reads a percentage while the panel is sized in pixels.
 - [ ] **SSH & Remote Workspace Support**: PTY remote terminal management.
 - [ ] **Terminal Scrollback Restore**: Workspace, tab, and pane-tree state already restore on reboot; scrollback contents do not.
 
