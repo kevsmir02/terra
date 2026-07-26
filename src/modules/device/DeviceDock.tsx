@@ -1,0 +1,44 @@
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { DevicePreviewPane } from "./DevicePreviewPane";
+
+type Props = {
+  serial: string | null;
+  onStop: () => void;
+};
+
+/**
+ * Right-docked device surface. Renders nothing until a device is picked; the
+ * panel itself stays collapsed at zero width until then, so there is no empty
+ * state to design.
+ *
+ * `overflow-hidden` matters: react-resizable-panels sets `overflow: visible`
+ * on the panel element, so without it the video would spill over the workspace
+ * while the dock is collapsed to zero width.
+ */
+export function DeviceDock({ serial, onStop }: Props) {
+  if (!serial) return null;
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border/60 bg-card">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2">
+        <span className="truncate text-[11px] font-medium text-foreground" title={serial}>
+          {serial}
+        </span>
+        <button
+          type="button"
+          onClick={onStop}
+          title="Stop and close this device"
+          aria-label="Stop and close this device"
+          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={1.75} />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1">
+        <DevicePreviewPane serial={serial} />
+      </div>
+    </div>
+  );
+}
