@@ -145,6 +145,11 @@ export function AboutSection() {
             {status.message}
           </p>
         )}
+        {status.kind === "staged" && status.message && (
+          <p className="font-mono text-[10.5px] break-all text-destructive/80">
+            {status.message}
+          </p>
+        )}
         {status.kind === "available" && !status.info.pair && (
           <p className="text-[11px] text-muted-foreground">
             This install format updates manually — the button opens the release

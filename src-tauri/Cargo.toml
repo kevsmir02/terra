@@ -41,6 +41,7 @@ tauri-plugin-notification = "2"
 tempfile = "3"
 notify = "8.2.0"
 which = "8.0.4"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 tokio = "1"
 minisign-verify = "0.2"
 base64 = "0.22"

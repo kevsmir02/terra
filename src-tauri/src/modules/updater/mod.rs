@@ -5,10 +5,37 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
 use crate::modules::proc::hide_console;
 use package::PackageKind;
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    pub downloaded: u64,
+    pub total: Option<u64>,
+}
+
+/// Hosts a release asset may legitimately come from. The URL arrives from the
+/// webview, so without this the command would be a general-purpose fetch
+/// primitive running outside the browser's own restrictions.
+const ALLOWED_HOSTS: &[&str] = &[
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+];
+
+fn is_allowed_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.split('@').next_back().unwrap_or("");
+    let host = host.split(':').next().unwrap_or("");
+    !host.is_empty() && ALLOWED_HOSTS.contains(&host)
+}
 
 /// A downloaded package is only ever addressed by bare file name. Anything
 /// with a separator, a parent component, or an empty/relative-marker name is
@@ -36,6 +63,12 @@ fn sig_path(pkg: &Path) -> PathBuf {
 }
 
 /// The single staged package: the one `.sig` in the directory, minus `.sig`.
+///
+/// Only `updater_download` writes a `.sig` file now, and it already knows the
+/// package path it just wrote — so this recovery-by-directory-scan is no
+/// longer exercised in production, only by the tests below that pin its
+/// behaviour. `#[cfg(test)]` keeps it from being flagged as dead code.
+#[cfg(test)]
 fn staged_package_path(dir: &Path) -> Result<PathBuf, String> {
     let mut found: Option<PathBuf> = None;
     for entry in fs::read_dir(dir).map_err(|e| format!("staging dir unreadable: {e}"))? {
@@ -52,7 +85,7 @@ fn staged_package_path(dir: &Path) -> Result<PathBuf, String> {
             ));
         }
     }
-    found.ok_or_else(|| "no staged update — call updater_stage_begin first".to_string())
+    found.ok_or_else(|| "no staged update".to_string())
 }
 
 fn staging_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -95,55 +128,67 @@ pub async fn updater_package_kind() -> Result<PackageKind, String> {
         .map_err(|e| format!("updater_package_kind join: {e}"))
 }
 
-/// Clears staging and records the signature. Must precede
-/// `updater_stage_finish`, which carries the package bytes as a raw body and
-/// therefore cannot also carry metadata.
+/// Downloads the package and its signature straight into the staging dir,
+/// reporting progress over `on_progress`. The bytes never cross IPC.
 #[tauri::command]
-pub async fn updater_stage_begin(
+pub async fn updater_download(
     app: AppHandle,
+    package_url: String,
+    signature_url: String,
     file_name: String,
-    signature: String,
-) -> Result<(), String> {
-    let dir = staging_dir(&app)?;
-    // Validate before writing anything, so a hostile name never reaches disk.
-    let path = safe_staged_path(&dir, &file_name)?;
-
-    tauri::async_runtime::spawn_blocking(move || {
-        clear_staging(&dir);
-        fs::write(sig_path(&path), signature.as_bytes())
-            .map_err(|e| format!("could not stage signature: {e}"))
-    })
-    .await
-    .map_err(|e| format!("updater_stage_begin join: {e}"))?
-}
-
-/// Receives the package as a raw IPC body, verifies it against the signature
-/// recorded by `updater_stage_begin`, and writes it only if it verifies.
-#[tauri::command]
-pub async fn updater_stage_finish(
-    app: AppHandle,
-    request: tauri::ipc::Request<'_>,
+    on_progress: Channel<DownloadProgress>,
 ) -> Result<String, String> {
-    let bytes = match request.body() {
-        tauri::ipc::InvokeBody::Raw(b) => b.clone(),
-        _ => return Err("updater_stage_finish expects a raw binary body".to_string()),
-    };
+    if !is_allowed_url(&package_url) || !is_allowed_url(&signature_url) {
+        return Err("refusing to download from an unexpected host".to_string());
+    }
     let dir = staging_dir(&app)?;
+    let path = safe_staged_path(&dir, &file_name)?;
     let pubkey = configured_pubkey(&app)?;
 
     tauri::async_runtime::spawn_blocking(move || {
-        let path = staged_package_path(&dir)?;
-        let signature = fs::read_to_string(sig_path(&path))
-            .map_err(|e| format!("staged signature missing: {e}"))?;
+        clear_staging(&dir);
 
-        // Verify before the bytes ever land on disk, so a failed download
-        // leaves nothing behind to install.
+        let signature = ureq::get(&signature_url)
+            .call()
+            .map_err(|e| format!("signature download failed: {e}"))?
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| format!("signature download failed: {e}"))?;
+
+        let resp = ureq::get(&package_url)
+            .call()
+            .map_err(|e| format!("download failed: {e}"))?;
+        let total = resp
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+
+        let mut reader = resp.into_body().into_reader();
+        let mut bytes: Vec<u8> = Vec::with_capacity(total.unwrap_or(0) as usize);
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut downloaded: u64 = 0;
+        loop {
+            let n = std::io::Read::read(&mut reader, &mut buf)
+                .map_err(|e| format!("download failed: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&buf[..n]);
+            downloaded += n as u64;
+            let _ = on_progress.send(DownloadProgress { downloaded, total });
+        }
+
+        // Verify before anything lands on disk, so a tampered or truncated
+        // download leaves nothing behind to install.
         verify::verify(&pubkey, &bytes, &signature)?;
         fs::write(&path, &bytes).map_err(|e| format!("could not stage update: {e}"))?;
+        fs::write(sig_path(&path), signature.as_bytes())
+            .map_err(|e| format!("could not stage signature: {e}"))?;
         Ok(path.to_string_lossy().into_owned())
     })
     .await
-    .map_err(|e| format!("updater_stage_finish join: {e}"))?
+    .map_err(|e| format!("updater_download join: {e}"))?
 }
 
 /// Reads the version from the package itself rather than its file name: the
@@ -352,5 +397,36 @@ mod tests {
         assert!(!is_newer("", "0.8.5"));
         assert!(!is_newer("not-a-version", "0.8.5"));
         assert!(!is_newer("0.8.6", ""));
+    }
+
+    #[test]
+    fn accepts_https_github_asset_urls() {
+        assert!(is_allowed_url("https://github.com/o/r/releases/download/v1/a.rpm"));
+        assert!(is_allowed_url(
+            "https://release-assets.githubusercontent.com/github-production-release-asset/1/2"
+        ));
+        assert!(is_allowed_url("https://objects.githubusercontent.com/x"));
+    }
+
+    #[test]
+    fn rejects_non_https_schemes() {
+        // The URL comes from the webview; without this the command is an
+        // arbitrary-fetch primitive pointed at the local network.
+        assert!(!is_allowed_url("http://github.com/o/r/a.rpm"));
+        assert!(!is_allowed_url("file:///etc/passwd"));
+        assert!(!is_allowed_url("ftp://github.com/a.rpm"));
+    }
+
+    #[test]
+    fn rejects_unrelated_hosts() {
+        assert!(!is_allowed_url("https://evil.test/a.rpm"));
+        assert!(!is_allowed_url("http://127.0.0.1:8080/a.rpm"));
+        assert!(!is_allowed_url("https://github.com.evil.test/a.rpm"));
+    }
+
+    #[test]
+    fn rejects_a_hostless_url() {
+        assert!(!is_allowed_url("https:///a.rpm"));
+        assert!(!is_allowed_url("not a url"));
     }
 }
