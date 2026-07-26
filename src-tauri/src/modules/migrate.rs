@@ -1,9 +1,13 @@
-//! One-shot migration off the pre-rename bundle identifier.
+//! One-shot migration off superseded bundle identifiers.
 //!
-//! Through 0.8.5 the app identified as `app.crynta.terax`. Every directory
-//! Tauri resolves — settings/spaces/theme stores, window state, and the
-//! webview's localStorage + IndexedDB — is keyed by that identifier, so the
-//! rename to `app.crynta.terra` would otherwise present as a factory reset.
+//! Every directory Tauri resolves — settings/spaces/theme stores, window
+//! state, and the webview's localStorage + IndexedDB — is keyed by the bundle
+//! identifier, so changing it would otherwise present as a factory reset.
+//!
+//! Two identifiers have been retired so far: `app.crynta.terax` (through
+//! 0.8.5, before the Terax -> Terra rename) and `app.crynta.terra` (the rename,
+//! which kept the upstream vendor prefix). Both migrate to the fork's own
+//! `app.kevsmir02.terra`.
 //!
 //! Paths are computed from `dirs` rather than an `AppHandle` so this can run
 //! before the builder exists: the store and webview open their trees during
@@ -12,8 +16,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const LEGACY_IDENTIFIER: &str = "app.crynta.terax";
-const IDENTIFIER: &str = "app.crynta.terra";
+/// Retired identifiers, **most recent first**. `move_tree` yields to a
+/// destination that already exists, so the first entry that has a tree on disk
+/// is the one that gets adopted — and the most recently used tree is the one
+/// worth keeping when several linger.
+const LEGACY_IDENTIFIERS: &[&str] = &["app.crynta.terra", "app.crynta.terax"];
+const IDENTIFIER: &str = "app.kevsmir02.terra";
 
 /// Moves every legacy app directory to its renamed counterpart. A destination
 /// that already exists is left alone, which makes this idempotent and keeps a
@@ -47,11 +55,13 @@ fn legacy_pairs() -> Vec<(PathBuf, PathBuf)> {
 
     let mut pairs = Vec::new();
     for root in roots.into_iter().flatten() {
-        let legacy = root.join(LEGACY_IDENTIFIER);
         let current = root.join(IDENTIFIER);
-        // config_dir and data_dir are the same path on macOS; don't queue it twice.
-        if !pairs.contains(&(legacy.clone(), current.clone())) {
-            pairs.push((legacy, current));
+        for legacy_id in LEGACY_IDENTIFIERS {
+            let legacy = root.join(legacy_id);
+            // config_dir and data_dir are the same path on macOS; don't queue it twice.
+            if !pairs.contains(&(legacy.clone(), current.clone())) {
+                pairs.push((legacy, current.clone()));
+            }
         }
     }
     pairs
@@ -108,7 +118,7 @@ mod tests {
     #[test]
     fn moves_legacy_tree_when_destination_is_absent() {
         let root = tmp("moves");
-        let legacy = root.join(LEGACY_IDENTIFIER);
+        let legacy = root.join(LEGACY_IDENTIFIERS[0]);
         fs::create_dir_all(legacy.join("nested")).unwrap();
         fs::write(legacy.join("nested").join("settings.json"), b"{\"a\":1}").unwrap();
 
@@ -126,7 +136,7 @@ mod tests {
     #[test]
     fn existing_destination_wins_over_legacy() {
         let root = tmp("existing");
-        let legacy = root.join(LEGACY_IDENTIFIER);
+        let legacy = root.join(LEGACY_IDENTIFIERS[0]);
         fs::create_dir_all(&legacy).unwrap();
         fs::write(legacy.join("settings.json"), b"old").unwrap();
         let current = root.join(IDENTIFIER);
@@ -141,10 +151,33 @@ mod tests {
     }
 
     #[test]
+    fn most_recent_legacy_identifier_wins() {
+        let root = tmp("precedence");
+        for (id, marker) in LEGACY_IDENTIFIERS.iter().zip(["recent", "older"]) {
+            let dir = root.join(id);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("settings.json"), marker).unwrap();
+        }
+
+        // Mirrors the order migrate_legacy_app_dirs walks for a single root.
+        let current = root.join(IDENTIFIER);
+        for id in LEGACY_IDENTIFIERS {
+            move_tree(&root.join(id), &current).unwrap();
+        }
+
+        assert_eq!(fs::read(current.join("settings.json")).unwrap(), b"recent");
+        assert!(
+            root.join(LEGACY_IDENTIFIERS[1]).exists(),
+            "the superseded tree stays put for manual recovery"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn missing_legacy_tree_is_not_an_error() {
         let root = tmp("missing");
         let current = root.join(IDENTIFIER);
-        move_tree(&root.join(LEGACY_IDENTIFIER), &current).unwrap();
+        move_tree(&root.join(LEGACY_IDENTIFIERS[0]), &current).unwrap();
         assert!(!current.exists(), "fresh installs stay fresh");
         let _ = fs::remove_dir_all(&root);
     }
