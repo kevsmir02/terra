@@ -2,6 +2,7 @@ mod agent_detect;
 mod da_filter;
 mod session;
 pub(crate) mod shell_init;
+mod url_detect;
 
 use std::collections::HashMap;
 use std::io::Write;
