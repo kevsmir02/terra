@@ -213,3 +213,19 @@ the strength of the unit suite.
 - GPG-signing packages for native `dnf`/`apt` verification
 - Any automatic or background update check
 - Changes to macOS/Windows install mechanics beyond removing the auto-check
+
+## Accepted limitations
+
+- **Staging-directory TOCTOU.** The staged package is handed to the privileged
+  installer by path, from a user-writable directory (`app_cache_dir()/updates`).
+  A process running as the same user could swap that file, or plant a symlink,
+  between verification and install, and get unverified content installed as
+  root. Closing this properly needs a file-descriptor handoff or root-owned
+  staging. Accepted: this is a single-user personal tool, and the attack
+  requires an adversary already executing code as that user, who has cheaper
+  routes than racing the updater. Revisit if Terra ever ships to others.
+- **Signatures bind content, not versions.** Minisign proves a package came
+  from the project's key; it says nothing about which release it is. The
+  strictly-newer check in `updater_install` reads the version from the package
+  metadata to compensate, but the primary reason that check exists is that
+  `dnf install -y` exits 0 on an already-current package.
