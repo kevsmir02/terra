@@ -81,6 +81,10 @@ The themes below frame every scope decision.
 - [x] Background images with adjustable opacity and blur
 - [x] Customizable UI keybindings
 
+### Build & Bundle
+
+- [x] **Enforced Startup Bundle Budget**: Per-window eager-set measurement derived from the built HTML (entry script plus every `modulepreload`), gated in CI alongside `knip`. Replaces hand-maintained size-limit globs that under-reported the eager set by 43%.
+
 ### Platform Integration
 
 - [x] macOS, Linux (.deb / .rpm / AppImage), Windows (NSIS), WSL
@@ -103,7 +107,6 @@ The themes below frame every scope decision.
 ### Longer horizon
 
 - [ ] Release automation: CHANGELOG generation and version bump. Tag-triggered multi-platform build and publish already ships in `release.yml`.
-- [ ] Bundle optimization: tree-shake audit. Language packs and heavy panes are already lazy-loaded.
 - [ ] Selective TS → Rust migration where profiler shows wins
 - [ ] Live filesystem update enhancements in explorer and editor
 
