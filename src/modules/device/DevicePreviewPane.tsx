@@ -1,6 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import type { DevicePreviewTab } from "@/modules/tabs";
 import { MsePlayer } from "./MsePlayer";
 import { DEVICE_KEYCODE, DeviceControlBridge } from "./controlBridge";
 import { AdbMissing, NoDevices, UnauthorizedDevice, ServerFailed } from "./emptyStates";
@@ -11,7 +10,7 @@ type Frame = {
   bytes: ArrayBuffer | Uint8Array | number[] | Record<string, number>;
 };
 
-export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
+export function DevicePreviewPane({ serial }: { serial: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<MsePlayer | null>(null);
   const handleRef = useRef<number | null>(null);
@@ -33,9 +32,9 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
         // Pre-flight: ensure devices list contains our serial and is authorized.
         const devices = await invoke<{ serial: string; state: string }[]>("device_list");
         if (disposed) return;
-        const match = devices.find((d) => d.serial === tab.serial);
+        const match = devices.find((d) => d.serial === serial);
         if (!match) return setStatus({ kind: "no-devices" });
-        if (match.state === "unauthorized") return setStatus({ kind: "unauthorized", serial: tab.serial });
+        if (match.state === "unauthorized") return setStatus({ kind: "unauthorized", serial });
         if (match.state !== "device") return setStatus({ kind: "error", message: `Device state: ${match.state}` });
 
         // Open the channel + session.
@@ -63,7 +62,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
           playerRef.current?.pushData(frame.kind, raw);
         };
         const handle = await invoke<number>("device_open", {
-          serial: tab.serial,
+          serial,
           onFrame: ch,
         });
         if (disposed) {
@@ -111,7 +110,7 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
       playerRef.current?.dispose();
       playerRef.current = null;
     };
-  }, [tab.serial]);
+  }, [serial]);
 
   // The encoded size isn't known until the first frame is decoded, and it
   // changes on rotation. `resize` fires on both, so it is what keeps scrcpy's
@@ -136,11 +135,11 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     };
   }, []);
 
-  if (status.kind === "adb-missing") return <AdbMissing />;
-  if (status.kind === "no-devices") return <NoDevices onRefresh={() => location.reload()} />;
+  if (status.kind === "adb-missing") return <AdbMissing narrow />;
+  if (status.kind === "no-devices") return <NoDevices narrow onRefresh={() => location.reload()} />;
   if (status.kind === "unauthorized")
-    return <UnauthorizedDevice serial={status.serial} onRefresh={() => location.reload()} />;
-  if (status.kind === "error") return <ServerFailed message={status.message} />;
+    return <UnauthorizedDevice narrow serial={status.serial} onRefresh={() => location.reload()} />;
+  if (status.kind === "error") return <ServerFailed narrow message={status.message} />;
 
   return (
     <div className="relative flex h-full w-full flex-col">

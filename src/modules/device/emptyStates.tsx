@@ -1,25 +1,46 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 import { BOOT_PHASE_LABEL, listSystemImages, useAvds, type SystemImage } from "./useAvds";
 
-function Shell({ title, children }: { title: string; children: React.ReactNode }) {
+function Shell({
+  title,
+  narrow,
+  children,
+}: {
+  title: string;
+  narrow?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
+    <div
+      className={cn(
+        "flex h-full w-full flex-col items-center justify-center gap-3 text-center",
+        narrow ? "px-3" : "px-6",
+      )}
+    >
       <div className="flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-card text-muted-foreground">
         <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.5} />
       </div>
       <p className="text-[12.5px] font-medium text-foreground">{title}</p>
-      <div className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+      <div
+        className={cn(
+          "leading-relaxed text-muted-foreground",
+          // At dock width the install commands in AdbMissing wrap hard; shrink
+          // the type and let long tokens break rather than overflow.
+          narrow ? "max-w-full text-[11px] break-words" : "max-w-sm text-xs",
+        )}
+      >
         {children}
       </div>
     </div>
   );
 }
 
-export function AdbMissing() {
+export function AdbMissing({ narrow }: { narrow?: boolean }) {
   return (
-    <Shell title="adb not found">
+    <Shell title="adb not found" narrow={narrow}>
       Install Android Platform Tools (<code>sudo apt install adb</code>,{" "}
       <code>brew install --cask android-platform-tools</code>, or{" "}
       <code>winget install Google.PlatformTools</code>). Terra shells out to
@@ -86,11 +107,11 @@ function CreateAvd({ onCreate, busy }: { onCreate: (name: string, pkg: string) =
   );
 }
 
-export function NoDevices({ onRefresh }: { onRefresh: () => void }) {
+export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: () => void }) {
   const { avds, boot, error, busy, launch, stop, create } = useAvds(() => onRefresh());
 
   return (
-    <Shell title="No active devices connected">
+    <Shell title="No active devices connected" narrow={narrow}>
       <p className="mb-2">
         Plug in a physical device via USB, or launch an emulator below — it runs headless and
         streams here, so no separate emulator window opens.
@@ -145,9 +166,17 @@ export function NoDevices({ onRefresh }: { onRefresh: () => void }) {
   );
 }
 
-export function UnauthorizedDevice({ serial, onRefresh }: { serial: string; onRefresh: () => void }) {
+export function UnauthorizedDevice({
+  narrow,
+  serial,
+  onRefresh,
+}: {
+  narrow?: boolean;
+  serial: string;
+  onRefresh: () => void;
+}) {
   return (
-    <Shell title="Device is unauthorized">
+    <Shell title="Device is unauthorized" narrow={narrow}>
       <p>{serial}: accept the USB debugging prompt on the device.</p>
       <button
         type="button"
@@ -160,9 +189,9 @@ export function UnauthorizedDevice({ serial, onRefresh }: { serial: string; onRe
   );
 }
 
-export function ServerFailed({ message }: { message: string }) {
+export function ServerFailed({ narrow, message }: { narrow?: boolean; message: string }) {
   return (
-    <Shell title="Device preview failed to start">
+    <Shell title="Device preview failed to start" narrow={narrow}>
       <p className="break-words">{message}</p>
       <p className="mt-1">Possibly unsupported Android version for the bundled scrcpy server; check the JAR version in About.</p>
     </Shell>
