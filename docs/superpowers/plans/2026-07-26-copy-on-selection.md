@@ -386,7 +386,7 @@ second sentence is the whole reason the feature is opt-in:
 ```tsx
         <SettingRow
           title="Copy on selection"
-          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
+          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terax cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
         >
           <Switch
             checked={terminalCopyOnSelect}

@@ -34,7 +34,7 @@ The themes below frame every scope decision.
 - [x] Shell integration (cwd, prompt markers)
 - [x] Inline search, link detection, true-color
 - [x] Drag and drop in terminal (files as quoted paths)
-- [x] **Copy on Selection**: Opt-in, off by default — a drag-selection is copied on mouse-up. Off by default because a webview cannot reach the X11 primary selection, so this replaces the clipboard rather than a separate buffer.
+- [x] **Copy on Selection**: Opt-in, off by default — a drag-selection is copied on mouse-up. Off by default because a webview cannot reach the X11 primary selection, so this replaces the clipboard rather than a separate buffer. Independently of the preference, horizontal drag-selections are no longer replaced by a block selection.
 - [x] OSC 777 terminal agent detection & status notifications for CLI agents
 - [x] WSL bridge as workspace environment
 - [x] **Project Profiles & Auto-Launch**: Extended Spaces to save resizable panel split ratios (`panelSizes`) and auto-run startup commands (`startupCommands: ["pnpm dev", "pi"]`).

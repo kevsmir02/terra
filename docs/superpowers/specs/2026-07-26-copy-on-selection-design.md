@@ -136,7 +136,7 @@ Plus a `SettingRow` with a `Switch` in `GeneralSection.tsx`, placed directly aft
 Copy for that row:
 
 > **Title:** Copy on selection
-> **Description:** Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals.
+> **Description:** Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terax cannot use the Linux primary selection, which is what makes this non-destructive in other terminals.
 
 The second sentence is load-bearing. A user enabling this without knowing it clobbers their clipboard will lose something they copied.
 

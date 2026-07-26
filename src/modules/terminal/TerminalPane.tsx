@@ -77,7 +77,10 @@ export const TerminalPane = memo(
     });
 
     const handlePaneMouseDown = useCallback((e: React.MouseEvent) => {
-      downPtRef.current = { x: e.clientX, y: e.clientY };
+      // Only a left-button press starts a selection drag. Clearing on other
+      // buttons stops a right- or middle-button release from being measured
+      // against a stale origin and copying.
+      downPtRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
     }, []);
 
     // Copies the selection when the gesture was a drag and the preference is
