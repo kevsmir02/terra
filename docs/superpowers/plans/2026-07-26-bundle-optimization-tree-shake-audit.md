@@ -59,7 +59,7 @@ Pure logic plus a CLI. Nothing else in the codebase changes, and nothing depends
   - `export function readBudgets(rootDir: string): Record<string, number>`
   - `chunks` is sorted by `gzip` descending; `totalGzip` is in bytes.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/app/eager-size.test.ts`:
 
@@ -177,12 +177,12 @@ describe("measureEager", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm vitest run src/app/eager-size.test.ts`
 Expected: FAIL — `Failed to resolve import "../../scripts/eager-size.mjs"`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `scripts/eager-size.mjs`:
 
@@ -306,7 +306,7 @@ if (isCli) {
 }
 ```
 
-- [ ] **Step 4: Write the type sidecar**
+- [x] **Step 4: Write the type sidecar**
 
 Create `scripts/eager-size.d.mts`:
 
@@ -320,7 +320,7 @@ export function measureEager(distDir: string): {
 export function readBudgets(rootDir?: string): Record<string, number>;
 ```
 
-- [ ] **Step 5: Create the budget file**
+- [x] **Step 5: Create the budget file**
 
 Create `eager-budget.json`:
 
@@ -331,12 +331,12 @@ Create `eager-budget.json`:
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `pnpm vitest run src/app/eager-size.test.ts`
 Expected: PASS — 7 tests.
 
-- [ ] **Step 7: Verify against the real build**
+- [x] **Step 7: Verify against the real build**
 
 Run: `pnpm build && node scripts/eager-size.mjs dist`
 
@@ -344,12 +344,12 @@ Expected: exit code 0, with `index.html` reporting ≈500 kB across 38 chunks an
 
 If the totals differ from the baseline by more than a few kB, stop and reconcile before continuing — the rest of the plan ratchets against these numbers.
 
-- [ ] **Step 8: Verify types and lint**
+- [x] **Step 8: Verify types and lint**
 
 Run: `pnpm check-types && pnpm lint`
 Expected: no errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/eager-size.mjs scripts/eager-size.d.mts eager-budget.json src/app/eager-size.test.ts
@@ -371,7 +371,7 @@ enforce it in CI — enforcing a gate that cannot pass is not enforcement.
 - Consumes: nothing.
 - Produces: `pnpm knip` exits 0.
 
-- [ ] **Step 1: Confirm the current failures**
+- [x] **Step 1: Confirm the current failures**
 
 Run: `pnpm knip`
 
@@ -383,7 +383,7 @@ Expected: exit 1, reporting `Unused files (1)` naming
 If the report differs, reconcile before continuing — the rest of this task
 assumes those exact findings.
 
-- [ ] **Step 2: Silence the false positive**
+- [x] **Step 2: Silence the false positive**
 
 `protocolShim.ts` is reachable only through the `vscode-languageserver-protocol`
 alias in `vite.config.ts`, which knip does not resolve. It is live code — the
@@ -405,7 +405,7 @@ to:
   ],
 ```
 
-- [ ] **Step 3: Confirm the three packages are genuinely unreferenced**
+- [x] **Step 3: Confirm the three packages are genuinely unreferenced**
 
 Run:
 
@@ -420,13 +420,13 @@ If a stylesheet `@import`s the font or references it by family name, it is
 loaded some other way — leave that package installed, add it to
 `ignoreDependencies` with a comment, and note the deviation.
 
-- [ ] **Step 4: Remove them**
+- [x] **Step 4: Remove them**
 
 ```bash
 pnpm remove @fontsource/jetbrains-mono @radix-ui/react-use-controllable-state react-compiler-healthcheck
 ```
 
-- [ ] **Step 5: Verify knip is clean and nothing broke**
+- [x] **Step 5: Verify knip is clean and nothing broke**
 
 Run: `pnpm knip && pnpm check-types && pnpm lint && pnpm test && pnpm build`
 
@@ -437,14 +437,14 @@ Knip may now emit configuration hints suggesting entries be dropped from
 `ignoreDependencies`. Act only on hints naming the three packages just removed;
 leave the rest alone.
 
-- [ ] **Step 6: Confirm the fonts still render**
+- [x] **Step 6: Confirm the fonts still render**
 
 Run `pnpm tauri dev`, open a terminal pane and the editor, and confirm the
 monospace font is unchanged. `@fontsource-variable/inter` and the terminal font
 stack are untouched by this task, so any visible change means Step 3 missed a
 reference — revert and investigate.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add knip.json package.json pnpm-lock.yaml
@@ -462,7 +462,7 @@ git commit -m "chore(deps): drop unused packages and teach knip about the protoc
 - Consumes: `scripts/eager-size.mjs` CLI from Task 1; a green `pnpm knip` from Task 2.
 - Produces: `pnpm size:eager`; CI failure on budget or knip regression.
 
-- [ ] **Step 1: Add the script**
+- [x] **Step 1: Add the script**
 
 In `package.json`, add to `"scripts"` immediately after the existing `"analyze:eager"` line:
 
@@ -470,7 +470,7 @@ In `package.json`, add to `"scripts"` immediately after the existing `"analyze:e
     "size:eager": "node scripts/eager-size.mjs dist",
 ```
 
-- [ ] **Step 2: Remove the misleading size-limit entry**
+- [x] **Step 2: Remove the misleading size-limit entry**
 
 `scripts/eager-size.mjs` now owns the eager measurement, and the old entry
 reports a number 43% below reality. In `.size-limit.json`, delete the first
@@ -487,7 +487,7 @@ object so the file reads exactly:
 ]
 ```
 
-- [ ] **Step 3: Verify all gates pass locally**
+- [x] **Step 3: Verify all gates pass locally**
 
 Run: `pnpm build && pnpm size:eager && pnpm knip && pnpm size`
 
@@ -495,7 +495,7 @@ Expected: all four succeed. If `pnpm knip` still reports unused files or
 dependencies, do **not** widen the ignore list to force it green — Task 2 was
 left incomplete; finish it first.
 
-- [ ] **Step 4: Add the CI steps**
+- [x] **Step 4: Add the CI steps**
 
 In `.github/workflows/ci.yml`, in the `frontend` job, replace:
 
@@ -517,7 +517,7 @@ with:
         run: pnpm knip
 ```
 
-- [ ] **Step 5: Prove the over-budget gate fails**
+- [x] **Step 5: Prove the over-budget gate fails**
 
 Temporarily lower `index.html` in `eager-budget.json` to `10`, then run:
 
@@ -526,7 +526,7 @@ Expected: FAIL — `OVER BUDGET`, exit code 1.
 
 Restore the value to `510` and re-run to confirm it passes again.
 
-- [ ] **Step 6: Prove an unbudgeted window cannot slip through**
+- [x] **Step 6: Prove an unbudgeted window cannot slip through**
 
 A new window entry with no budget must fail rather than be skipped, otherwise
 adding a third window silently escapes the gate. Temporarily rename the
@@ -537,7 +537,7 @@ Expected: FAIL — `MISSING BUDGET for settings.html`, exit code 1.
 
 Restore the key to `"settings.html"` and re-run to confirm it passes again.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add package.json .size-limit.json .github/workflows/ci.yml
@@ -561,20 +561,20 @@ imports it statically, putting `updater-*.js` (10.5 kB gzipped, including
 - Consumes: `scripts/eager-size.mjs` from Task 1.
 - Produces: `UpdaterDialog` exported from `@/modules/updater` now resolves to the lazy wrapper. `App.tsx` is unchanged — its import site keeps working.
 
-- [ ] **Step 1: Record the baseline**
+- [x] **Step 1: Record the baseline**
 
 Run: `pnpm build && pnpm size:eager`
 
 Write down the `index.html` total and confirm `assets/updater-*.js` appears in
 the chunk list at roughly 10.5 kB.
 
-- [ ] **Step 2: Read the convention**
+- [x] **Step 2: Read the convention**
 
 Read `src/modules/device/DeviceDockLazy.tsx`. Note that the guard which
 prevents the chunk from loading lives in the **wrapper**, not the inner
 component — React only requests a lazy chunk once the inner element renders.
 
-- [ ] **Step 3: Write the wrapper**
+- [x] **Step 3: Write the wrapper**
 
 Create `src/modules/updater/UpdaterDialogLazy.tsx`:
 
@@ -600,7 +600,7 @@ export function UpdaterDialog() {
 }
 ```
 
-- [ ] **Step 4: Point the barrel at the wrapper**
+- [x] **Step 4: Point the barrel at the wrapper**
 
 Change `src/modules/updater/index.ts` from:
 
@@ -619,7 +619,7 @@ export { useUpdater } from "./useUpdater";
 `useUpdater` stays a direct export — `src/settings/sections/AboutSection.tsx`
 imports it, and the settings window has its own budget line.
 
-- [ ] **Step 5: Measure the result**
+- [x] **Step 5: Measure the result**
 
 Run: `pnpm build && pnpm size:eager`
 
@@ -630,7 +630,7 @@ list, and the total drops by roughly 10 kB.
 the module means the wrapper bought nothing; note the finding in the commit
 message of a later task rather than keeping dead indirection.
 
-- [ ] **Step 6: Verify the dialog still works**
+- [x] **Step 6: Verify the dialog still works**
 
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: all pass.
@@ -640,7 +640,7 @@ Confirm the updater UI still appears and reports a result. This path is the
 only consumer of the lazy chunk, so it is the only way to catch a broken
 `Suspense` boundary.
 
-- [ ] **Step 7: Ratchet the budget**
+- [x] **Step 7: Ratchet the budget**
 
 In `eager-budget.json`, lower `"index.html"` to the new measured total rounded
 up to the next whole kB, plus 5 kB of headroom.
@@ -648,7 +648,7 @@ up to the next whole kB, plus 5 kB of headroom.
 Run: `pnpm size:eager`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/modules/updater/UpdaterDialogLazy.tsx src/modules/updater/index.ts eager-budget.json
@@ -673,13 +673,13 @@ path.
 - Consumes: `setLspNavigator` from `src/modules/lsp/lib/navigator.ts` (unchanged signature: `(nav: LspNavigator | null) => void`).
 - Produces: no API change.
 
-- [ ] **Step 1: Record the baseline**
+- [x] **Step 1: Record the baseline**
 
 Run: `pnpm build && pnpm size:eager`
 
 Note the `index.html` total and the size of `assets/lsp-*.js` (~8.1 kB).
 
-- [ ] **Step 2: Change the import**
+- [x] **Step 2: Change the import**
 
 In `src/app/App.tsx`, change line 38 from:
 
@@ -693,7 +693,7 @@ to:
 import { setLspNavigator } from "@/modules/lsp/lib/navigator";
 ```
 
-- [ ] **Step 3: Measure the result**
+- [x] **Step 3: Measure the result**
 
 Run: `pnpm build && pnpm size:eager`
 
@@ -706,7 +706,7 @@ drop means the barrel was already being pulled by `StatusBar` alone.
 **If the total did not drop, revert this task.** Importing by path is only
 worth the inconsistency when it buys bytes.
 
-- [ ] **Step 4: Verify go-to-definition still navigates**
+- [x] **Step 4: Verify go-to-definition still navigates**
 
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: all pass.
@@ -716,7 +716,7 @@ server, and press F12 on a symbol defined in another file. Confirm the editor
 opens that file — this exercises `setLspNavigator`, whose registration is the
 only thing this task moves.
 
-- [ ] **Step 5: Ratchet the budget**
+- [x] **Step 5: Ratchet the budget**
 
 In `eager-budget.json`, lower `"index.html"` to the new measured total rounded
 up to the next whole kB, plus 5 kB of headroom.
@@ -724,7 +724,7 @@ up to the next whole kB, plus 5 kB of headroom.
 Run: `pnpm size:eager`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/App.tsx eager-budget.json
@@ -752,7 +752,7 @@ This task is explicitly allowed to end in "no change, finding recorded".
 - Consumes: `measureEager` output from Task 1.
 - Produces: either a measured reduction plus a ratcheted budget, or a documented finding and no code change.
 
-- [ ] **Step 1: Record the baseline and identify the real occupants**
+- [x] **Step 1: Record the baseline and identify the real occupants**
 
 Run:
 
@@ -765,7 +765,7 @@ Record what the chunk actually contains. If the bulk is not language-resolution
 code, the `TabBar` import is not the cause and Step 2 will not help — skip to
 Step 4.
 
-- [ ] **Step 2: Try splitting the display-name lookup**
+- [x] **Step 2: Try splitting the display-name lookup**
 
 Only attempt this if Step 1 showed language-resolution code dominating.
 
@@ -782,7 +782,7 @@ generated by hand from `LANGUAGES`, then have `TabBar.tsx:23` import
 Keep `resolveDisplayName` exported from `languageResolver.ts` as a re-export so
 `src/modules/editor/lib/languageResolver.test.ts` keeps passing unchanged.
 
-- [ ] **Step 3: Measure**
+- [x] **Step 3: Measure**
 
 Run: `pnpm build && pnpm size:eager && pnpm test`
 
@@ -790,7 +790,7 @@ Expected: `index.html` total drops and all tests pass. **If the total did not
 drop, revert Step 2 entirely** — a duplicated name table that buys nothing is
 worse than the import it replaced.
 
-- [ ] **Step 4: Investigate the hugeicons chunk**
+- [x] **Step 4: Investigate the hugeicons chunk**
 
 Run:
 
@@ -811,7 +811,7 @@ per icon, mirroring the existing `cm-lang-*` rule:
 
 Place it directly above the existing `@codemirror/lang-` block.
 
-- [ ] **Step 5: Measure the icon change**
+- [x] **Step 5: Measure the icon change**
 
 Run: `pnpm build && pnpm size:eager`
 
@@ -819,7 +819,7 @@ Expected: the `index.html` total drops. **If it rises** — many tiny chunks cos
 more in per-chunk overhead than one shared chunk — **revert the `manualChunks`
 addition.** Record the outcome either way.
 
-- [ ] **Step 6: Verify the UI is intact**
+- [x] **Step 6: Verify the UI is intact**
 
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: all pass.
@@ -828,7 +828,7 @@ Then run `pnpm tauri dev` and confirm icons still render in the tab bar, the
 sidebar rail, and the statusbar. A broken `manualChunks` glob shows up as
 missing icons, not as a build error.
 
-- [ ] **Step 7: Ratchet the budget if anything changed**
+- [x] **Step 7: Ratchet the budget if anything changed**
 
 If either sub-investigation produced a reduction, lower `"index.html"` in
 `eager-budget.json` to the new measured total plus 5 kB of headroom, and run
@@ -836,7 +836,7 @@ If either sub-investigation produced a reduction, lower `"index.html"` in
 
 If neither produced a reduction, leave the budget alone.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 If code changed:
 
@@ -861,7 +861,7 @@ Put the measured numbers and the reason in the commit body either way.
 **Files:**
 - Modify: `ROADMAP.md:104`
 
-- [ ] **Step 1: Run every gate from a clean build**
+- [x] **Step 1: Run every gate from a clean build**
 
 ```bash
 rm -rf dist
@@ -871,7 +871,7 @@ pnpm lint && pnpm check-types && pnpm test && pnpm build && pnpm size:eager && p
 
 Expected: all pass. Record the final `index.html` and `settings.html` totals.
 
-- [ ] **Step 2: Confirm the gate still catches a regression**
+- [x] **Step 2: Confirm the gate still catches a regression**
 
 Add a deliberate static import of a heavy lazy module to `src/app/App.tsx`:
 
@@ -885,7 +885,7 @@ Expected: FAIL — `OVER BUDGET` on `index.html`.
 Remove the import and re-run to confirm it passes. This is the end-to-end proof
 that the budget does the job the old globs failed at.
 
-- [ ] **Step 3: Update the roadmap**
+- [x] **Step 3: Update the roadmap**
 
 In `ROADMAP.md`, remove line 104 from "Longer horizon":
 
@@ -905,7 +905,7 @@ immediately before `### Platform Integration`:
 Word the entry as a budget with cuts, not as a one-off optimization — the
 enforcement is the durable part.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add ROADMAP.md
