@@ -62,8 +62,6 @@ export const TerminalPane = memo(
     const containerRef = useRef<HTMLDivElement>(null);
     const downPtRef = useRef<Point | null>(null);
     const copyOnSelect = usePreferencesStore((s) => s.terminalCopyOnSelect);
-    // TEMP-COS-DEBUG — fires on every TerminalPane render
-    console.log("[cos] pane render", { leafId, copyOnSelect });
     const { resolvedMode, themeId, customThemes } = useTheme();
 
     const session = useTerminalSession({
