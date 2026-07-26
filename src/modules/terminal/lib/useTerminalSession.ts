@@ -20,6 +20,10 @@ import { openPty, type PtySession } from "./pty-bridge";
 import "../block/block.css";
 import { ensureAgentActivityListener, isAgentActivePty } from "./agentActivity";
 import {
+  ensureDevServerListener,
+  useDevServerStore,
+} from "@/modules/preview/lib/devServerStore";
+import {
   acquireSlot,
   applyBackgroundActive,
   applyCursorBlink,
@@ -366,6 +370,8 @@ ensureAgentActivityListener((ptyId) => {
   if (s) scheduleHiddenRelease(leafId, s);
 });
 
+ensureDevServerListener(leafIdForPty);
+
 configureRendererPool({
   resolveLeaf(leafId) {
     const s = sessions.get(leafId);
@@ -540,6 +546,9 @@ async function openPtyForSession(
         s.pty = null;
         s.pendingInput = "";
         s.commandRunning = false;
+        // Detections die with the shell: a new shell starts clean, including
+        // its dismissal memory.
+        useDevServerStore.getState().clear(leafId);
         const slot = getSlotForLeaf(leafId);
         if (slot) slot.term.options.disableStdin = true;
         scheduleHiddenRelease(leafId, s);
