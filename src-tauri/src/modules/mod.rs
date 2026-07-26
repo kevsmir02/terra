@@ -8,4 +8,5 @@ pub mod migrate;
 pub mod proc;
 pub mod pty;
 pub mod shell;
+pub mod updater;
 pub mod workspace;
