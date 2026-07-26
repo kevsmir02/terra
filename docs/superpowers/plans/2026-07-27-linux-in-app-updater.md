@@ -30,7 +30,7 @@
 | `src-tauri/src/modules/updater/package.rs` | Install-kind classification, install command | Create |
 | `src-tauri/src/modules/updater/verify.rs` | Minisign verification | Create |
 | `src-tauri/src/modules/mod.rs` | Register `updater` module | Modify |
-| `src-tauri/src/lib.rs` | Register the three commands | Modify |
+| `src-tauri/src/lib.rs` | Register the four commands | Modify |
 | `src/modules/updater/useUpdater.ts` | State machine, download, asset selection | Rewrite |
 | `src/modules/updater/assets.ts` | Pure asset-selection helpers | Create |
 | `src/modules/updater/assets.test.ts` | Asset-selection tests | Create |
@@ -470,11 +470,21 @@ git commit -m "feat(updater): verify minisign signatures against the configured 
 
 **Interfaces:**
 - Consumes: `package::{PackageKind, detect, install_command}`, `verify::verify`
-- Produces three Tauri commands:
+- Produces four Tauri commands:
   - `updater_package_kind() -> Result<PackageKind, String>`
-  - `updater_stage(app: AppHandle, bytes: Vec<u8>, signature: String, file_name: String) -> Result<String, String>` — returns the absolute staged path
+  - `updater_stage_begin(app: AppHandle, file_name: String, signature: String) -> Result<(), String>`
+  - `updater_stage_finish(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<String, String>` — returns the absolute staged path
   - `updater_install(app: AppHandle, file_name: String) -> Result<(), String>`
 - Also produces `fn safe_staged_path(dir: &Path, file_name: &str) -> Result<PathBuf, String>`
+
+**Why staging is split in two.** Tauri 2's `invoke` sends *either* a raw binary
+body *or* JSON arguments — not both. A ~15 MB package must travel as a raw
+body (`Array.from()` on 15 M bytes would allocate a JS array of ~120 MB), so
+the metadata cannot ride along with it. `updater_stage_begin` takes the small
+JSON args and writes `<file_name>.sig` into a freshly cleared staging dir;
+`updater_stage_finish` then carries only the raw bytes and recovers the package
+name from the single `.sig` file present. Staging is cleared on every `begin`,
+so exactly one `.sig` is ever there.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -526,6 +536,39 @@ mod tests {
     fn rejects_a_dotfile_current_dir() {
         assert!(safe_staged_path(Path::new("/tmp/stage"), ".").is_err());
     }
+
+    #[test]
+    fn sig_path_appends_rather_than_replacing_the_extension() {
+        // The release publishes Terra-0.8.6-1.x86_64.rpm.sig — NOT
+        // Terra-0.8.6-1.x86_64.sig, which is what with_extension would give.
+        assert_eq!(
+            sig_path(Path::new("/tmp/stage/Terra-0.8.6-1.x86_64.rpm")),
+            Path::new("/tmp/stage/Terra-0.8.6-1.x86_64.rpm.sig")
+        );
+    }
+
+    #[test]
+    fn staged_package_path_recovers_the_name_from_the_signature() {
+        let dir = std::env::temp_dir().join(format!("terra-stage-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("Terra-0.8.6-1.x86_64.rpm.sig"), b"sig").unwrap();
+
+        assert_eq!(
+            staged_package_path(&dir).unwrap(),
+            dir.join("Terra-0.8.6-1.x86_64.rpm")
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn staged_package_path_errors_when_nothing_is_staged() {
+        let dir = std::env::temp_dir().join(format!("terra-empty-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        assert!(staged_package_path(&dir).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
 ```
 
@@ -565,6 +608,35 @@ fn safe_staged_path(dir: &Path, file_name: &str) -> Result<PathBuf, String> {
         return Err(format!("refusing unsafe update file name: {file_name}"));
     }
     Ok(dir.join(file_name))
+}
+
+/// Appends `.sig` to the whole file name. `Path::with_extension` would
+/// *replace* the extension, turning `Terra-0.8.6-1.x86_64.rpm` into
+/// `Terra-0.8.6-1.x86_64.sig` — which is not the name the release publishes.
+fn sig_path(pkg: &Path) -> PathBuf {
+    let mut name = pkg.as_os_str().to_os_string();
+    name.push(".sig");
+    PathBuf::from(name)
+}
+
+/// The single staged package: the one `.sig` in the directory, minus `.sig`.
+fn staged_package_path(dir: &Path) -> Result<PathBuf, String> {
+    let mut found: Option<PathBuf> = None;
+    for entry in fs::read_dir(dir).map_err(|e| format!("staging dir unreadable: {e}"))? {
+        let path = entry.map_err(|e| format!("staging dir unreadable: {e}"))?.path();
+        if path.extension().is_some_and(|e| e == "sig") {
+            if found.is_some() {
+                return Err("more than one staged update".to_string());
+            }
+            let s = path.to_string_lossy();
+            found = Some(PathBuf::from(
+                s.strip_suffix(".sig")
+                    .ok_or_else(|| "malformed staged signature".to_string())?
+                    .to_string(),
+            ));
+        }
+    }
+    found.ok_or_else(|| "no staged update — call updater_stage_begin first".to_string())
 }
 
 fn staging_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -607,27 +679,55 @@ pub async fn updater_package_kind() -> Result<PackageKind, String> {
         .map_err(|e| format!("updater_package_kind join: {e}"))
 }
 
+/// Clears staging and records the signature. Must precede
+/// `updater_stage_finish`, which carries the package bytes as a raw body and
+/// therefore cannot also carry metadata.
 #[tauri::command]
-pub async fn updater_stage(
+pub async fn updater_stage_begin(
     app: AppHandle,
-    bytes: Vec<u8>,
-    signature: String,
     file_name: String,
-) -> Result<String, String> {
+    signature: String,
+) -> Result<(), String> {
     let dir = staging_dir(&app)?;
+    // Validate before writing anything, so a hostile name never reaches disk.
     let path = safe_staged_path(&dir, &file_name)?;
-    let pubkey = configured_pubkey(&app)?;
 
     tauri::async_runtime::spawn_blocking(move || {
         clear_staging(&dir);
+        fs::write(sig_path(&path), signature.as_bytes())
+            .map_err(|e| format!("could not stage signature: {e}"))
+    })
+    .await
+    .map_err(|e| format!("updater_stage_begin join: {e}"))?
+}
+
+/// Receives the package as a raw IPC body, verifies it against the signature
+/// recorded by `updater_stage_begin`, and writes it only if it verifies.
+#[tauri::command]
+pub async fn updater_stage_finish(
+    app: AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<String, String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(b) => b.clone(),
+        _ => return Err("updater_stage_finish expects a raw binary body".to_string()),
+    };
+    let dir = staging_dir(&app)?;
+    let pubkey = configured_pubkey(&app)?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = staged_package_path(&dir)?;
+        let signature = fs::read_to_string(sig_path(&path))
+            .map_err(|e| format!("staged signature missing: {e}"))?;
+
+        // Verify before the bytes ever land on disk, so a failed download
+        // leaves nothing behind to install.
         verify::verify(&pubkey, &bytes, &signature)?;
         fs::write(&path, &bytes).map_err(|e| format!("could not stage update: {e}"))?;
-        fs::write(path.with_extension("sig"), signature.as_bytes())
-            .map_err(|e| format!("could not stage signature: {e}"))?;
         Ok(path.to_string_lossy().into_owned())
     })
     .await
-    .map_err(|e| format!("updater_stage join: {e}"))?
+    .map_err(|e| format!("updater_stage_finish join: {e}"))?
 }
 
 #[tauri::command]
@@ -640,7 +740,7 @@ pub async fn updater_install(app: AppHandle, file_name: String) -> Result<(), St
         // Re-verify immediately before escalating: verifying only at stage
         // time would leave a window in which the file could be swapped.
         let bytes = fs::read(&path).map_err(|e| format!("staged update missing: {e}"))?;
-        let signature = fs::read_to_string(path.with_extension("sig"))
+        let signature = fs::read_to_string(sig_path(&path))
             .map_err(|e| format!("staged signature missing: {e}"))?;
         verify::verify(&pubkey, &bytes, &signature)?;
 
@@ -678,7 +778,7 @@ pub async fn updater_install(app: AppHandle, file_name: String) -> Result<(), St
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd src-tauri && cargo test --lib updater`
-Expected: PASS — 22 passed (9 package + 5 verify + 8 path safety).
+Expected: PASS — 25 passed (9 package + 5 verify + 11 mod).
 
 `package::detect()` now reports `Unsupported` when `pkexec` is absent, so
 `install_command` is never reached without a way to escalate.
@@ -689,7 +789,8 @@ In `src-tauri/src/lib.rs`, add to the `tauri::generate_handler![` list (after th
 
 ```rust
             updater::updater_package_kind,
-            updater::updater_stage,
+            updater::updater_stage_begin,
+            updater::updater_stage_finish,
             updater::updater_install,
 ```
 
@@ -896,11 +997,20 @@ git commit -m "feat(updater): select the release asset matching the install kind
 
 ---
 
-### Task 6: Rework the updater hook
+### Task 6: Rework the hook, rebuild the About panel, delete the modal
+
+This is one task: the hook rewrite alone does not type-check, because
+`AboutSection.tsx` and `App.tsx` still consume the old API. Splitting it would
+produce a knowingly-broken commit and violate the Global Constraint that
+`pnpm check-types` passes.
 
 **Files:**
 - Rewrite: `src/modules/updater/useUpdater.ts`
 - Modify: `src/modules/updater/index.ts`
+- Modify: `src/settings/sections/AboutSection.tsx`
+- Modify: `src/app/App.tsx` (import near `:87`, `<UpdaterDialog />` near `:1248`)
+- Delete: `src/modules/updater/UpdaterDialog.tsx`
+- Delete: `src/modules/updater/UpdaterDialogLazy.tsx`
 
 **Interfaces:**
 - Consumes: `selectAsset`, `isNewer`, `PackageKind`, `AssetPair` from `./assets`; the three Tauri commands from Task 4
@@ -1050,11 +1160,14 @@ export function useUpdater() {
       if (!sigRes.ok) throw new Error(`signature download failed (${sigRes.status})`);
       const signature = await sigRes.text();
 
-      await invoke<string>("updater_stage", {
-        bytes: Array.from(bytes),
-        signature,
+      // Two calls: Tauri sends either JSON args or a raw binary body, never
+      // both. The metadata goes first; the package travels as a raw body so a
+      // ~15 MB download is not re-encoded into a JS number array.
+      await invoke("updater_stage_begin", {
         fileName: pair.pkg.name,
+        signature,
       });
+      await invoke<string>("updater_stage_finish", bytes);
       setStatus({ kind: "staged", info, fileName: pair.pkg.name });
     } catch (err) {
       setStatus({ kind: "error", message: String(err) });
@@ -1095,33 +1208,7 @@ export { useUpdater } from "./useUpdater";
 export type { AvailableUpdate, UpdaterStatus } from "./useUpdater";
 ```
 
-- [ ] **Step 3: Verify types**
-
-Run: `pnpm check-types`
-Expected: FAIL — `AboutSection.tsx` and `App.tsx` still reference the old API. Task 7 fixes both.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/modules/updater/useUpdater.ts src/modules/updater/index.ts
-git commit -m "feat(updater): drive check, download, and install from explicit state"
-```
-
----
-
-### Task 7: About panel UI and dialog removal
-
-**Files:**
-- Modify: `src/settings/sections/AboutSection.tsx`
-- Modify: `src/app/App.tsx` (remove the import near `:87` and the `<UpdaterDialog />` mount near `:1248`)
-- Delete: `src/modules/updater/UpdaterDialog.tsx`
-- Delete: `src/modules/updater/UpdaterDialogLazy.tsx`
-
-**Interfaces:**
-- Consumes: `useUpdater` from Task 6
-- Produces: no new exports
-
-- [ ] **Step 1: Delete the dialog and unmount it**
+- [ ] **Step 3: Delete the dialog and unmount it**
 
 ```bash
 git rm src/modules/updater/UpdaterDialog.tsx src/modules/updater/UpdaterDialogLazy.tsx
@@ -1129,7 +1216,7 @@ git rm src/modules/updater/UpdaterDialog.tsx src/modules/updater/UpdaterDialogLa
 
 In `src/app/App.tsx`, delete the `UpdaterDialog` import line and the `<UpdaterDialog />` element.
 
-- [ ] **Step 2: Replace the update controls in AboutSection**
+- [ ] **Step 4: Replace the update controls in AboutSection**
 
 In `src/settings/sections/AboutSection.tsx`, replace the `useUpdater` destructure and the whole button block with:
 
@@ -1200,17 +1287,17 @@ Below the button row, replace the error/progress block with:
         )}
 ```
 
-- [ ] **Step 3: Verify types, lint, and tests**
+- [ ] **Step 5: Verify types, lint, and tests**
 
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: all pass. `check-types` exits 0; `pnpm test` reports 55+ files passing.
 
-- [ ] **Step 4: Verify the bundle budget and dead-code gates**
+- [ ] **Step 6: Verify the bundle budget and dead-code gates**
 
 Run: `pnpm build && pnpm knip`
 Expected: build succeeds within `eager-budget.json`; `knip` reports no newly unused files or exports. Deleting the lazy dialog removes a chunk, so the eager set should shrink or stay flat — if the budget script errors on a missing chunk name, update `eager-budget.json` to match the new output and say so in the commit.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -1219,7 +1306,7 @@ git commit -m "feat(updater): drive updates from the About panel and drop the mo
 
 ---
 
-### Task 8: Manual verification against a real release
+### Task 7: Manual verification against a real release
 
 Automated tests cannot cover `pkexec` + `dnf`/`apt` — that needs root and a genuinely signed package. This task is performed by hand and its result reported honestly.
 
