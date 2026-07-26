@@ -80,8 +80,8 @@ PTY reader thread (session.rs)
                     │
                     │  emit("terax:dev-server", { id: ptyId, url })
                     ▼
-  devServerStore  (module-level, keyed by ptyId)
-                    │  ptyIdForLeaf(leafId)
+  devServerStore  (zustand, keyed by leafId)
+                    │  leafIdForPty(ptyId) resolves on arrival
                     ▼
   DevServerChip  (rendered in PaneTreeView, beside DropOverlay)
                     │  click
@@ -107,16 +107,29 @@ into a module-level store keyed by pty id; `devServerStore` mirrors it.
 A byte state machine in the shape of `da_filter.rs`.
 
 **Escape-aware.** Dev banners are coloured: Vite emits
-`➜  Local:  \x1b[36mhttp://localhost:5173/\x1b[39m`. The scanner skips CSI and
-OSC sequences rather than letting them terminate a candidate, so a URL wrapped
-in colour codes still matches.
+`➜  Local:  \x1b[36mhttp://localhost:5173/\x1b[39m`. The scanner recognises CSI
+and OSC sequences and consumes them whole rather than letting their payload
+bytes leak into a candidate, so a colour-wrapped URL still matches: the leading
+`\x1b[36m` arrives while the candidate is empty, and the trailing `\x1b[39m`
+closes the completed candidate for evaluation.
+
+An escape sequence therefore *ends* the current candidate. The alternative —
+skipping escapes transparently so a candidate continues across them — would
+catch the rare banner that colours a URL's interior, but at the cost of gluing
+adjacent coloured cells into one bogus URL. Offering the user a wrong URL is
+worse than missing an unusual one.
 
 **Cross-chunk.** A 4 KB read can split `http://localh` / `ost:5173`. Partial
 candidates carry in a held buffer, capped at 2048 bytes and then discarded —
 the same runaway guard as `da_filter`'s `HOLD_MAX`.
 
 **Candidate termination:** whitespace, control byte, escape, or any of
-`"'()<>[]`.
+`"'()<>` and backtick. Square brackets are *not* terminators — they are
+required by the `[::1]` IPv6 literal form.
+
+**End of stream.** A candidate still open when the PTY closes is dropped rather
+than flushed. The shell has exited; offering to preview a server it was
+printing about is pointless.
 
 ### Match scope
 
@@ -154,11 +167,17 @@ collapse plus frontend dedup already make repaints inert.
 
 ## Frontend state — `src/modules/preview/lib/devServerStore.ts`
 
-A module-level store keyed by pty id:
+A zustand store keyed by **leaf id**, in the shape of `agentActivity.ts`:
 
 ```ts
-{ [ptyId]: { candidate: string | null; dismissed: string | null } }
+{ [leafId]: { candidate: string | null; dismissed: string | null } }
 ```
+
+The event carries a pty id, but the chip renders per pane, and `leafId` is the
+stable key a component has at render time while `ptyIdForLeaf` is not reactive.
+The listener therefore resolves pty → leaf on arrival via the existing
+`leafIdForPty`, mirroring how `ensureAgentActivityListener`'s consumer already
+does it at `useTerminalSession.ts:362`.
 
 Four transitions, all pure and testable without React:
 
