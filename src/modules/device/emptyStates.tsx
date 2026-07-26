@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
-import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { BOOT_PHASE_LABEL, listSystemImages, useAvds, type SystemImage } from "./useAvds";
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -28,42 +28,112 @@ export function AdbMissing() {
   );
 }
 
-export function NoDevices({ onRefresh }: { onRefresh: () => void }) {
-  const [avds, setAvds] = useState<string[] | null>(null);
-  const [launching, setLaunching] = useState<string | null>(null);
+/// Offered only when no AVD exists at all. Creation is limited to system images
+/// already on disk — downloading one needs sdkmanager, license acceptance and a
+/// progress UI, which belongs in Android Studio rather than here.
+function CreateAvd({ onCreate, busy }: { onCreate: (name: string, pkg: string) => void; busy: boolean }) {
+  const [images, setImages] = useState<SystemImage[] | null>(null);
+  const [name, setName] = useState("Terax_Device");
+  const [pkg, setPkg] = useState("");
 
   useEffect(() => {
-    invoke<string[]>("device_list_avds")
-      .then(setAvds)
-      .catch(() => setAvds([]));
+    void listSystemImages().then((list) => {
+      setImages(list);
+      if (list.length > 0) setPkg(list[0].package);
+    });
   }, []);
 
-  const handleLaunch = async (name: string) => {
-    setLaunching(name);
-    try {
-      await invoke("device_launch_avd", { name });
-      setTimeout(onRefresh, 3000);
-    } catch {}
-  };
+  if (!images) return <p className="mt-2">Checking for installed system images…</p>;
+  if (images.length === 0) {
+    return (
+      <p className="mt-2">
+        No AVDs and no system images installed. Install one from Android Studio&apos;s SDK Manager
+        (or <code>sdkmanager</code>), then click Refresh.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      <div className="font-medium text-foreground">Create an emulator</div>
+      <input
+        aria-label="AVD name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-foreground"
+      />
+      <select
+        aria-label="System image"
+        value={pkg}
+        onChange={(e) => setPkg(e.target.value)}
+        className="rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-foreground"
+      >
+        {images.map((img) => (
+          <option key={img.package} value={img.package}>
+            {img.apiLevel} · {img.tag} · {img.abi}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={busy || !name.trim() || !pkg}
+        onClick={() => onCreate(name.trim(), pkg)}
+        className="rounded-md border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
+      >
+        {busy ? "Creating…" : "Create AVD"}
+      </button>
+    </div>
+  );
+}
+
+export function NoDevices({ onRefresh }: { onRefresh: () => void }) {
+  const { avds, boot, error, busy, launch, stop, create } = useAvds(() => onRefresh());
 
   return (
     <Shell title="No active devices connected">
-      <p className="mb-2">Plug in a physical device via USB or launch an emulator below.</p>
+      <p className="mb-2">
+        Plug in a physical device via USB, or launch an emulator below — it runs headless and
+        streams here, so no separate emulator window opens.
+      </p>
+
+      {error && <p className="mb-2 break-words text-destructive">{error}</p>}
+
       {avds && avds.length > 0 ? (
-        <div className="flex flex-col gap-1.5 items-center justify-center my-2">
-          {avds.map((name) => (
-            <button
-              key={name}
-              type="button"
-              disabled={launching !== null}
-              onClick={() => void handleLaunch(name)}
-              className="rounded-md border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
-            >
-              🚀 Launch {name} {launching === name ? "(Booting…)" : ""}
-            </button>
-          ))}
+        <div className="my-2 flex flex-col items-stretch justify-center gap-1.5">
+          {avds.map((avd) => {
+            const booting = boot?.name === avd.name;
+            const runningSerial = avd.serial;
+            return (
+              <div key={avd.name} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={busy || !!runningSerial}
+                  onClick={() => void launch(avd.name)}
+                  className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
+                >
+                  <span className="truncate">{avd.name}</span>
+                  <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                    {booting ? BOOT_PHASE_LABEL[boot.phase] : runningSerial ? "Running" : "Launch"}
+                  </span>
+                </button>
+                {avd.managed && runningSerial && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void stop(runningSerial)}
+                    className="shrink-0 rounded-md border border-border/60 px-2 py-1.5 text-[10px] text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
+                  >
+                    Stop
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
+      ) : avds ? (
+        <CreateAvd busy={busy} onCreate={(name, pkg) => void create(name, pkg)} />
       ) : null}
+
       <button
         type="button"
         onClick={onRefresh}

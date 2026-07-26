@@ -2,59 +2,43 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
+import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
 
 type DeviceEntry = { serial: string; state: string; product?: string; model?: string };
 
 export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void }) {
   const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
-  const [avds, setAvds] = useState<string[] | null>(null);
-  const [launchingAvd, setLaunchingAvd] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const refresh = () => {
+  const refreshDevices = () => {
     setError(null);
     setIsRefreshing(true);
     invoke<DeviceEntry[]>("device_list")
-      .then((list) => {
-        setDevices(list);
-        if (list.length === 0) {
-          invoke<string[]>("device_list_avds")
-            .then(setAvds)
-            .catch(() => setAvds([]));
-        }
-      })
+      .then(setDevices)
       .catch((e) => setError(String(e)))
       .finally(() => setIsRefreshing(false));
   };
 
-  useEffect(() => void refresh(), []);
+  // A freshly booted emulator should appear without the user hitting Refresh.
+  const {
+    avds,
+    boot,
+    error: avdError,
+    busy,
+    refresh: refreshAvds,
+    launch,
+    stop,
+  } = useAvds(() => refreshDevices());
 
-  const handleLaunchAvd = async (name: string) => {
-    setLaunchingAvd(name);
-    try {
-      await invoke("device_launch_avd", { name });
-      let attempts = 0;
-      const timer = setInterval(async () => {
-        attempts++;
-        try {
-          const list = await invoke<DeviceEntry[]>("device_list");
-          if (list.length > 0) {
-            setDevices(list);
-            setLaunchingAvd(null);
-            clearInterval(timer);
-          }
-        } catch {}
-        if (attempts > 10) {
-          setLaunchingAvd(null);
-          clearInterval(timer);
-        }
-      }, 2000);
-    } catch (e) {
-      setError(String(e));
-      setLaunchingAvd(null);
-    }
+  useEffect(() => refreshDevices(), []);
+
+  const refresh = () => {
+    refreshDevices();
+    void refreshAvds();
   };
+
+  const shown = error ?? avdError;
 
   return (
     <div className="flex flex-col">
@@ -72,52 +56,88 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
         </button>
       </div>
 
-      {error?.includes("adb not found") ? (
-        <div className="px-3 py-2 text-[11px] text-destructive">adb not found on PATH.</div>
-      ) : error ? (
-        <div className="px-3 py-2 text-[11px] text-destructive">{error}</div>
-      ) : !devices ? (
-        <div className="px-3 py-2 text-[11px] text-muted-foreground">Checking…</div>
-      ) : devices.length === 0 ? (
-        <div className="flex flex-col gap-2 px-3 py-2 text-[11px] text-muted-foreground">
-          <div>No active devices connected.</div>
-          {avds && avds.length > 0 ? (
-            <div className="flex flex-col gap-1.5 pt-1">
-              <div className="font-medium text-foreground">Available Emulators:</div>
-              {avds.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  disabled={launchingAvd !== null}
-                  onClick={() => void handleLaunchAvd(name)}
-                  className="flex w-full items-center justify-between rounded-md border border-border/60 bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
-                >
-                  <span>🚀 Launch {name}</span>
-                  {launchingAvd === name && <span className="text-[10px] text-muted-foreground">Booting…</span>}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div>Start an emulator or connect a device via USB, then click Refresh.</div>
-          )}
+      {shown?.includes("adb not found") ? (
+        <div className="px-3 py-2 text-[11px] text-destructive">
+          adb not found. Install Android Platform Tools, or set ANDROID_HOME.
         </div>
+      ) : shown ? (
+        <div className="px-3 py-2 text-[11px] text-destructive">{shown}</div>
+      ) : null}
+
+      {!devices ? (
+        <div className="px-3 py-2 text-[11px] text-muted-foreground">Checking…</div>
       ) : (
-        <ul className="flex flex-col">
-          {devices.map((d) => (
-            <li key={d.serial}>
-              <button
-                type="button"
-                disabled={d.state !== "device"}
-                onClick={() => onPick(d.serial)}
-                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs hover:bg-accent/50 disabled:opacity-50"
-                title={d.state === "device" ? "Open device preview" : `state: ${d.state}`}
-              >
-                <span className="truncate">{d.model ?? d.serial}</span>
-                <span className="text-muted-foreground">{d.serial}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          {devices.length > 0 && (
+            <ul className="flex flex-col">
+              {devices.map((d) => (
+                <li key={d.serial}>
+                  <button
+                    type="button"
+                    disabled={d.state !== "device"}
+                    onClick={() => onPick(d.serial)}
+                    className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs hover:bg-accent/50 disabled:opacity-50"
+                    title={d.state === "device" ? "Open device preview" : `state: ${d.state}`}
+                  >
+                    <span className="truncate">{d.model ?? d.serial}</span>
+                    <span className="text-muted-foreground">{d.serial}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {avds && avds.length > 0 && (
+            <div className="flex flex-col gap-1 border-t border-border/40 px-3 py-2">
+              <div className="text-[11px] font-medium text-foreground">Emulators</div>
+              {avds.map((avd) => {
+                const booting = boot?.name === avd.name;
+                const runningSerial = avd.serial;
+                return (
+                  <div key={avd.name} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={busy && !runningSerial}
+                      onClick={() =>
+                        runningSerial ? onPick(runningSerial) : void launch(avd.name)
+                      }
+                      className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/60 bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
+                      title={
+                        runningSerial ? "Open device preview" : "Launch headless and stream here"
+                      }
+                    >
+                      <span className="truncate">{avd.name}</span>
+                      <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                        {booting
+                          ? BOOT_PHASE_LABEL[boot.phase]
+                          : runningSerial
+                            ? "Running"
+                            : "Launch"}
+                      </span>
+                    </button>
+                    {avd.managed && runningSerial && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void stop(runningSerial)}
+                        className="shrink-0 rounded-md border border-border/60 px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
+                        title="Stop this emulator"
+                      >
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {devices.length === 0 && (!avds || avds.length === 0) && (
+            <div className="px-3 py-2 text-[11px] text-muted-foreground">
+              No devices or emulators. Connect a device via USB, or create an AVD.
+            </div>
+          )}
+        </>
       )}
     </div>
   );

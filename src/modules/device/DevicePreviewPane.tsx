@@ -2,8 +2,9 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import type { DevicePreviewTab } from "@/modules/tabs";
 import { MsePlayer } from "./MsePlayer";
-import { DeviceControlBridge } from "./controlBridge";
+import { DEVICE_KEYCODE, DeviceControlBridge } from "./controlBridge";
 import { AdbMissing, NoDevices, UnauthorizedDevice, ServerFailed } from "./emptyStates";
+import { DeviceKeyBar } from "./DeviceKeyBar";
 
 type Frame = {
   kind: number;
@@ -70,16 +71,20 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
           return;
         }
         handleRef.current = handle;
-        // Query the physical display size — video.videoWidth reflects the
-        // encoded resolution (may be downscaled), but adb input needs the
-        // physical display dimensions for accurate coordinate mapping.
-        let devW = 0;
-        let devH = 0;
-        try {
-          [devW, devH] = await invoke<[number, number]>("device_screen_size", { serial: tab.serial });
-        } catch { /* keep video fallback in deviceCoords */ }
-        bridgeRef.current = new DeviceControlBridge(handle, devW || 1080, devH || 1920);
-        setStatus({ kind: "streaming", devW, devH });
+        // Touch coordinates must be in the ENCODED VIDEO space, not the
+        // device's physical space: scrcpy compares the width/height on each
+        // touch against its current video size and silently drops the event on
+        // any mismatch. `max_size=1920` downscales a 1080x2400 panel to
+        // 864x1920, so the physical size from `wm size` drops every touch.
+        // videoWidth/videoHeight is that encoded size, and it is authoritative
+        // across rotation, so it is the only correct source here.
+        const el = videoRef.current;
+        bridgeRef.current = new DeviceControlBridge(
+          handle,
+          el?.videoWidth || 1080,
+          el?.videoHeight || 1920,
+        );
+        setStatus({ kind: "streaming", devW: el?.videoWidth ?? 0, devH: el?.videoHeight ?? 0 });
       } catch (e) {
         if (disposed) return;
         const msg = String(e);
@@ -94,6 +99,9 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     void start();
     return () => {
       disposed = true;
+      // Release anything still held before the session goes away, or the
+      // device stays latched mid-touch with no up ever arriving.
+      bridgeRef.current?.releaseAll();
       bridgeRef.current = null;
       if (handleRef.current !== null) {
         const handle = handleRef.current;
@@ -105,6 +113,29 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
     };
   }, [tab.serial]);
 
+  // The encoded size isn't known until the first frame is decoded, and it
+  // changes on rotation. `resize` fires on both, so it is what keeps scrcpy's
+  // size check satisfied for the life of the session.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const sync = () => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) {
+        bridgeRef.current?.setVideoSize(el.videoWidth, el.videoHeight);
+        setStatus((s) =>
+          s.kind === "streaming" ? { ...s, devW: el.videoWidth, devH: el.videoHeight } : s,
+        );
+      }
+    };
+    sync();
+    el.addEventListener("loadedmetadata", sync);
+    el.addEventListener("resize", sync);
+    return () => {
+      el.removeEventListener("loadedmetadata", sync);
+      el.removeEventListener("resize", sync);
+    };
+  }, []);
+
   if (status.kind === "adb-missing") return <AdbMissing />;
   if (status.kind === "no-devices") return <NoDevices onRefresh={() => location.reload()} />;
   if (status.kind === "unauthorized")
@@ -112,16 +143,23 @@ export function DevicePreviewPane({ tab }: { tab: DevicePreviewTab }) {
   if (status.kind === "error") return <ServerFailed message={status.message} />;
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative flex h-full w-full flex-col">
       <video
         ref={videoRef}
-        className="h-full w-full object-contain bg-black"
+        className="min-h-0 w-full flex-1 object-contain bg-black touch-none"
         autoPlay
         muted
         playsInline
         onPointerDown={(e) => bridgeRef.current?.handlePointerDown(e)}
         onPointerMove={(e) => bridgeRef.current?.handlePointerMove(e)}
         onPointerUp={(e) => bridgeRef.current?.handlePointerUp(e)}
+        onPointerCancel={(e) => bridgeRef.current?.handlePointerCancel(e)}
+        onWheel={(e) => bridgeRef.current?.handleWheel(e)}
+      />
+      <DeviceKeyBar
+        disabled={status.kind !== "streaming"}
+        onPress={(keycode) => bridgeRef.current?.pressKey(keycode)}
+        keycodes={DEVICE_KEYCODE}
       />
     </div>
   );
