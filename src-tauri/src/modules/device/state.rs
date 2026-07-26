@@ -7,7 +7,7 @@ use tauri::Manager;
 
 use super::session::DeviceSession;
 
-/// An emulator this process started. Tracked so Terax can stop what it started
+/// An emulator this process started. Tracked so Terra can stop what it started
 /// and clean up on exit — and, just as importantly, so it can tell those apart
 /// from emulators the user launched from Android Studio, which it must leave
 /// strictly alone.

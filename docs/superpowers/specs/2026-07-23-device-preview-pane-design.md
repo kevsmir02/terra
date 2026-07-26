@@ -194,13 +194,13 @@ tabs (out of scope for this spec; tracked separately).
         v
 [ src-tauri/modules/device/session.rs ]   (pseudocode: real topology is
    pinned to the bundled scrcpy-server version; see "Version pinning")
-   1. adb push scrcpy-server-${SERVER_VERSION}.jar /data/local/tmp/terax-scrcpy.jar
-   2. adb forward tcp:${LOCAL_PORT} localabstract:terax-scrcpy
+   1. adb push scrcpy-server-${SERVER_VERSION}.jar /data/local/tmp/terra-scrcpy.jar
+   2. adb forward tcp:${LOCAL_PORT} localabstract:terra-scrcpy
       (with a second forward for control if the pinned server protocol
        uses a separate control socket; some scrcpy versions multiplex
        control bytes onto the same socket — the implementation plan pins
        this against the bundled JAR's documented protocol)
-   3. adb shell CLASSPATH=/data/local/tmp/terax-scrcpy.jar \
+   3. adb shell CLASSPATH=/data/local/tmp/terra-scrcpy.jar \
           app_process / com.genymobile.scrcpy.Server ${SERVER_VERSION} \
           tunnel_forward=true audio=false control=true \
           raw_stream=true max_size=1920 max_fps=30

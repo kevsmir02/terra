@@ -457,8 +457,10 @@ export const LANGUAGES: LanguageDefinition[] = [
       ),
   },
   {
-    name: "Terax Theme",
-    extensions: ["terax-theme"],
+    name: "Terra Theme",
+    // terax-theme is the pre-rename extension, kept so exports from older
+    // versions still open with swatches instead of as plain text.
+    extensions: ["terra-theme", "terax-theme"],
     loader: async () => {
       const [{ json }, { colorSwatches }] = await Promise.all([
         import("@codemirror/lang-json"),

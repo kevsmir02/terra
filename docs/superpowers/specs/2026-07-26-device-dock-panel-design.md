@@ -132,7 +132,7 @@ This avoids inventing a placeholder UI and a dedicated toggle affordance.
 - Default `340px`, min `240px`, max `640px`. A phone is roughly 0.45 aspect, so
   340px shows the whole device with modest side bars. Letterboxing is harmless:
   `scaleCoordinates` accounts for `object-contain` bars.
-- `terax.deviceDock.width` and `terax.deviceDock.collapsed` in `localStorage`,
+- `terra.deviceDock.width` and `terra.deviceDock.collapsed` in `localStorage`,
   mirroring the sidebar's keys.
 - The docked device is deliberately **not** persisted. Auto-reconnecting on
   startup to a device that has since disappeared surfaces a confusing error

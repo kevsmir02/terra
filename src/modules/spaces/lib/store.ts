@@ -22,7 +22,7 @@ export type SpaceState = {
   panelSizes?: number[];
 };
 
-const STORE_PATH = "terax-spaces.json";
+const STORE_PATH = "terra-spaces.json";
 const KEY_SPACES = "spaces";
 const KEY_ACTIVE = "activeId";
 const STATE_PREFIX = "state:";

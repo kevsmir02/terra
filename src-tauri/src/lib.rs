@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, history, lsp, pty, shell, workspace};
+use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -91,7 +91,7 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         if let Some(t) = tab.as_deref().filter(|s| !s.is_empty()) {
             // emit() serializes via JSON — no string-escape footgun, unlike
             // eval() with format!(). Frontend listens via Tauri event API.
-            let _ = window.emit("terax:settings-tab", t);
+            let _ = window.emit("terra:settings-tab", t);
         }
         return Ok(());
     }
@@ -160,7 +160,7 @@ pub fn run() {
     #[cfg(windows)]
     {
         let args: Vec<String> = std::env::args().collect();
-        if args.get(1).map(String::as_str) == Some("__terax_notify") {
+        if args.get(1).map(String::as_str) == Some("__terra_notify") {
             if let (Some(agent), Some(event)) = (args.get(2), args.get(3)) {
                 agent::emit_conout_marker(agent, event);
             }
@@ -171,6 +171,10 @@ pub fn run() {
             std::process::exit(0);
         }
     }
+
+    // Must precede the builder: the store and webview open their
+    // identifier-scoped trees during plugin init.
+    migrate::migrate_legacy_app_dirs();
 
     let launch = parse_launch_target();
     let cli_dir = launch.dir.clone();
@@ -331,7 +335,7 @@ pub fn run() {
                     }
                     if let Some(state) = app.try_state::<device::DeviceState>() {
                         state.kill_all();
-                        // Only tears down emulators Terax started; ones the
+                        // Only tears down emulators Terra started; ones the
                         // user launched elsewhere are left running.
                         state.kill_launched_avds();
                     }
@@ -364,7 +368,7 @@ pub fn run() {
                     if let Some(state) = app.try_state::<LaunchFiles>() {
                         *state.0.lock().expect("LaunchFiles mutex poisoned") = target.files.clone();
                     }
-                    let _ = app.emit("terax:open-file", target.files);
+                    let _ = app.emit("terra:open-file", target.files);
                 }
                 _ => {}
             }

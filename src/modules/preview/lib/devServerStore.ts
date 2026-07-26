@@ -94,7 +94,7 @@ export function ensureDevServerListener(
 ): void {
   if (bound || typeof window === "undefined") return;
   bound = true;
-  void listen<DevServerSignal>("terax:dev-server", (e) => {
+  void listen<DevServerSignal>("terra:dev-server", (e) => {
     const leafId = resolveLeaf(e.payload.id);
     if (leafId === null) return;
     useDevServerStore.getState().detect(leafId, e.payload.url);

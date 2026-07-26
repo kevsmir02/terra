@@ -60,23 +60,27 @@ const AGENTS: &[AgentSpec] = &[
 ];
 
 const PI_EXTENSION_DIR: &str = ".pi/agent/extensions";
-const PI_EXTENSION_FILE: &str = "terax-notifications.ts";
-const PI_EXTENSION_MARKER: &str = "terax-pi-notifications-v1";
+const PI_EXTENSION_FILE: &str = "terra-notifications.ts";
+const PI_EXTENSION_MARKER: &str = "terra-pi-notifications-v1";
+// Pre-rename names. pi loads every file in the extensions dir, so leaving the
+// old one behind would emit a second notification for each event.
+const LEGACY_PI_EXTENSION_FILE: &str = "terax-notifications.ts";
+const LEGACY_PI_EXTENSION_MARKER: &str = "terax-pi-notifications-v1";
 const PI_STATUS_NEEDLES: [&str; 6] = [
     PI_EXTENSION_MARKER,
     "agent_start",
     "agent_settled",
-    "notify;Terax;pi;${event}",
+    "notify;Terra;pi;${event}",
     "emit(\"working\")",
     "emit(\"finished\")",
 ];
-const PI_EXTENSION: &str = r#"// terax-pi-notifications-v1
+const PI_EXTENSION: &str = r#"// terra-pi-notifications-v1
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
   const emit = (event: "working" | "finished") => {
-    if (process.env.TERAX_TERMINAL) {
-      process.stdout.write(`\u001b]777;notify;Terax;pi;${event}\u0007`);
+    if (process.env.TERRA_TERMINAL) {
+      process.stdout.write(`\u001b]777;notify;Terra;pi;${event}\u0007`);
     }
   };
 
@@ -89,7 +93,18 @@ export default function (pi: ExtensionAPI) {
 // emitted (legacy /dev/tty Claude, current TerminalSequence, Osc, Windows
 // helper). Used to prune our own groups before reinserting so installs are
 // idempotent and migrate older markers.
-const OWNED_MARKERS: [&str; 3] = ["notify;Terax;", "terax;notify", "__terax_notify"];
+//
+// The `Terax` spellings predate the rename. They must stay: pruning is what
+// stops a reinstall from leaving the old hook in place alongside the new one
+// and firing every notification twice.
+const OWNED_MARKERS: [&str; 6] = [
+    "notify;Terra;",
+    "terra;notify",
+    "__terra_notify",
+    "notify;Terax;",
+    "terax;notify",
+    "__terax_notify",
+];
 
 fn find(agent: &str) -> Result<&'static AgentSpec, String> {
     AGENTS
@@ -101,7 +116,7 @@ fn find(agent: &str) -> Result<&'static AgentSpec, String> {
 fn hook_command(spec: &AgentSpec, event: &str) -> String {
     match spec.delivery {
         Delivery::TerminalSequence => format!(
-            r#"[ -n "$TERAX_TERMINAL" ] && printf '{{"terminalSequence":"\\u001b]777;notify;Terax;{event}\\u0007"}}' || true"#
+            r#"[ -n "$TERRA_TERMINAL" ] && printf '{{"terminalSequence":"\\u001b]777;notify;Terra;{event}\\u0007"}}' || true"#
         ),
         Delivery::Osc => osc_command(spec.agent, event),
     }
@@ -111,7 +126,7 @@ fn hook_command(spec: &AgentSpec, event: &str) -> String {
 #[cfg(unix)]
 fn osc_command(agent: &str, event: &str) -> String {
     format!(
-        r#"[ -n "$TERAX_TERMINAL" ] && printf '\033]777;notify;Terax;{agent};{event}\007' > /dev/tty; printf '{{}}'"#
+        r#"[ -n "$TERRA_TERMINAL" ] && printf '\033]777;notify;Terra;{agent};{event}\007' > /dev/tty; printf '{{}}'"#
     )
 }
 
@@ -119,23 +134,23 @@ fn osc_command(agent: &str, event: &str) -> String {
 fn osc_command(agent: &str, event: &str) -> String {
     let exe = std::env::current_exe()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "terax.exe".to_string());
-    format!(r#""{exe}" __terax_notify {agent} {event}"#)
+        .unwrap_or_else(|_| "terra.exe".to_string());
+    format!(r#""{exe}" __terra_notify {agent} {event}"#)
 }
 
 // The stable substring that proves a given (agent, event) hook is installed.
 // Kept in sync with hook_command so status reflects what enable writes.
 fn status_needle(spec: &AgentSpec, event: &str) -> String {
     match spec.delivery {
-        Delivery::TerminalSequence => format!("notify;Terax;{event}"),
+        Delivery::TerminalSequence => format!("notify;Terra;{event}"),
         Delivery::Osc => {
             #[cfg(unix)]
             {
-                format!("notify;Terax;{};{event}", spec.agent)
+                format!("notify;Terra;{};{event}", spec.agent)
             }
             #[cfg(windows)]
             {
-                format!("__terax_notify {} {event}", spec.agent)
+                format!("__terra_notify {} {event}", spec.agent)
             }
         }
     }
@@ -222,7 +237,7 @@ fn pi_extension_contents(
 ) -> Result<&'static str, String> {
     if existing.is_some_and(|s| !s.trim().is_empty() && !s.contains(PI_EXTENSION_MARKER)) {
         return Err(format!(
-            "{} is not managed by Terax; refusing to overwrite",
+            "{} is not managed by Terra; refusing to overwrite",
             path.display()
         ));
     }
@@ -230,7 +245,7 @@ fn pi_extension_contents(
 }
 
 fn write_atomic(path: &std::path::Path, contents: &str) -> Result<(), String> {
-    let tmp = path.with_extension("terax-tmp");
+    let tmp = path.with_extension("terra-tmp");
     std::fs::write(&tmp, contents).map_err(|e| format!("write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, path).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
@@ -249,9 +264,24 @@ fn pi_extension_write_path(path: &std::path::Path) -> Result<std::path::PathBuf,
     }
 }
 
+/// Drops the pre-rename extension, but only when it still carries our marker —
+/// a file the user has since made their own is left alone.
+fn remove_legacy_pi_extension(dir: &std::path::Path) {
+    let legacy = dir.join(LEGACY_PI_EXTENSION_FILE);
+    if std::fs::symlink_metadata(&legacy).is_err() {
+        return;
+    }
+    if std::fs::read_to_string(&legacy)
+        .is_ok_and(|s| s.contains(LEGACY_PI_EXTENSION_MARKER) || s.contains(PI_EXTENSION_MARKER))
+    {
+        let _ = std::fs::remove_file(&legacy);
+    }
+}
+
 fn enable_pi_extension_at(path: &std::path::Path) -> Result<(), String> {
     let dir = path.parent().unwrap();
     std::fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    remove_legacy_pi_extension(dir);
     let existing = match std::fs::read_to_string(path) {
         Ok(s) if s == PI_EXTENSION => return Ok(()),
         Ok(s) => Some(s),
@@ -291,10 +321,10 @@ pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
 // CONOUT$ path can't drift from what the Unix /dev/tty hook emits.
 #[cfg(any(windows, test))]
 fn conout_marker(agent: &str, event: &str) -> String {
-    format!("\x1b]777;notify;Terax;{agent};{event}\x07")
+    format!("\x1b]777;notify;Terra;{agent};{event}\x07")
 }
 
-// Windows has no /dev/tty: the hook calls `terax.exe __terax_notify ...` and we
+// Windows has no /dev/tty: the hook calls `terra.exe __terra_notify ...` and we
 // write the marker into the ConPTY console. GUI-subsystem release inherits no
 // console, so attach to the hook runner's first.
 #[cfg(windows)]
@@ -302,7 +332,7 @@ pub fn emit_conout_marker(agent: &str, event: &str) {
     use std::io::Write;
     use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
 
-    if std::env::var_os("TERAX_TERMINAL").is_none() {
+    if std::env::var_os("TERRA_TERMINAL").is_none() {
         return;
     }
     unsafe {
@@ -368,9 +398,9 @@ mod tests {
         assert_eq!(hook_count(&out, "UserPromptSubmit"), 1);
         assert_eq!(hook_count(&out, "Notification"), 1);
         assert_eq!(hook_count(&out, "Stop"), 1);
-        assert!(command(&out, "Notification", 0).contains("notify;Terax;attention"));
-        assert!(command(&out, "Stop", 0).contains("notify;Terax;finished"));
-        assert!(command(&out, "UserPromptSubmit", 0).contains("notify;Terax;working"));
+        assert!(command(&out, "Notification", 0).contains("notify;Terra;attention"));
+        assert!(command(&out, "Stop", 0).contains("notify;Terra;finished"));
+        assert!(command(&out, "UserPromptSubmit", 0).contains("notify;Terra;working"));
         assert!(command(&out, "Stop", 0).contains("terminalSequence"));
         assert!(!command(&out, "Stop", 0).contains("/dev/tty"));
     }
@@ -390,7 +420,7 @@ mod tests {
         // Exactly the bytes pty/agent_detect parses (ESC ] 777 ; ... BEL).
         assert_eq!(
             conout_marker("gemini", "attention"),
-            "\u{1b}]777;notify;Terax;gemini;attention\u{7}"
+            "\u{1b}]777;notify;Terra;gemini;attention\u{7}"
         );
     }
 
@@ -402,7 +432,7 @@ mod tests {
         assert_eq!(hook_count(&out, "PermissionRequest"), 1);
         assert_eq!(hook_count(&out, "Stop"), 1);
         let stop = command(&out, "Stop", 0);
-        assert!(stop.contains("notify;Terax;codex;finished"));
+        assert!(stop.contains("notify;Terra;codex;finished"));
         assert!(stop.contains("> /dev/tty"));
         // Codex Stop rejects empty/non-JSON stdout; the hook must emit a no-op.
         assert!(stop.contains("printf '{}'"));
@@ -414,24 +444,24 @@ mod tests {
     fn gemini_uses_matcher_and_named_marker() {
         let out = merge_hooks(json!({}), spec("gemini"));
         assert_eq!(out["hooks"]["BeforeAgent"][0]["matcher"], "*");
-        assert!(command(&out, "AfterAgent", 0).contains("notify;Terax;gemini;finished"));
-        assert!(command(&out, "Notification", 0).contains("notify;Terax;gemini;attention"));
+        assert!(command(&out, "AfterAgent", 0).contains("notify;Terra;gemini;finished"));
+        assert!(command(&out, "Notification", 0).contains("notify;Terra;gemini;attention"));
     }
 
     #[test]
     fn pi_extension_emits_named_working_and_finished_markers() {
-        let path = std::path::Path::new("/x/terax-notifications.ts");
+        let path = std::path::Path::new("/x/terra-notifications.ts");
         let extension = pi_extension_contents(None, path).unwrap();
         for needle in PI_STATUS_NEEDLES {
             assert!(extension.contains(needle), "missing {needle}");
         }
-        assert!(extension.contains("process.env.TERAX_TERMINAL"));
+        assert!(extension.contains("process.env.TERRA_TERMINAL"));
         assert!(extension.contains("process.stdout.write"));
     }
 
     #[test]
-    fn pi_extension_only_replaces_terax_owned_file() {
-        let path = std::path::Path::new("/x/terax-notifications.ts");
+    fn pi_extension_only_replaces_terra_owned_file() {
+        let path = std::path::Path::new("/x/terra-notifications.ts");
         assert!(pi_extension_contents(Some("export const mine = true;"), path).is_err());
         assert!(pi_extension_contents(Some(PI_EXTENSION), path).is_ok());
         assert!(pi_extension_contents(Some("  \n"), path).is_ok());
@@ -439,7 +469,7 @@ mod tests {
 
     #[test]
     fn pi_extension_install_is_atomic_idempotent_and_preserves_foreign_files() {
-        let dir = std::env::temp_dir().join(format!("terax-pi-extension-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("terra-pi-extension-{}", std::process::id()));
         let path = dir.join(PI_EXTENSION_FILE);
         let _ = std::fs::remove_dir_all(&dir);
 
@@ -462,7 +492,7 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let dir =
-            std::env::temp_dir().join(format!("terax-pi-extension-symlink-{}", std::process::id()));
+            std::env::temp_dir().join(format!("terra-pi-extension-symlink-{}", std::process::id()));
         let target = dir.join("managed.ts");
         let path = dir.join(PI_EXTENSION_FILE);
         let _ = std::fs::remove_dir_all(&dir);
@@ -487,7 +517,7 @@ mod tests {
                 "Notification": [
                     { "hooks": [ {
                         "type": "command",
-                        "command": "[ -n \"$TERAX_TERMINAL\" ] && printf '\\033]777;terax;notify\\033\\\\' > /dev/tty || true"
+                        "command": "[ -n \"$TERRA_TERMINAL\" ] && printf '\\033]777;terra;notify\\033\\\\' > /dev/tty || true"
                     } ] }
                 ]
             }
@@ -532,7 +562,7 @@ mod tests {
         });
         let out = merge_hooks(input, spec("claude"));
         assert_eq!(hook_count(&out, "Notification"), 1);
-        assert!(command(&out, "Notification", 0).contains("notify;Terax;attention"));
+        assert!(command(&out, "Notification", 0).contains("notify;Terra;attention"));
     }
 
     #[test]

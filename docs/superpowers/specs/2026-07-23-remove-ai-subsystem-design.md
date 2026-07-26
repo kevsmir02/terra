@@ -1,11 +1,11 @@
-# Design: Remove the AI Subsystem from Terax
+# Design: Remove the AI Subsystem from Terra
 
 **Date:** 2026-07-23
 **Status:** Approved (brainstorming complete, pending implementation plan)
 
 ## Goal
 
-Transform Terax from an AI-native terminal emulator into a clean, lightweight,
+Transform Terra from an AI-native terminal emulator into a clean, lightweight,
 AI-free Terminal IDE. The built-in AI side-panel, agent loop, provider system,
 and AI-specific IPC are obsolete because external CLI agent harnesses (Claude
 Code, Codex, Gemini CLI, Pi) will run directly inside the terminal PTY. The
@@ -246,7 +246,7 @@ shortcuts, agentNotifications, workspace, background, etc.).
 - Delete `lib/review.ts` (`maybeTriggerManagedReview`)
 - `components/AgentNotificationsBridge.tsx`: remove `maybeTriggerManagedReview`
   import/call, remove `useManagedAgentsStore` import/usage. Keep terminal agent
-  signal handling (`handleSignal`, `route`, the `terax:agent-signal` listener)
+  signal handling (`handleSignal`, `route`, the `terra:agent-signal` listener)
 - `components/NotificationBell.tsx`: remove `localAgent` state usage,
   `onActivateLocal` prop, localAgent `StatusRow`, `activateLocal` function.
   Keep terminal sessions, notifications, hook enable/disable for
@@ -348,7 +348,7 @@ Run `pnpm install` to update lockfile.
 
 ### 4c. Documentation updates
 
-- `TERAX.md`: Remove "AI subsystem" section, AI references in two-process model
+- `TERRA.md`: Remove "AI subsystem" section, AI references in two-process model
   (`net::*`, `shell::*`, `secrets::*`), `AiComposerProvider` note in PTY shell
   integration, AI parts of agents module description, AI quality bar references.
   Update description from "AI-native terminal emulator" to "terminal IDE"
@@ -437,6 +437,6 @@ Run `pnpm install` to update lockfile.
 `src/modules/statusbar/`, `src/modules/agents/` (4 files),
 `src/modules/header/`, `src/app/components/WorkspaceInputBar.tsx`,
 `src/modules/explorer/`, `src-tauri/src/lib.rs`, `src-tauri/src/modules/mod.rs`,
-`src-tauri/Cargo.toml`, `package.json`, `components.json`, `TERAX.md`,
+`src-tauri/Cargo.toml`, `package.json`, `components.json`, `TERRA.md`,
 `README.md`, `ROADMAP.md`, `CONTRIBUTING.md`, `docs/README.md`,
 `docs/architecture/two-process-model.md`, `docs/architecture/security-model.md`

@@ -218,7 +218,7 @@ emulator-5554   device\n";
 - [ ] **Step 4: Run test to verify it fails**
 
 ```bash
-cd src-tauri && cargo nextest run -p terax device::adb 2>&1 | tail -20
+cd src-tauri && cargo nextest run -p terra device::adb 2>&1 | tail -20
 # fallback: cargo test --locked device::adb -- --nocapture
 ```
 
@@ -359,7 +359,7 @@ cd src-tauri && cargo add which
 - [ ] **Step 6: Run tests and clippy**
 
 ```bash
-cd src-tauri && cargo nextest run -p terax device::adb
+cd src-tauri && cargo nextest run -p terra device::adb
 cd src-tauri && cargo clippy --all-targets --locked -- -D warnings
 ```
 
@@ -405,8 +405,8 @@ use std::process::Command;
 
 use super::scrcpy_server_version::SCRCPY_SERVER_VERSION;
 
-const DEVICE_JAR_PATH: &str = "/data/local/tmp/terax-scrcpy.jar";
-const LOCAL_ABSTRACT_NAME: &str = "terax-scrcpy";
+const DEVICE_JAR_PATH: &str = "/data/local/tmp/terra-scrcpy.jar";
+const LOCAL_ABSTRACT_NAME: &str = "terra-scrcpy";
 
 /// Build the `adb shell ... app_process ... com.genymobile.scrcpy.Server` command
 /// that runs the scrcpy standalone server on the device. Pure function: returns
@@ -449,7 +449,7 @@ mod tests {
         assert_eq!(args[0], "-s");
         assert_eq!(args[1], "emulator-5554");
         assert_eq!(args[2], "shell");
-        assert!(args[3].starts_with("CLASSPATH=/data/local/tmp/terax-scrcpy.jar"));
+        assert!(args[3].starts_with("CLASSPATH=/data/local/tmp/terra-scrcpy.jar"));
         assert!(args[4].contains("com.genymobile.scrcpy.Server 4.1 "));
         assert!(args[4].contains("tunnel_forward=true"));
         assert!(args[4].contains("control=false"));
@@ -470,7 +470,7 @@ pub mod server;
 - [ ] **Step 2: Run test, expect pass**
 
 ```bash
-cd src-tauri && cargo nextest run -p terax device::server
+cd src-tauri && cargo nextest run -p terra device::server
 ```
 
 Expected: 1 test passes (the function is already implemented — the test guards against regressions in the command construction, especially the version-pin and the `control=false raw_stream=true` flags).
@@ -626,7 +626,7 @@ pub mod server;
 - [ ] **Step 2: Run tests, expect failure**
 
 ```bash
-cd src-tauri && cargo nextest run -p terax device::remux 2>&1 | tail -10
+cd src-tauri && cargo nextest run -p terra device::remux 2>&1 | tail -10
 ```
 
 Expected: 4 test failures (always returns empty).
@@ -672,7 +672,7 @@ pub fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
 - [ ] **Step 4: Run tests, expect pass**
 
 ```bash
-cd src-tauri && cargo nextest run -p terax device::remux
+cd src-tauri && cargo nextest run -p terra device::remux
 ```
 
 Expected: 4 tests pass.
@@ -921,9 +921,9 @@ This is the **only** step in the plan where the engineer must capture real bytes
 
 1. With an emulator AVD running, manually run the bundled standalone-server invocation outside Terra:
    ```bash
-   adb push src-tauri/resources/scrcpy-server-4.1.jar /data/local/tmp/terax-scrcpy.jar
-   adb forward tcp:27183 localabstract:terax-scrcpy
-   adb shell 'CLASSPATH=/data/local/tmp/terax-scrcpy.jar app_process / com.genymobile.scrcpy.Server 4.1 tunnel_forward=true audio=false control=false cleanup=false raw_stream=true max_size=1920 max_fps=30 video_codec=h264' &
+   adb push src-tauri/resources/scrcpy-server-4.1.jar /data/local/tmp/terra-scrcpy.jar
+   adb forward tcp:27183 localabstract:terra-scrcpy
+   adb shell 'CLASSPATH=/data/local/tmp/terra-scrcpy.jar app_process / com.genymobile.scrcpy.Server 4.1 tunnel_forward=true audio=false control=false cleanup=false raw_stream=true max_size=1920 max_fps=30 video_codec=h264' &
    nc 127.0.0.1 27183 > /tmp/scrcpy-annexb.bin
    # Capture ~200 KB then Ctrl-C the nc and the adb shell.
    ```
@@ -939,7 +939,7 @@ This is the **only** step in the plan where the engineer must capture real bytes
 - [ ] **Step 5: Run the fixture test**
 
 ```bash
-cd src-tauri && cargo nextest run -p terax --test device
+cd src-tauri && cargo nextest run -p terra --test device
 ```
 
 Expected: integration test passes.

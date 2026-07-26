@@ -4,7 +4,7 @@ use std::process::Command;
 
 use super::scrcpy_server_version::SCRCPY_SERVER_VERSION;
 
-const DEVICE_JAR_PATH: &str = "/data/local/tmp/terax-scrcpy.jar";
+const DEVICE_JAR_PATH: &str = "/data/local/tmp/terra-scrcpy.jar";
 const LOCAL_ABSTRACT_NAME: &str = "scrcpy";
 
 pub fn build_server_command(adb: &Path, _jar: &Path, serial: &str, _local_port: u16) -> Command {
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(args[0], "-s");
         assert_eq!(args[1], "emulator-5554");
         assert_eq!(args[2], "shell");
-        assert!(args[3].starts_with("CLASSPATH=/data/local/tmp/terax-scrcpy.jar"));
+        assert!(args[3].starts_with("CLASSPATH=/data/local/tmp/terra-scrcpy.jar"));
         assert!(args[4].contains("com.genymobile.scrcpy.Server 4.1 "));
         assert!(args[4].contains("tunnel_forward=true"));
         assert!(args[4].contains("control=true"));

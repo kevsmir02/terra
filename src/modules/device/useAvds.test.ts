@@ -47,9 +47,9 @@ describe("AVD boot is event-driven", () => {
 });
 
 describe("emulator lifecycle affordances", () => {
-  it("offers stop only for emulators Terax launched", () => {
+  it("offers stop only for emulators Terra launched", () => {
     // `managed` is the backend's flag for "this process started it"; gating the
-    // Stop button on it keeps Terax from killing an Android Studio emulator.
+    // Stop button on it keeps Terra from killing an Android Studio emulator.
     expect(emptyStatesSrc).toMatch(/avd\.managed && runningSerial/);
     expect(dropdownSrc).toMatch(/avd\.managed && runningSerial/);
   });

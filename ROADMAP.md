@@ -114,7 +114,7 @@ The themes below frame every scope decision.
 ## Out of scope
 
 - **Heavy IDE features.** Full language-server indexers, integrated debuggers, heavy refactoring engines.
-- **Notebook and document workspaces.** Anything that turns Terax into a document host rather than a terminal IDE.
+- **Notebook and document workspaces.** Anything that turns Terra into a document host rather than a terminal IDE.
 - **Package manager and toolchain UIs.** Use `npm`, `pip`, `cargo` and friends in the terminal directly.
 - **Full web browser features.** Preview pane stays scoped to local dev servers and lightweight doc viewing.
-- **Telemetry, analytics, accounts.** Terax stays offline-respectful.
+- **Telemetry, analytics, accounts.** Terra stays offline-respectful.

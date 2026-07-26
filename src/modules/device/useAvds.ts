@@ -8,7 +8,7 @@ export type AvdEntry = {
   name: string;
   /** Serial of the running instance; absent when the AVD is not booted. */
   serial?: string;
-  /** True when Terax started it, and may therefore stop it again. */
+  /** True when Terra started it, and may therefore stop it again. */
   managed: boolean;
 };
 

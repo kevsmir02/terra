@@ -5,7 +5,7 @@ export const DOCK_DEFAULT_WIDTH = 340;
 export const DOCK_MIN_WIDTH = 240;
 export const DOCK_MAX_WIDTH = 640;
 
-const DOCK_WIDTH_STORAGE_KEY = "terax.deviceDock.width";
+const DOCK_WIDTH_STORAGE_KEY = "terra.deviceDock.width";
 
 export function clampDockWidth(width: number): number {
   return Math.min(DOCK_MAX_WIDTH, Math.max(DOCK_MIN_WIDTH, Math.round(width)));

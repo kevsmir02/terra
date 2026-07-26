@@ -43,7 +43,7 @@ export function AdbMissing({ narrow }: { narrow?: boolean }) {
     <Shell title="adb not found" narrow={narrow}>
       Install Android Platform Tools (<code>sudo apt install adb</code>,{" "}
       <code>brew install --cask android-platform-tools</code>, or{" "}
-      <code>winget install Google.PlatformTools</code>). Terax shells out to{" "}
+      <code>winget install Google.PlatformTools</code>). Terra shells out to{" "}
       <code>adb</code> but does not bundle it.
     </Shell>
   );
@@ -54,7 +54,7 @@ export function AdbMissing({ narrow }: { narrow?: boolean }) {
 /// progress UI, which belongs in Android Studio rather than here.
 function CreateAvd({ onCreate, busy }: { onCreate: (name: string, pkg: string) => void; busy: boolean }) {
   const [images, setImages] = useState<SystemImage[] | null>(null);
-  const [name, setName] = useState("Terax_Device");
+  const [name, setName] = useState("Terra_Device");
   const [pkg, setPkg] = useState("");
 
   useEffect(() => {

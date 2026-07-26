@@ -78,7 +78,7 @@ PTY reader thread (session.rs)
   ├─ url_detect.process(&buf[..n], ..)       NEW
   └─ da_filter.process(&buf[..n], ..)        existing
                     │
-                    │  emit("terax:dev-server", { id: ptyId, url })
+                    │  emit("terra:dev-server", { id: ptyId, url })
                     ▼
   devServerStore  (zustand, keyed by leafId)
                     │  leafIdForPty(ptyId) resolves on arrival
@@ -90,7 +90,7 @@ PTY reader thread (session.rs)
 ```
 
 The reader thread already runs two byte-stream scanners per chunk and emits a
-Tauri event (`terax:agent-signal`). This is a third instance of an established
+Tauri event (`terra:agent-signal`). This is a third instance of an established
 pattern, not a new mechanism. `agentActivity.ts` already brokers that event
 into a module-level store keyed by pty id; `devServerStore` mirrors it.
 

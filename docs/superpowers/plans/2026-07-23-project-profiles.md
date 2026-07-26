@@ -6,12 +6,12 @@
 
 **Architecture:** A new `useSpaceStartup` hook owns two switch-time side-effects (apply the saved `panelSizes` via the sidebar panel handle; create one cold terminal per `startupCommand`, warm it, then `submitToLeaf` the command on next tick). Per-space `panelSizes` is a percentage pair persisted on `SpaceState` (debounced via the existing `useSpacePersistence` snapshot) and mirrored into a runtime `panelSizesBySpace` map on the `useSpaces` zustand store, seeded at boot from the loaded `states`. Startup-terminal tabs are marked with a runtime-only `startupCommand` field excluded from serialization, so they recreate cleanly each launch without duplication. The settings UI is a self-contained `SpaceSettingsPopover` triggered by a gear `RowAction` inside each `SpaceRow`.
 
-**Tech Stack:** Tauri 2, React 19 (`useRef`/`useEffect`/`useCallback`), Zustand, Vite, Vitest, Biome, TypeScript (`tsc --noEmit`). The Tauri/Rust layer is **untouched** by this plan. Icons: `@hugeicons/core-free-icons`. Persistence: `@tauri-apps/plugin-store` (`terax-spaces.json`). Resizable panel: `react-resizable-panels`.
+**Tech Stack:** Tauri 2, React 19 (`useRef`/`useEffect`/`useCallback`), Zustand, Vite, Vitest, Biome, TypeScript (`tsc --noEmit`). The Tauri/Rust layer is **untouched** by this plan. Icons: `@hugeicons/core-free-icons`. Persistence: `@tauri-apps/plugin-store` (`terra-spaces.json`). Resizable panel: `react-resizable-panels`.
 
 ## Global Constraints
 
 - **No em-dashes.** Use `\u2014`? No — use regular hyphens or parenthetical phrasing in all code comments and prose.
-- **Backward compatibility:** All new persisted fields (`SpaceMeta.startupCommands`, `SpaceState.panelSizes`) are optional. Existing `terax-spaces.json` files load unchanged; missing values stay `undefined`.
+- **Backward compatibility:** All new persisted fields (`SpaceMeta.startupCommands`, `SpaceState.panelSizes`) are optional. Existing `terra-spaces.json` files load unchanged; missing values stay `undefined`.
 - **Rust untouched:** `src-tauri/` is NOT modified. `cargo clippy --all-targets --locked -- -D warnings` runs as a regression gate, not new-code gate.
 - **Reuse, don't reinvent:** `newTabInSpace` (already returns a tabId), `submitToLeaf` (queues input until pty attaches), `SPACE_COLORS`/`accentFor`, `Popover`/`PopoverContent`, `RowAction` (in `SpaceSwitcher`), `InlineRename` pattern, `persistSidebarWidth` debounce pattern.
 - **Ephemeral startup terminals are never serialized** (extend `isSerializableTab`).

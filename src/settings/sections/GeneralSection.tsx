@@ -258,7 +258,7 @@ export function GeneralSection() {
         </SettingRow>
         <SettingRow
           title="Copy on selection"
-          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terax cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
+          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
         >
           <Switch
             checked={terminalCopyOnSelect}
@@ -444,7 +444,7 @@ export function GeneralSection() {
         <Label>Agents</Label>
         <SettingRow
           title="Coding agent notifications"
-          description="Alert when Claude Code or Codex running in a terminal needs your input or finishes. Desktop notification when Terax is unfocused, in-app otherwise."
+          description="Alert when Claude Code or Codex running in a terminal needs your input or finishes. Desktop notification when Terra is unfocused, in-app otherwise."
         >
           <Switch
             checked={agentNotifications}
@@ -458,7 +458,7 @@ export function GeneralSection() {
         <div className="flex flex-col gap-2">
           <SettingRow
             title="Launch at login"
-            description="Open Terax automatically when you sign in."
+            description="Open Terra automatically when you sign in."
           >
             <Switch
               checked={autostart}

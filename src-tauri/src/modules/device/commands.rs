@@ -38,7 +38,7 @@ pub async fn device_list() -> Result<Vec<DeviceEntry>, String> {
 }
 
 /// Lists every AVD, annotated with the serial of its running instance (so the
-/// UI can attach instead of failing on a relaunch) and whether Terax owns it.
+/// UI can attach instead of failing on a relaunch) and whether Terra owns it.
 #[tauri::command]
 pub async fn device_list_avds(state: State<'_, DeviceState>) -> Result<Vec<AvdEntry>, String> {
     let emulator = resolve_emulator_path()?;
@@ -109,7 +109,7 @@ pub async fn device_launch_avd(
 
     let devices = list_devices(&adb).unwrap_or_default();
     let port = free_emulator_port(&devices)?;
-    let log_path = std::env::temp_dir().join(format!("terax-emulator-{port}.log"));
+    let log_path = std::env::temp_dir().join(format!("terra-emulator-{port}.log"));
     let launched = launch_avd(&emulator, &name, port, gpu.as_deref(), log_path.clone())?;
     let serial = launched.serial.clone();
     state.track_launched(serial.clone(), name.clone(), launched.child);
@@ -117,7 +117,7 @@ pub async fn device_launch_avd(
     let app_for_thread = app.clone();
     let serial_for_thread = serial.clone();
     std::thread::Builder::new()
-        .name("terax-avd-boot".into())
+        .name("terra-avd-boot".into())
         .spawn(move || {
             await_boot(
                 app_for_thread,
@@ -259,12 +259,12 @@ fn await_boot(
     );
 }
 
-/// Only stops emulators Terax started. One launched from Android Studio is the
+/// Only stops emulators Terra started. One launched from Android Studio is the
 /// user's to manage, and killing it would be hostile.
 #[tauri::command]
 pub async fn device_stop_avd(state: State<'_, DeviceState>, serial: String) -> Result<(), String> {
     let Some(mut avd) = state.take_launched(&serial) else {
-        return Err(format!("{serial} was not launched by Terax"));
+        return Err(format!("{serial} was not launched by Terra"));
     };
     let adb = resolve_adb_path()?;
     tauri::async_runtime::spawn_blocking(move || {

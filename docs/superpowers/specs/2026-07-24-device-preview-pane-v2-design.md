@@ -32,8 +32,8 @@ When initializing a device preview session in `src-tauri/src/modules/device/sess
 
 - `scrcpy-server` is launched with `control=true` and `tunnel_forward=true`.
 - Two local TCP port forwards are established via `adb forward`:
-  - `LOCAL_PORT` -> `localabstract:terax-scrcpy` (Video H.264 Stream Socket)
-  - `LOCAL_PORT + 1` -> `localabstract:terax-scrcpy` (Control Packet Socket)
+  - `LOCAL_PORT` -> `localabstract:terra-scrcpy` (Video H.264 Stream Socket)
+  - `LOCAL_PORT + 1` -> `localabstract:terra-scrcpy` (Control Packet Socket)
 
 ```
 [ DevicePreviewPane UI ]

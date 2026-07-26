@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use terax_lib::modules::device::remux::{split_nal_units, Fmp4Builder};
+use terra_lib::modules::device::remux::{split_nal_units, Fmp4Builder};
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -4,7 +4,7 @@
 
 **Goal:** Detect loopback dev-server URLs in PTY output and offer to open them in the web preview tab via a dismissible chip on the terminal pane.
 
-**Architecture:** A third byte-stream scanner in the Rust PTY reader thread (beside `agent_detect` and `da_filter`) emits a `terax:dev-server` Tauri event. The frontend owns all policy — dedup, dismissal memory, and display — in a zustand store keyed by leaf id.
+**Architecture:** A third byte-stream scanner in the Rust PTY reader thread (beside `agent_detect` and `da_filter`) emits a `terra:dev-server` Tauri event. The frontend owns all policy — dedup, dismissal memory, and display — in a zustand store keyed by leaf id.
 
 **Tech Stack:** Rust (Tauri 2, `portable-pty`), TypeScript, React 19, zustand, vitest, cargo nextest.
 
@@ -243,7 +243,7 @@ const BACKSLASH: u8 = 0x5c;
 // discarded rather than grown without bound.
 const CAND_MAX: usize = 2048;
 
-/// Payload for the `terax:dev-server` event. `id` is the pty id, matching how
+/// Payload for the `terra:dev-server` event. `id` is the pty id, matching how
 /// `AgentSignal` identifies its session.
 #[derive(Clone, serde::Serialize)]
 pub struct DevServerSignal {
@@ -449,7 +449,7 @@ git commit -m "feat(pty): add loopback dev-server URL detector"
 
 **Interfaces:**
 - Consumes: `UrlDetector::new()`, `UrlDetector::process(&[u8], FnMut(&str))`, `DevServerSignal { id, url }` from Task 1.
-- Produces: Tauri event `"terax:dev-server"` with payload `{ id: number, url: string }`.
+- Produces: Tauri event `"terra:dev-server"` with payload `{ id: number, url: string }`.
 
 - [ ] **Step 1: Add the import and event const**
 
@@ -461,7 +461,7 @@ use super::da_filter::DaFilter;
 use super::shell_init;
 use crate::modules::workspace::WorkspaceEnv;
 
-const AGENT_EVENT: &str = "terax:agent-signal";
+const AGENT_EVENT: &str = "terra:agent-signal";
 ```
 
 to:
@@ -473,8 +473,8 @@ use super::shell_init;
 use super::url_detect::{DevServerSignal, UrlDetector};
 use crate::modules::workspace::WorkspaceEnv;
 
-const AGENT_EVENT: &str = "terax:agent-signal";
-const DEV_SERVER_EVENT: &str = "terax:dev-server";
+const AGENT_EVENT: &str = "terra:agent-signal";
+const DEV_SERVER_EVENT: &str = "terra:dev-server";
 ```
 
 - [ ] **Step 2: Construct the detector in the reader thread**
@@ -534,7 +534,7 @@ Expected: PASS — the full Rust suite, including Task 1's 20 tests.
 
 ```bash
 git add src-tauri/src/modules/pty/session.rs src-tauri/src/modules/pty/url_detect.rs
-git commit -m "feat(pty): emit terax:dev-server on detected loopback URLs"
+git commit -m "feat(pty): emit terra:dev-server on detected loopback URLs"
 ```
 
 ---
@@ -726,7 +726,7 @@ export function ensureDevServerListener(
 ): void {
   if (bound || typeof window === "undefined") return;
   bound = true;
-  void listen<DevServerSignal>("terax:dev-server", (e) => {
+  void listen<DevServerSignal>("terra:dev-server", (e) => {
     const leafId = resolveLeaf(e.payload.id);
     if (leafId === null) return;
     useDevServerStore.getState().detect(leafId, e.payload.url);

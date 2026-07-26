@@ -332,7 +332,7 @@ pub fn log_tail(path: &Path, lines: usize) -> Option<String> {
 
 /// Start an AVD headless. `-no-window` is the whole point: without it the
 /// emulator opens its own OS window and the user is back to alt-tabbing, which
-/// is precisely what streaming into Terax exists to avoid.
+/// is precisely what streaming into Terra exists to avoid.
 ///
 /// `gpu` is `None` by default *deliberately*. Passing any `-gpu` value
 /// overrides the AVD's own `hw.gpu.mode`; when the two disagree the emulator
@@ -612,7 +612,7 @@ emulator-5554   device\n";
     #[test]
     fn launch_rejects_unsafe_name_and_gpu_before_spawning() {
         let fake = PathBuf::from("/nonexistent/emulator");
-        let log = std::env::temp_dir().join("terax-test-launch.log");
+        let log = std::env::temp_dir().join("terra-test-launch.log");
         assert!(launch_avd(&fake, "-evil", 5554, None, log.clone())
             .unwrap_err()
             .contains("unsafe AVD name"));
@@ -630,8 +630,8 @@ emulator-5554   device\n";
     // omitting the flag boots in ~8s. `None` must stay the default.
     #[test]
     fn launch_omits_gpu_flag_unless_explicitly_requested() {
-        let script = std::env::temp_dir().join("terax-test-fake-emulator.sh");
-        let argv_dump = std::env::temp_dir().join("terax-test-emulator-argv.txt");
+        let script = std::env::temp_dir().join("terra-test-fake-emulator.sh");
+        let argv_dump = std::env::temp_dir().join("terra-test-emulator-argv.txt");
         let _ = std::fs::remove_file(&argv_dump);
         std::fs::write(
             &script,
@@ -644,7 +644,7 @@ emulator-5554   device\n";
             std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
-        let log = std::env::temp_dir().join("terax-test-nogpu.log");
+        let log = std::env::temp_dir().join("terra-test-nogpu.log");
         let mut launched = launch_avd(&script, "Pixel_API34", 5554, None, log).expect("spawn");
         // Give the shim a moment to write its argv, then stop it.
         std::thread::sleep(std::time::Duration::from_millis(400));
@@ -662,7 +662,7 @@ emulator-5554   device\n";
 
     #[test]
     fn log_tail_prefers_error_lines() {
-        let path = std::env::temp_dir().join("terax-test-logtail.log");
+        let path = std::env::temp_dir().join("terra-test-logtail.log");
         std::fs::write(
             &path,
             "INFO | booting\nWARNING | Change of GLES renderer detected\nINFO | more noise\n",

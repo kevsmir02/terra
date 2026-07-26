@@ -12,7 +12,7 @@
 
 - Spec: `docs/superpowers/specs/2026-07-26-device-dock-panel-design.md`.
 - Dock sizing: default `340px`, min `240px`, max `640px`. Exact values.
-- localStorage keys: `terax.deviceDock.width`, `terax.deviceDock.collapsed`. Exact strings.
+- localStorage keys: `terra.deviceDock.width`, `terra.deviceDock.collapsed`. Exact strings.
 - The dock holds **exactly one** device. No multi-device switcher.
 - The docked device is **not** persisted across restarts. Only width and collapsed state are.
 - Collapsing the dock must **not** tear down the scrcpy session.
@@ -112,17 +112,17 @@ describe("readDockWidth", () => {
   });
 
   it("falls back to the default when the stored value is garbage", () => {
-    stubStorage({ "terax.deviceDock.width": "not-a-number" });
+    stubStorage({ "terra.deviceDock.width": "not-a-number" });
     expect(readDockWidth()).toBe(DOCK_DEFAULT_WIDTH);
   });
 
   it("clamps an out-of-range stored width", () => {
-    stubStorage({ "terax.deviceDock.width": "9999" });
+    stubStorage({ "terra.deviceDock.width": "9999" });
     expect(readDockWidth()).toBe(DOCK_MAX_WIDTH);
   });
 
   it("returns a valid stored width", () => {
-    stubStorage({ "terax.deviceDock.width": "420" });
+    stubStorage({ "terra.deviceDock.width": "420" });
     expect(readDockWidth()).toBe(420);
   });
 });
@@ -134,9 +134,9 @@ describe("readDockCollapsed", () => {
   });
 
   it("is true only for the exact stored flag", () => {
-    stubStorage({ "terax.deviceDock.collapsed": "1" });
+    stubStorage({ "terra.deviceDock.collapsed": "1" });
     expect(readDockCollapsed()).toBe(true);
-    stubStorage({ "terax.deviceDock.collapsed": "0" });
+    stubStorage({ "terra.deviceDock.collapsed": "0" });
     expect(readDockCollapsed()).toBe(false);
   });
 });
@@ -159,8 +159,8 @@ export const DOCK_DEFAULT_WIDTH = 340;
 export const DOCK_MIN_WIDTH = 240;
 export const DOCK_MAX_WIDTH = 640;
 
-const DOCK_WIDTH_STORAGE_KEY = "terax.deviceDock.width";
-const DOCK_COLLAPSED_STORAGE_KEY = "terax.deviceDock.collapsed";
+const DOCK_WIDTH_STORAGE_KEY = "terra.deviceDock.width";
+const DOCK_COLLAPSED_STORAGE_KEY = "terra.deviceDock.collapsed";
 
 export function clampDockWidth(width: number): number {
   return Math.min(DOCK_MAX_WIDTH, Math.max(DOCK_MIN_WIDTH, Math.round(width)));

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Terax",
+  "productName": "Terra",
   "version": "0.8.5",
-  "identifier": "app.crynta.terax",
+  "identifier": "app.crynta.terra",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "Terax",
+        "title": "Terra",
         "width": 800,
         "height": 600,
         "minWidth": 720,
@@ -85,10 +85,10 @@
     },
     "category": "DeveloperTool",
     "shortDescription": "AI-native terminal emulator",
-    "longDescription": "Terax — an open-source AI-native terminal emulator with multi-tab, file explorer, code editor, web preview, voice input, and AI agents.",
+    "longDescription": "Terra — an open-source AI-native terminal emulator with multi-tab, file explorer, code editor, web preview, voice input, and AI agents.",
     "fileAssociations": [
       {
-        "name": "Terax Document",
+        "name": "Terra Document",
         "role": "Editor",
         "mimeType": "text/plain",
         "ext": [
@@ -109,7 +109,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCQUJGRDhBQjYwRTM0NjkKUldScE5BNjJpdjJyT3dIN0dqbUpHaDA4QW1GaDVmTTllRXdZVk96dFNTRUZ3Y2hiVGszYjFqRloK",
       "endpoints": [
-        "https://github.com/crynta/terax-ai/releases/latest/download/latest.json"
+        "https://github.com/crynta/terra-ai/releases/latest/download/latest.json"
       ]
     }
   }

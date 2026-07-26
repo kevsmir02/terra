@@ -55,17 +55,17 @@ describe("readDockWidth", () => {
   });
 
   it("falls back to the default when the stored value is garbage", () => {
-    stubStorage({ "terax.deviceDock.width": "not-a-number" });
+    stubStorage({ "terra.deviceDock.width": "not-a-number" });
     expect(readDockWidth()).toBe(DOCK_DEFAULT_WIDTH);
   });
 
   it("clamps an out-of-range stored width", () => {
-    stubStorage({ "terax.deviceDock.width": "9999" });
+    stubStorage({ "terra.deviceDock.width": "9999" });
     expect(readDockWidth()).toBe(DOCK_MAX_WIDTH);
   });
 
   it("returns a valid stored width", () => {
-    stubStorage({ "terax.deviceDock.width": "420" });
+    stubStorage({ "terra.deviceDock.width": "420" });
     expect(readDockWidth()).toBe(420);
   });
 });

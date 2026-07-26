@@ -18,7 +18,7 @@ full **Project Profiles**. Each space gains:
 3. **Settings UI** — a popover per space row in `SpaceSwitcher` to edit name, root
    directory, accent color, and the startup-commands list.
 
-Backward compatibility with existing `terax-spaces.json` data is preserved; all new
+Backward compatibility with existing `terra-spaces.json` data is preserved; all new
 fields are optional and loaded transparently.
 
 ## Decisions (from brainstorming)
@@ -79,7 +79,7 @@ fields are optional and loaded transparently.
 
 - `serializeTabs` / `hydrateTabs` — unchanged behavior; the `startupCommand`
   marker is runtime-only, never in `SerializedTab`, so hydration is unaffected.
-- Existing saved spaces in `terax-spaces.json` — missing optional fields load as
+- Existing saved spaces in `terra-spaces.json` — missing optional fields load as
   `undefined`; no migration needed.
 - Workspace-switcher integrations, sidebar collapse/expand, terminal pane-split
   serialization.
@@ -91,7 +91,7 @@ fields are optional and loaded transparently.
 - Root folder-picker dialog (root is a text input in v1).
 - Startup-command reordering, shell-quoting/validation, and a manual
   "run now" button (switching to the space already runs them once per session).
-- Migration of the global `terax.sidebar.width` pref — it remains the seed for
+- Migration of the global `terra.sidebar.width` pref — it remains the seed for
   uncustomized spaces.
 
 ## Data Model
@@ -143,7 +143,7 @@ export type TerminalTab = TabBase & {
 
 All three additions are optional. `loadAll()` already casts `v as SpaceState`; a
 missing `panelSizes`/`startupCommands` stays `undefined`, so existing
-`terax-spaces.json` files load unchanged. Restored tabs never carry
+`terra-spaces.json` files load unchanged. Restored tabs never carry
 `startupCommand` (it's not in `SerializedTab`), so `hydrateTabs` is unaffected. No
 schema migration; the default-space bootstrap path in `useSpacesBoot` is unchanged.
 
@@ -236,7 +236,7 @@ is the serialization exclusion, covered by the extended `serialize.test.ts`.
 ## Panel-Size Persistence & Reconciliation
 
 The sidebar is pixel-sized today (`useSidebarPanel`, global
-`terax.sidebar.width` localStorage). Per-space `panelSizes` stores **percentages**
+`terra.sidebar.width` localStorage). Per-space `panelSizes` stores **percentages**
 so it survives window-width changes.
 
 **Apply on switch** — folded into `useSpaceStartup` (keeps all switch-time
@@ -267,7 +267,7 @@ space's `SpaceState.panelSizes`, via `useSpacePersistence`:
   100 - sidebarPct]`.
 
 **Global pref as seed only** — `useSidebarPanel` keeps reading
-`terax.sidebar.width` for the *initial* `defaultSize` of a brand-new/default space
+`terra.sidebar.width` for the *initial* `defaultSize` of a brand-new/default space
 with no saved `panelSizes`. Once a space has `panelSizes`, it is authoritative for
 that space. No migration of the global pref. `toggleSidebar`/`cycleSidebarView`
 keep working (pixel-based `resize`/`collapse` interop is fine —

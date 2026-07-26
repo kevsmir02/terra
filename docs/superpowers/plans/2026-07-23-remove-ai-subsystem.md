@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the built-in AI subsystem from Terax, transforming it from an AI-native terminal emulator into a clean, AI-free Terminal IDE, while preserving terminal coding-agent notifications (OSC 777 detection for Claude Code/Codex/Gemini/Pi).
+**Goal:** Remove the built-in AI subsystem from Terra, transforming it from an AI-native terminal emulator into a clean, AI-free Terminal IDE, while preserving terminal coding-agent notifications (OSC 777 detection for Claude Code/Codex/Gemini/Pi).
 
 **Architecture:** Frontend-first staged removal across 4 stages. Each stage leaves the app compilable and runnable. The `native` IPC bridge (currently in the AI module but used app-wide) is extracted first. Terminal agent notifications are surgically preserved while built-in AI agent state is removed.
 
@@ -810,7 +810,7 @@ Remove the `localAgent` StatusRow JSX (lines 300-306):
 ) : null}
 ```
 
-Update the empty state text (lines 294-296) from "Run the Terax agent or a coding agent to track it here." to "Run a coding agent to track it here."
+Update the empty state text (lines 294-296) from "Run the Terra agent or a coding agent to track it here." to "Run a coding agent to track it here."
 
 - [ ] **Step 6: Verify `index.ts` exports are clean**
 
@@ -1171,7 +1171,7 @@ git commit -m "chore: remove AI references from config files"
 ### Task 17: Documentation updates
 
 **Files:**
-- Modify: `TERAX.md`
+- Modify: `TERRA.md`
 - Delete: `docs/architecture/ai-subsystem.md`
 - Modify: `docs/README.md`
 - Modify: `docs/architecture/two-process-model.md`
@@ -1187,13 +1187,13 @@ git commit -m "chore: remove AI references from config files"
 rm docs/architecture/ai-subsystem.md
 ```
 
-- [ ] **Step 2: Update `TERAX.md`**
+- [ ] **Step 2: Update `TERRA.md`**
 
 - Change description from "open-source AI-native terminal emulator" to "open-source terminal IDE"
 - Remove the entire "### AI subsystem (`src/modules/ai/`)" section (lines 106-119)
 - In the two-process model section, remove `net::*`, `shell::*`, `secrets::*` command descriptions
 - Remove the `AiComposerProvider` note in PTY shell integration section
-- In the agents module description, remove references to `localAgent`, `managedAgentsStore`, built-in Terax agent; keep terminal coding-agent notification description
+- In the agents module description, remove references to `localAgent`, `managedAgentsStore`, built-in Terra agent; keep terminal coding-agent notification description
 - In the statusbar description, remove "AI tools indicator"
 - In the shortcuts description, remove `ai.toggle` reference
 - Remove `BYOK AI via Vercel AI SDK v6` from the project description
@@ -1228,11 +1228,11 @@ Remove AI provider contribution guidelines (the "Adding a new provider" section 
 
 Change:
 ```toml
-description = "Terax — an open-source AI-native terminal emulator"
+description = "Terra — an open-source AI-native terminal emulator"
 ```
 To:
 ```toml
-description = "Terax — an open-source terminal IDE"
+description = "Terra — an open-source terminal IDE"
 ```
 
 - [ ] **Step 10: Commit**
@@ -1241,7 +1241,7 @@ description = "Terax — an open-source terminal IDE"
 git add -A
 git commit -m "docs: update documentation for AI-free terminal IDE
 
-Remove AI subsystem docs, update TERAX.md architecture description,
+Remove AI subsystem docs, update TERRA.md architecture description,
 update README/ROADMAP/CONTRIBUTING branding. Remove AI command
 references from two-process-model and security-model docs."
 ```

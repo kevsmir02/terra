@@ -8,7 +8,7 @@ const BACKSLASH: u8 = 0x5c;
 // discarded rather than grown without bound.
 const CAND_MAX: usize = 2048;
 
-/// Payload for the `terax:dev-server` event. `id` is the pty id, matching how
+/// Payload for the `terra:dev-server` event. `id` is the pty id, matching how
 /// `AgentSignal` identifies its session.
 #[derive(Clone, serde::Serialize)]
 pub struct DevServerSignal {
