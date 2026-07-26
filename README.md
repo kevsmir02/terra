@@ -56,7 +56,7 @@ Net effect: ~22k lines deleted across 167 files, 11 npm dependencies and 5 Cargo
 
 <table>
   <tr>
-    <td align="center"><img src="docs/terminal.png" alt="Terminal" /><br/><sub>Multi-tab terminal with WebGL rendering</sub></td>
+    <td align="center"><img src="docs/device-preview.png" alt="Embedded Android device preview" /><br/><sub>Embedded Android device preview</sub></td>
     <td align="center"><img src="docs/themes.png" alt="Themes and background image" /><br/><sub>Custom themes, presets, and background images</sub></td>
   </tr>
   <tr>
