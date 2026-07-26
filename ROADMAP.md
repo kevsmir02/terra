@@ -47,6 +47,7 @@ The themes below frame every scope decision.
 - [x] Vim mode
 - [x] Prebuilt & custom editor themes
 - [x] **Hybrid Diagnostics & Lazy-Loaded LSP**: Default zero-RAM on-save diagnostics & statusbar indicator; ref-counted lazy LSP session lifecycle with idle shutdown.
+- [x] **Live Filesystem Sync**: Explorer re-reads affected directories and the editor reloads open tabs on fs-watch events. A dirty buffer is never clobbered; instead the pane surfaces whether the file changed or was deleted on disk, with an explicit reload-or-recreate action.
 
 ### File Explorer
 
@@ -109,7 +110,6 @@ The themes below frame every scope decision.
 
 - [ ] Release automation: CHANGELOG generation and version bump. Tag-triggered multi-platform build and publish already ships in `release.yml`.
 - [ ] Selective TS → Rust migration where profiler shows wins
-- [ ] Live filesystem update enhancements in explorer and editor
 
 ## Out of scope
 
