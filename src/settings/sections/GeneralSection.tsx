@@ -23,6 +23,7 @@ import {
   setExplorerGitDecorations,
   setRestoreWindowState,
   setShowHidden,
+  setTerminalCopyOnSelect,
   setTerminalCursorBlink,
   setTerminalFontFamily,
   setTerminalFontSize,
@@ -85,6 +86,9 @@ export function GeneralSection() {
     (s) => s.terminalWebglEnabled,
   );
   const terminalCursorBlink = usePreferencesStore((s) => s.terminalCursorBlink);
+  const terminalCopyOnSelect = usePreferencesStore(
+    (s) => s.terminalCopyOnSelect,
+  );
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
@@ -250,6 +254,15 @@ export function GeneralSection() {
           <Switch
             checked={terminalCursorBlink}
             onCheckedChange={(v) => void setTerminalCursorBlink(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Copy on selection"
+          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
+        >
+          <Switch
+            checked={terminalCopyOnSelect}
+            onCheckedChange={(v) => void setTerminalCopyOnSelect(v)}
           />
         </SettingRow>
         <FontFamilyInput
