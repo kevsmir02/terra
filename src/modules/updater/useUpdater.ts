@@ -7,7 +7,7 @@ import { IS_LINUX } from "@/lib/platform";
 const LAST_CHECK_KEY = "terra:updater:last-check";
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const GITHUB_LATEST_RELEASE =
-  "https://api.github.com/repos/crynta/terra-ai/releases/latest";
+  "https://api.github.com/repos/kevsmir02/terra/releases/latest";
 
 export interface ManualUpdateInfo {
   version: string;
