@@ -11,9 +11,11 @@ use tauri::{AppHandle, Emitter, Manager};
 use super::agent_detect::AgentDetector;
 use super::da_filter::DaFilter;
 use super::shell_init;
+use super::url_detect::{DevServerSignal, UrlDetector};
 use crate::modules::workspace::WorkspaceEnv;
 
 const AGENT_EVENT: &str = "terax:agent-signal";
+const DEV_SERVER_EVENT: &str = "terax:dev-server";
 
 // Flusher coalesces a short window after first-byte arrival so we send chunks,
 // not single bytes. MAX_IDLE is only a safety net for missed signals.
@@ -183,6 +185,7 @@ pub fn spawn(
             let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
             let mut da_filter = DaFilter::new();
             let mut agent_detect = AgentDetector::new();
+            let mut url_detect = UrlDetector::new();
             let mut dropped_bytes: u64 = 0;
             loop {
                 match reader.read(&mut buf) {
@@ -194,6 +197,12 @@ pub fn spawn(
                         }
                         agent_detect.process(&buf[..n], |t| {
                             let _ = app_reader.emit(AGENT_EVENT, t.into_signal(id));
+                        });
+                        url_detect.process(&buf[..n], |url| {
+                            let _ = app_reader.emit(
+                                DEV_SERVER_EVENT,
+                                DevServerSignal { id, url: url.to_string() },
+                            );
                         });
                         filtered.clear();
                         da_filter.process(&buf[..n], &mut filtered, |reply| {

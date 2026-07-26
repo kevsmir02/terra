@@ -1,12 +1,7 @@
-#[allow(dead_code)]
 const ESC: u8 = 0x1b;
-#[allow(dead_code)]
 const BEL: u8 = 0x07;
-#[allow(dead_code)]
 const LBRACKET: u8 = 0x5b;
-#[allow(dead_code)]
 const RBRACKET: u8 = 0x5d;
-#[allow(dead_code)]
 const BACKSLASH: u8 = 0x5c;
 
 // Matches da_filter's HOLD_MAX discipline: a candidate that never terminates is
@@ -15,7 +10,6 @@ const CAND_MAX: usize = 2048;
 
 /// Payload for the `terax:dev-server` event. `id` is the pty id, matching how
 /// `AgentSignal` identifies its session.
-#[allow(dead_code)]
 #[derive(Clone, serde::Serialize)]
 pub struct DevServerSignal {
     pub id: u32,
