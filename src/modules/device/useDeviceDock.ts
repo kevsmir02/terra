@@ -1,0 +1,100 @@
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import type { PanelImperativeHandle } from "react-resizable-panels";
+
+export const DOCK_DEFAULT_WIDTH = 340;
+export const DOCK_MIN_WIDTH = 240;
+export const DOCK_MAX_WIDTH = 640;
+
+const DOCK_WIDTH_STORAGE_KEY = "terax.deviceDock.width";
+const DOCK_COLLAPSED_STORAGE_KEY = "terax.deviceDock.collapsed";
+
+export function clampDockWidth(width: number): number {
+  return Math.min(DOCK_MAX_WIDTH, Math.max(DOCK_MIN_WIDTH, Math.round(width)));
+}
+
+export function readDockWidth(): number {
+  try {
+    const stored = window.localStorage.getItem(DOCK_WIDTH_STORAGE_KEY);
+    const parsed = stored ? Number.parseInt(stored, 10) : Number.NaN;
+    return Number.isFinite(parsed) ? clampDockWidth(parsed) : DOCK_DEFAULT_WIDTH;
+  } catch {
+    return DOCK_DEFAULT_WIDTH;
+  }
+}
+
+export function readDockCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(DOCK_COLLAPSED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Dock state, mirroring useSidebarPanel. The docked serial is deliberately not
+ * persisted: reconnecting on startup to a device that has since disappeared
+ * surfaces an error before the user has done anything.
+ */
+export function useDeviceDock() {
+  const dockRef = useRef<PanelImperativeHandle | null>(null);
+  const dockWidthRef = useRef(readDockWidth());
+  const widthWriteTimerRef = useRef(0);
+  const [serial, setSerial] = useState<string | null>(null);
+  const [initialCollapsed] = useState(true);
+  const collapsedRef = useRef(true);
+
+  const persistDockCollapsed = useCallback((collapsed: boolean) => {
+    if (collapsedRef.current === collapsed) return;
+    collapsedRef.current = collapsed;
+    try {
+      window.localStorage.setItem(DOCK_COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+    } catch {
+      // storage may fail in private mode
+    }
+  }, []);
+
+  const persistDockWidth = useCallback((next: number) => {
+    dockWidthRef.current = next;
+    if (widthWriteTimerRef.current) window.clearTimeout(widthWriteTimerRef.current);
+    widthWriteTimerRef.current = window.setTimeout(() => {
+      widthWriteTimerRef.current = 0;
+      try {
+        window.localStorage.setItem(DOCK_WIDTH_STORAGE_KEY, String(next));
+      } catch {
+        // ignore
+      }
+    }, 200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (widthWriteTimerRef.current) window.clearTimeout(widthWriteTimerRef.current);
+    };
+  }, []);
+
+  // Picking the already-docked device just re-expands it, so the live scrcpy
+  // session is reused instead of being torn down and restarted.
+  const dockDevice = useCallback((next: string) => {
+    setSerial(next);
+    dockRef.current?.resize(`${dockWidthRef.current}px`);
+  }, []);
+
+  const stopDevice = useCallback(() => {
+    setSerial(null);
+    dockRef.current?.collapse();
+  }, []);
+
+  return {
+    dockRef,
+    dockWidthRef,
+    serial,
+    initialCollapsed,
+    dockDevice,
+    stopDevice,
+    persistDockWidth,
+    persistDockCollapsed,
+  };
+}
+
+export type UseDeviceDock = ReturnType<typeof useDeviceDock>;
+export type DockPanelRef = RefObject<PanelImperativeHandle | null>;
