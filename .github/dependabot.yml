@@ -4,10 +4,23 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
     groups:
+      # Must come first: the Tauri JS surface is split across prod
+      # (@tauri-apps/api + plugins) and dev (@tauri-apps/cli). Grouping by
+      # dependency-type alone would land them in two PRs that can merge
+      # independently and leave the CLI out of step with the plugins.
+      tauri-js:
+        patterns:
+          - "@tauri-apps/*"
+        update-types:
+          - minor
+          - patch
       npm-dev:
         dependency-type: development
         update-types:
@@ -23,10 +36,23 @@ updates:
     directory: "/src-tauri"
     schedule:
       interval: monthly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
     groups:
+      # Kept separate from the rest of the Cargo tree so it can be reviewed
+      # and merged alongside the tauri-js PR — each tauri-plugin-* crate has a
+      # matching @tauri-apps/plugin-* package that should move with it.
+      tauri-rust:
+        patterns:
+          - "tauri"
+          - "tauri-build"
+          - "tauri-plugin-*"
+        update-types:
+          - minor
+          - patch
       cargo:
         patterns:
           - "*"
@@ -38,6 +64,8 @@ updates:
     directory: "/"
     schedule:
       interval: monthly
+    commit-message:
+      prefix: "ci"
     groups:
       github-actions:
         patterns:

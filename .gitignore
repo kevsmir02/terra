@@ -26,3 +26,8 @@ stats.html
 *.sw?
 
 *.tsbuildinfo
+
+# Updater signing keys — the private key must never be committed.
+# It belongs in ~/.tauri/ and in the TAURI_SIGNING_PRIVATE_KEY repo secret.
+*.key
+!*.key.pub
