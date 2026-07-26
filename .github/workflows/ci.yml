@@ -37,6 +37,12 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Startup bundle budget
+        run: pnpm size:eager
+
+      - name: Unused files, deps and exports
+        run: pnpm knip
+
   rust-linux:
     runs-on: ubuntu-22.04
     steps:
