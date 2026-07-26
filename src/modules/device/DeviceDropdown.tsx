@@ -93,17 +93,28 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
               {avds.map((avd) => {
                 const booting = boot?.name === avd.name;
                 const runningSerial = avd.serial;
+                // Mirror the device-list gate above: a serial adb hasn't
+                // reported as "device" yet (e.g. still "offline" right after
+                // boot) has no live session, so picking it must be a no-op
+                // rather than a silent dead click.
+                const deviceReady = runningSerial
+                  ? devices?.some((d) => d.serial === runningSerial && d.state === "device")
+                  : false;
                 return (
                   <div key={avd.name} className="flex items-center gap-1">
                     <button
                       type="button"
-                      disabled={busy && !runningSerial}
+                      disabled={runningSerial ? !deviceReady : busy}
                       onClick={() =>
                         runningSerial ? onPick(runningSerial) : void launch(avd.name)
                       }
                       className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/60 bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
                       title={
-                        runningSerial ? "Open device preview" : "Launch headless and stream here"
+                        runningSerial
+                          ? deviceReady
+                            ? "Open device preview"
+                            : "Device not ready yet"
+                          : "Launch headless and stream here"
                       }
                     >
                       <span className="truncate">{avd.name}</span>

@@ -6,7 +6,6 @@ export const DOCK_MIN_WIDTH = 240;
 export const DOCK_MAX_WIDTH = 640;
 
 const DOCK_WIDTH_STORAGE_KEY = "terax.deviceDock.width";
-const DOCK_COLLAPSED_STORAGE_KEY = "terax.deviceDock.collapsed";
 
 export function clampDockWidth(width: number): number {
   return Math.min(DOCK_MAX_WIDTH, Math.max(DOCK_MIN_WIDTH, Math.round(width)));
@@ -22,14 +21,6 @@ export function readDockWidth(): number {
   }
 }
 
-export function readDockCollapsed(): boolean {
-  try {
-    return window.localStorage.getItem(DOCK_COLLAPSED_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Dock state, mirroring useSidebarPanel. The docked serial is deliberately not
  * persisted: reconnecting on startup to a device that has since disappeared
@@ -40,26 +31,15 @@ export function useDeviceDock() {
   const dockWidthRef = useRef(readDockWidth());
   const widthWriteTimerRef = useRef(0);
   const [serial, setSerial] = useState<string | null>(null);
-  const [initialCollapsed] = useState(true);
-  const collapsedRef = useRef(true);
-
-  const persistDockCollapsed = useCallback((collapsed: boolean) => {
-    if (collapsedRef.current === collapsed) return;
-    collapsedRef.current = collapsed;
-    try {
-      window.localStorage.setItem(DOCK_COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
-    } catch {
-      // storage may fail in private mode
-    }
-  }, []);
 
   const persistDockWidth = useCallback((next: number) => {
-    dockWidthRef.current = next;
+    const clamped = clampDockWidth(next);
+    dockWidthRef.current = clamped;
     if (widthWriteTimerRef.current) window.clearTimeout(widthWriteTimerRef.current);
     widthWriteTimerRef.current = window.setTimeout(() => {
       widthWriteTimerRef.current = 0;
       try {
-        window.localStorage.setItem(DOCK_WIDTH_STORAGE_KEY, String(next));
+        window.localStorage.setItem(DOCK_WIDTH_STORAGE_KEY, String(clamped));
       } catch {
         // ignore
       }
@@ -88,11 +68,9 @@ export function useDeviceDock() {
     dockRef,
     dockWidthRef,
     serial,
-    initialCollapsed,
     dockDevice,
     stopDevice,
     persistDockWidth,
-    persistDockCollapsed,
   };
 }
 

@@ -281,13 +281,10 @@ export default function App() {
 
   const {
     dockRef,
-    dockWidthRef,
     serial: dockedSerial,
-    initialCollapsed: dockInitialCollapsed,
     dockDevice,
     stopDevice,
     persistDockWidth,
-    persistDockCollapsed,
   } = useDeviceDock();
 
   useSpaceStartup({
@@ -1173,16 +1170,16 @@ export default function App() {
               <ResizablePanel
                 id="device-dock"
                 panelRef={dockRef}
-                defaultSize={
-                  dockInitialCollapsed ? "0px" : `${dockWidthRef.current}px`
-                }
+                // The docked serial is deliberately never persisted (see
+                // useDeviceDock), so there is never a device to restore into —
+                // the dock panel must always start collapsed.
+                defaultSize="0px"
                 minSize={`${DOCK_MIN_WIDTH}px`}
                 maxSize={`${DOCK_MAX_WIDTH}px`}
                 collapsible
                 collapsedSize={0}
                 onResize={(size) => {
                   if (size.inPixels > 0) persistDockWidth(size.inPixels);
-                  persistDockCollapsed(size.inPixels <= 0);
                 }}
               >
                 <DeviceDock serial={dockedSerial} onStop={stopDevice} />

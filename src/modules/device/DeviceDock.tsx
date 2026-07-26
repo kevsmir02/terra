@@ -37,7 +37,9 @@ export function DeviceDock({ serial, onStop }: Props) {
       </div>
 
       <div className="min-h-0 flex-1">
-        <DevicePreviewPane serial={serial} />
+        {/* Keyed on serial so switching devices mounts a fresh pane instead
+            of reusing one that may be stuck in another device's error state. */}
+        <DevicePreviewPane key={serial} serial={serial} />
       </div>
     </div>
   );

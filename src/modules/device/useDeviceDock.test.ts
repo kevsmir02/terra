@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -7,7 +7,6 @@ import {
   DOCK_DEFAULT_WIDTH,
   DOCK_MAX_WIDTH,
   DOCK_MIN_WIDTH,
-  readDockCollapsed,
   readDockWidth,
 } from "./useDeviceDock";
 
@@ -25,6 +24,11 @@ function stubStorage(initial: Record<string, string> = {}) {
   // Make globalThis.window available for window.localStorage access in tests
   (globalThis as unknown as { window: unknown }).window = globalThis;
 }
+
+afterEach(() => {
+  delete (globalThis as { localStorage?: unknown }).localStorage;
+  delete (globalThis as { window?: unknown }).window;
+});
 
 describe("clampDockWidth", () => {
   beforeEach(() => stubStorage());
@@ -62,20 +66,6 @@ describe("readDockWidth", () => {
   it("returns a valid stored width", () => {
     stubStorage({ "terax.deviceDock.width": "420" });
     expect(readDockWidth()).toBe(420);
-  });
-});
-
-describe("readDockCollapsed", () => {
-  it("is false by default", () => {
-    stubStorage();
-    expect(readDockCollapsed()).toBe(false);
-  });
-
-  it("is true only for the exact stored flag", () => {
-    stubStorage({ "terax.deviceDock.collapsed": "1" });
-    expect(readDockCollapsed()).toBe(true);
-    stubStorage({ "terax.deviceDock.collapsed": "0" });
-    expect(readDockCollapsed()).toBe(false);
   });
 });
 
