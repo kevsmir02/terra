@@ -4,9 +4,11 @@ pub mod verify;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
+use ureq::ResponseExt;
 
 use crate::modules::proc::hide_console;
 use package::PackageKind;
@@ -37,6 +39,75 @@ fn is_allowed_url(url: &str) -> bool {
     !host.is_empty() && ALLOWED_HOSTS.contains(&host)
 }
 
+/// Every hop in a redirect chain must land on an allowed host, not just the
+/// final one: `ureq` follows redirects on its own, and a malicious or
+/// compromised intermediate hop could otherwise reach an arbitrary host (an
+/// SSRF/port-scan oracle) before eventually landing somewhere allowed. Takes
+/// plain strings so it is unit-testable without a network round trip.
+fn all_hops_allowed<'a>(hops: impl IntoIterator<Item = &'a str>) -> bool {
+    hops.into_iter().all(is_allowed_url)
+}
+
+/// Validates every hop `ureq` actually took to produce `resp` against the
+/// allowlist. Requires the agent to be configured with
+/// `save_redirect_history(true)` (see `download_agent` below); falls back to
+/// just the final URL if that history isn't available.
+fn verify_response_hosts(resp: &ureq::http::Response<ureq::Body>) -> Result<(), String> {
+    let hops: Vec<String> = resp
+        .get_redirect_history()
+        .map(|h| h.iter().map(ToString::to_string).collect())
+        .unwrap_or_else(|| vec![resp.get_uri().to_string()]);
+    if all_hops_allowed(hops.iter().map(String::as_str)) {
+        Ok(())
+    } else {
+        Err("refusing to follow a redirect to an unexpected host".to_string())
+    }
+}
+
+/// No published Terra package is anywhere near this size. A response
+/// reporting more via `Content-Length` — or one that just keeps sending data
+/// regardless of what it reported — is refused outright rather than trusted
+/// to allocate however much memory it likes.
+const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Checked against the reported `Content-Length` before a single byte is
+/// read, and again against the running total on every chunk, so neither a
+/// lying header nor an absent one can turn this into an unbounded
+/// allocation. A free function so the cap logic is unit-testable without a
+/// network round trip.
+fn enforce_download_cap(total: Option<u64>, downloaded: u64) -> Result<(), String> {
+    if total.is_some_and(|t| t > MAX_DOWNLOAD_BYTES) || downloaded > MAX_DOWNLOAD_BYTES {
+        Err(format!("refusing to download more than {MAX_DOWNLOAD_BYTES} bytes"))
+    } else {
+        Ok(())
+    }
+}
+
+/// Shared safety settings and timeouts for both requests `updater_download`
+/// makes.
+///
+/// - `https_only` stops a redirect from silently downgrading to plaintext.
+/// - `save_redirect_history` is what lets `verify_response_hosts` check every
+///   hop, not just the final URL.
+/// - `timeout_connect` bounds how long a dead socket can block the
+///   `spawn_blocking` thread before the handshake even starts; 30s is
+///   generous for DNS + TLS and short enough that a black-holed connection
+///   no longer blocks indefinitely.
+/// - `timeout_global` is a hard backstop for the *entire* call, deliberately
+///   loose (30 minutes): tight enough that a stalled or dropped connection
+///   can no longer strand the UI in `downloading` forever (the bug this
+///   fixes), loose enough that a real, large package on a slow-but-live
+///   connection still has time to finish.
+fn download_agent() -> ureq::Agent {
+    let config = ureq::config::Config::builder()
+        .https_only(true)
+        .save_redirect_history(true)
+        .timeout_connect(Some(Duration::from_secs(30)))
+        .timeout_global(Some(Duration::from_secs(30 * 60)))
+        .build();
+    ureq::Agent::new_with_config(config)
+}
+
 /// A downloaded package is only ever addressed by bare file name. Anything
 /// with a separator, a parent component, or an empty/relative-marker name is
 /// refused, so a compromised webview cannot steer the privileged install at an
@@ -60,32 +131,6 @@ fn sig_path(pkg: &Path) -> PathBuf {
     let mut name = pkg.as_os_str().to_os_string();
     name.push(".sig");
     PathBuf::from(name)
-}
-
-/// The single staged package: the one `.sig` in the directory, minus `.sig`.
-///
-/// Only `updater_download` writes a `.sig` file now, and it already knows the
-/// package path it just wrote — so this recovery-by-directory-scan is no
-/// longer exercised in production, only by the tests below that pin its
-/// behaviour. `#[cfg(test)]` keeps it from being flagged as dead code.
-#[cfg(test)]
-fn staged_package_path(dir: &Path) -> Result<PathBuf, String> {
-    let mut found: Option<PathBuf> = None;
-    for entry in fs::read_dir(dir).map_err(|e| format!("staging dir unreadable: {e}"))? {
-        let path = entry.map_err(|e| format!("staging dir unreadable: {e}"))?.path();
-        if path.extension().is_some_and(|e| e == "sig") {
-            if found.is_some() {
-                return Err("more than one staged update".to_string());
-            }
-            let s = path.to_string_lossy();
-            found = Some(PathBuf::from(
-                s.strip_suffix(".sig")
-                    .ok_or_else(|| "malformed staged signature".to_string())?
-                    .to_string(),
-            ));
-        }
-    }
-    found.ok_or_else(|| "no staged update".to_string())
 }
 
 fn staging_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -147,25 +192,33 @@ pub async fn updater_download(
 
     tauri::async_runtime::spawn_blocking(move || {
         clear_staging(&dir);
+        let agent = download_agent();
 
-        let signature = ureq::get(&signature_url)
+        let mut sig_resp = agent
+            .get(&signature_url)
             .call()
-            .map_err(|e| format!("signature download failed: {e}"))?
+            .map_err(|e| format!("signature download failed: {e}"))?;
+        verify_response_hosts(&sig_resp)?;
+        let signature = sig_resp
             .body_mut()
             .read_to_string()
             .map_err(|e| format!("signature download failed: {e}"))?;
 
-        let resp = ureq::get(&package_url)
+        let resp = agent
+            .get(&package_url)
             .call()
             .map_err(|e| format!("download failed: {e}"))?;
+        verify_response_hosts(&resp)?;
         let total = resp
             .headers()
             .get("content-length")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<u64>().ok());
+        enforce_download_cap(total, 0)?;
 
         let mut reader = resp.into_body().into_reader();
-        let mut bytes: Vec<u8> = Vec::with_capacity(total.unwrap_or(0) as usize);
+        let mut bytes: Vec<u8> =
+            Vec::with_capacity(total.unwrap_or(0).min(MAX_DOWNLOAD_BYTES) as usize);
         let mut buf = vec![0u8; 64 * 1024];
         let mut downloaded: u64 = 0;
         loop {
@@ -174,8 +227,9 @@ pub async fn updater_download(
             if n == 0 {
                 break;
             }
-            bytes.extend_from_slice(&buf[..n]);
             downloaded += n as u64;
+            enforce_download_cap(total, downloaded)?;
+            bytes.extend_from_slice(&buf[..n]);
             let _ = on_progress.send(DownloadProgress { downloaded, total });
         }
 
@@ -348,29 +402,6 @@ mod tests {
     }
 
     #[test]
-    fn staged_package_path_recovers_the_name_from_the_signature() {
-        let dir = std::env::temp_dir().join(format!("terra-stage-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("Terra-0.8.6-1.x86_64.rpm.sig"), b"sig").unwrap();
-
-        assert_eq!(
-            staged_package_path(&dir).unwrap(),
-            dir.join("Terra-0.8.6-1.x86_64.rpm")
-        );
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn staged_package_path_errors_when_nothing_is_staged() {
-        let dir = std::env::temp_dir().join(format!("terra-empty-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        assert!(staged_package_path(&dir).is_err());
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn is_newer_accepts_a_higher_patch() {
         assert!(is_newer("0.8.6", "0.8.5"));
     }
@@ -428,5 +459,47 @@ mod tests {
     fn rejects_a_hostless_url() {
         assert!(!is_allowed_url("https:///a.rpm"));
         assert!(!is_allowed_url("not a url"));
+    }
+
+    #[test]
+    fn all_hops_allowed_accepts_a_redirect_chain_that_stays_on_allowlisted_hosts() {
+        // The exact happy path: GitHub asset URLs 302 to the CDN host.
+        assert!(all_hops_allowed([
+            "https://github.com/o/r/releases/download/v1/a.rpm",
+            "https://release-assets.githubusercontent.com/github-production-release-asset/1/2",
+        ]));
+    }
+
+    #[test]
+    fn all_hops_allowed_rejects_a_chain_with_any_disallowed_hop() {
+        // Even if the chain ends up back on an allowed host, a hop through
+        // an unexpected one in between must not be trusted.
+        assert!(!all_hops_allowed([
+            "https://github.com/o/r/releases/download/v1/a.rpm",
+            "https://evil.test/steal-me",
+            "https://release-assets.githubusercontent.com/x",
+        ]));
+        assert!(!all_hops_allowed(["https://evil.test/a.rpm"]));
+    }
+
+    #[test]
+    fn enforce_download_cap_accepts_sizes_within_the_limit() {
+        assert!(enforce_download_cap(Some(1024), 1024).is_ok());
+        assert!(enforce_download_cap(None, 1024).is_ok());
+    }
+
+    #[test]
+    fn enforce_download_cap_rejects_a_reported_size_over_the_limit() {
+        // A malicious or broken server can claim any Content-Length; it must
+        // be rejected before a single byte is read, not just once actually
+        // received.
+        assert!(enforce_download_cap(Some(MAX_DOWNLOAD_BYTES + 1), 0).is_err());
+    }
+
+    #[test]
+    fn enforce_download_cap_rejects_accumulated_bytes_over_the_limit_even_without_a_header() {
+        // No Content-Length header at all must not be a free pass to stream
+        // forever.
+        assert!(enforce_download_cap(None, MAX_DOWNLOAD_BYTES + 1).is_err());
     }
 }
