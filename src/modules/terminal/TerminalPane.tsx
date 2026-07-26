@@ -4,6 +4,7 @@ import type { SearchAddon } from "@xterm/addon-search";
 import {
   forwardRef,
   memo,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -75,6 +76,30 @@ export const TerminalPane = memo(
       onCwd: (c) => onCwd?.(leafId, c),
     });
 
+    const handlePaneMouseDown = useCallback((e: React.MouseEvent) => {
+      downPtRef.current = { x: e.clientX, y: e.clientY };
+    }, []);
+
+    // Copies the selection when the gesture was a drag and the preference is
+    // on, and reports whether it was a drag so callers can run their own
+    // click-only behaviour. Clearing the origin here keeps both call sites
+    // from having to remember it.
+    const copySelectionIfDragged = useCallback(
+      (e: React.MouseEvent): boolean => {
+        const dragged = isDragGesture(downPtRef.current, {
+          x: e.clientX,
+          y: e.clientY,
+        });
+        downPtRef.current = null;
+        if (dragged && copyOnSelect) {
+          const text = selectionToCopy(session.getSelection() ?? "");
+          if (text) void writeTerminalClipboard(text);
+        }
+        return dragged;
+      },
+      [copyOnSelect, session],
+    );
+
     useEffect(() => {
       // Defer one frame so CSS-variable token resolution sees the new class.
       const id = requestAnimationFrame(() => session.applyTheme());
@@ -110,26 +135,12 @@ export const TerminalPane = memo(
             <div
               ref={containerRef}
               className="absolute inset-0 z-0"
-              onMouseDown={(e) => {
-                downPtRef.current = { x: e.clientX, y: e.clientY };
-              }}
+              onMouseDown={handlePaneMouseDown}
               onMouseUp={(e) => {
-                const dragged = isDragGesture(downPtRef.current, {
-                  x: e.clientX,
-                  y: e.clientY,
-                });
-                downPtRef.current = null;
-                // The two branches are mutually exclusive on purpose:
-                // selectBlockAt replaces the selection with whole-block lines,
-                // so the copy path must never run where it could observe that.
-                if (dragged) {
-                  if (copyOnSelect) {
-                    const text = selectionToCopy(session.getSelection() ?? "");
-                    if (text) void writeTerminalClipboard(text);
-                  }
-                } else {
-                  session.selectBlockAt(e.clientY);
-                }
+                // Mutually exclusive on purpose: selectBlockAt replaces the
+                // selection with whole-block lines, so it must never run where
+                // the copy path could observe that.
+                if (!copySelectionIfDragged(e)) session.selectBlockAt(e.clientY);
                 if (session.blockMode === "prompt") focusLeafInput(leafId);
               }}
             />
@@ -156,10 +167,13 @@ export const TerminalPane = memo(
     }
 
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: terminal surface; pointer selects text for copy-on-selection
       <div
         ref={containerRef}
         className="zoom-exempt h-full w-full"
         style={hideStyle}
+        onMouseDown={handlePaneMouseDown}
+        onMouseUp={copySelectionIfDragged}
       />
     );
   }),
