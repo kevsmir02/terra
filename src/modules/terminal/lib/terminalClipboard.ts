@@ -25,14 +25,24 @@ export async function readTerminalClipboard(): Promise<string> {
 }
 
 export async function writeTerminalClipboard(text: string): Promise<void> {
+  // TEMP-COS-DEBUG
+  console.log("[cos] write called", { len: text.length, isLinux: IS_LINUX });
   if (IS_LINUX) {
     try {
       const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
       await writeText(text);
+      console.log("[cos] write OK via tauri plugin"); // TEMP-COS-DEBUG
       return;
-    } catch {}
+    } catch (err) {
+      console.log("[cos] tauri plugin write FAILED", err); // TEMP-COS-DEBUG
+    }
   }
   try {
     await webClipboard()?.writeText(text);
-  } catch {}
+    console.log("[cos] write OK via navigator.clipboard", {
+      hadClipboard: !!webClipboard(),
+    }); // TEMP-COS-DEBUG
+  } catch (err) {
+    console.log("[cos] navigator.clipboard write FAILED", err); // TEMP-COS-DEBUG
+  }
 }
