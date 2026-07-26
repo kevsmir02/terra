@@ -1,6 +1,6 @@
 [package]
 name = "terra"
-version = "0.8.6"
+version = "0.8.7"
 description = "Terra -- an open-source terminal IDE"
 authors = ["crynta"]
 license = "Apache-2.0"
