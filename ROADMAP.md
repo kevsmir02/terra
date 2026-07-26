@@ -94,7 +94,9 @@ The themes below frame every scope decision.
 ### Coming next
 
 - [ ] **Terminal <-> Editor Quick Bridge**: Click file/error paths in terminal output to jump straight to the line in CodeMirror; send paths from Explorer to active PTY.
-
+- [ ] **Copy on Selection**: Opt-in, off by default. Writing the selection to the clipboard on mouse-up clobbers whatever the user had copied, since a webview cannot reach the X11 primary selection that makes this non-destructive on Linux.
+- [ ] **Rebindable Terminal Keys**: Terminal copy, paste, and Shift+Enter are hardcoded in the xterm key handler and bypass the shortcut system that already covers the other 40 actions.
+- [ ] **Shortcut Conflict Detection**: Binding a chord already claimed by another action silently shadows it; the shortcut editor should surface the clash while recording.
 - [ ] **SSH & Remote Workspace Support**: PTY remote terminal management.
 - [ ] **Terminal Scrollback Restore**: Workspace, tab, and pane-tree state already restore on reboot; scrollback contents do not.
 
