@@ -1453,6 +1453,287 @@ git commit -m "feat(updater): drive updates from the About panel and drop the mo
 ```
 
 ---
+### Task 6b: Move the download into Rust
+
+The Task 6 review flagged, and the controller confirmed by inspecting live
+response headers, that **the download cannot work as built**:
+
+- `api.github.com` returns `access-control-allow-origin: *` — which is why the
+  metadata check works today.
+- The GitHub release-asset host returns **no** ACAO header at all.
+
+The webview fetches from a `tauri://` origin, so CORS decides whether JS may
+read the response. Metadata succeeds; the package download fails with an opaque
+`TypeError`. Spec decision 5 ("download in the frontend, Rust has no HTTP
+client") is therefore wrong for asset URLs.
+
+Ruling: Rust performs the download. This also deletes the ~15 MB IPC transfer
+and the two-call staging dance that only existed to work around it.
+
+**Files:**
+- Modify: `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
+- Modify: `src-tauri/src/modules/updater/mod.rs`
+- Modify: `src-tauri/src/lib.rs`
+- Modify: `src/modules/updater/useUpdater.ts`
+
+**Interfaces:**
+- **Removed:** `updater_stage_begin`, `updater_stage_finish`
+- **Added:** `updater_download(app, package_url, signature_url, file_name, on_progress: Channel<DownloadProgress>) -> Result<String, String>` returning the staged path
+- `updater_package_kind` and `updater_install` are unchanged.
+
+- [ ] **Step 1: Add the HTTP client**
+
+In `src-tauri/Cargo.toml`, next to `which`:
+
+```toml
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+```
+
+`ureq` is blocking and has no async runtime, which suits `spawn_blocking`. It
+is deliberately not `reqwest` — that is the heavy TLS + tokio stack the AI purge
+removed. Confirm the feature name for rustls against the version that resolves;
+if it differs, adapt and report. **If the resolved tree is large, stop and
+report the package count before proceeding.**
+
+- [ ] **Step 2: Write the failing tests**
+
+Append to the `mod tests` block in `src-tauri/src/modules/updater/mod.rs`:
+
+```rust
+    #[test]
+    fn accepts_https_github_asset_urls() {
+        assert!(is_allowed_url("https://github.com/o/r/releases/download/v1/a.rpm"));
+        assert!(is_allowed_url(
+            "https://release-assets.githubusercontent.com/github-production-release-asset/1/2"
+        ));
+        assert!(is_allowed_url("https://objects.githubusercontent.com/x"));
+    }
+
+    #[test]
+    fn rejects_non_https_schemes() {
+        // The URL comes from the webview; without this the command is an
+        // arbitrary-fetch primitive pointed at the local network.
+        assert!(!is_allowed_url("http://github.com/o/r/a.rpm"));
+        assert!(!is_allowed_url("file:///etc/passwd"));
+        assert!(!is_allowed_url("ftp://github.com/a.rpm"));
+    }
+
+    #[test]
+    fn rejects_unrelated_hosts() {
+        assert!(!is_allowed_url("https://evil.test/a.rpm"));
+        assert!(!is_allowed_url("http://127.0.0.1:8080/a.rpm"));
+        assert!(!is_allowed_url("https://github.com.evil.test/a.rpm"));
+    }
+
+    #[test]
+    fn rejects_a_hostless_url() {
+        assert!(!is_allowed_url("https:///a.rpm"));
+        assert!(!is_allowed_url("not a url"));
+    }
+```
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+Run: `cd src-tauri && cargo test --lib updater::tests`
+Expected: FAIL — `cannot find function is_allowed_url`.
+
+- [ ] **Step 4: Implement**
+
+Add to `src-tauri/src/modules/updater/mod.rs`:
+
+```rust
+use tauri::ipc::Channel;
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    pub downloaded: u64,
+    pub total: Option<u64>,
+}
+
+/// Hosts a release asset may legitimately come from. The URL arrives from the
+/// webview, so without this the command would be a general-purpose fetch
+/// primitive running outside the browser's own restrictions.
+const ALLOWED_HOSTS: &[&str] = &[
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+];
+
+fn is_allowed_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.split('@').next_back().unwrap_or("");
+    let host = host.split(':').next().unwrap_or("");
+    !host.is_empty() && ALLOWED_HOSTS.contains(&host)
+}
+```
+
+Then replace `updater_stage_begin` and `updater_stage_finish` entirely with:
+
+```rust
+/// Downloads the package and its signature straight into the staging dir,
+/// reporting progress over `on_progress`. The bytes never cross IPC.
+#[tauri::command]
+pub async fn updater_download(
+    app: AppHandle,
+    package_url: String,
+    signature_url: String,
+    file_name: String,
+    on_progress: Channel<DownloadProgress>,
+) -> Result<String, String> {
+    if !is_allowed_url(&package_url) || !is_allowed_url(&signature_url) {
+        return Err("refusing to download from an unexpected host".to_string());
+    }
+    let dir = staging_dir(&app)?;
+    let path = safe_staged_path(&dir, &file_name)?;
+    let pubkey = configured_pubkey(&app)?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        clear_staging(&dir);
+
+        let signature = ureq::get(&signature_url)
+            .call()
+            .map_err(|e| format!("signature download failed: {e}"))?
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| format!("signature download failed: {e}"))?;
+
+        let resp = ureq::get(&package_url)
+            .call()
+            .map_err(|e| format!("download failed: {e}"))?;
+        let total = resp
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+
+        let mut reader = resp.into_body().into_reader();
+        let mut bytes: Vec<u8> = Vec::with_capacity(total.unwrap_or(0) as usize);
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut downloaded: u64 = 0;
+        loop {
+            let n = std::io::Read::read(&mut reader, &mut buf)
+                .map_err(|e| format!("download failed: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&buf[..n]);
+            downloaded += n as u64;
+            let _ = on_progress.send(DownloadProgress { downloaded, total });
+        }
+
+        // Verify before anything lands on disk, so a tampered or truncated
+        // download leaves nothing behind to install.
+        verify::verify(&pubkey, &bytes, &signature)?;
+        fs::write(&path, &bytes).map_err(|e| format!("could not stage update: {e}"))?;
+        fs::write(sig_path(&path), signature.as_bytes())
+            .map_err(|e| format!("could not stage signature: {e}"))?;
+        Ok(path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| format!("updater_download join: {e}"))?
+}
+```
+
+The `ureq` 3 response API (`body_mut().read_to_string()`, `into_body().into_reader()`,
+`headers()`) may differ in the version that resolves. Adapt to what compiles,
+keep the behaviour identical, and report what you changed.
+
+- [ ] **Step 5: Re-register the commands**
+
+In `src-tauri/src/lib.rs`, replace the two staging entries with one:
+
+```rust
+            updater::updater_package_kind,
+            updater::updater_download,
+            updater::updater_install,
+```
+
+- [ ] **Step 6: Rework the frontend download**
+
+In `src/modules/updater/useUpdater.ts`, replace the whole body of `download()`
+with a single command call driven by a `Channel`:
+
+```ts
+  const download = useCallback(async () => {
+    if (status.kind !== "available" || !status.info.pair) return;
+    const { info } = status;
+    const pair = info.pair;
+    if (!pair) return;
+
+    setStatus({ kind: "downloading", info, downloaded: 0, contentLength: null });
+    const onProgress = new Channel<{ downloaded: number; total: number | null }>();
+    onProgress.onmessage = (p) => {
+      setStatus({
+        kind: "downloading",
+        info,
+        downloaded: p.downloaded,
+        contentLength: p.total,
+      });
+    };
+
+    try {
+      await invoke<string>("updater_download", {
+        packageUrl: pair.pkg.browser_download_url,
+        signatureUrl: pair.sig.browser_download_url,
+        fileName: pair.pkg.name,
+        onProgress,
+      });
+      setStatus({ kind: "staged", info, fileName: pair.pkg.name });
+    } catch (err) {
+      setStatus({ kind: "error", message: String(err) });
+    }
+  }, [status]);
+```
+
+Import `Channel` from `@tauri-apps/api/core` alongside `invoke`. Remove the now
+unused `ReadableStream` reader code and any import it needed.
+
+- [ ] **Step 7: Stop a failed install stranding the staged package**
+
+Also from the Task 6 review: an install failure that is neither a cancel nor an
+authorisation refusal drops to `error`, whose only action is `check()` — so the
+still-staged package is unreachable and retrying re-downloads it.
+
+Give the `staged` state an optional message and route every install failure
+back to it:
+
+```ts
+  | { kind: "staged"; info: AvailableUpdate; fileName: string; message?: string }
+```
+
+and in `install()`'s catch, replace the cancel/authz-only branch with:
+
+```ts
+      setStatus({ kind: "staged", info, fileName, message: String(err) });
+```
+
+In `AboutSection.tsx`, render `status.message` under the button when
+`status.kind === "staged" && status.message` using the same
+`text-destructive/80` styling as the error line.
+
+- [ ] **Step 8: Verify every gate**
+
+Run:
+```bash
+cd src-tauri && cargo test --lib updater && cargo clippy --all-targets --locked -- -D warnings
+cd .. && pnpm check-types && pnpm lint && pnpm test && pnpm build && pnpm knip
+```
+Expected: Rust tests pass (34 = 9 package + 5 verify + 20 mod); clippy clean;
+check-types clean; lint at the 78 baseline; frontend tests pass; build within
+the bundle budget; knip clean.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add -A
+git commit -m "fix(updater): download in Rust, since asset hosts send no CORS headers"
+```
+
+---
 
 ### Task 7: Manual verification against a real release
 
