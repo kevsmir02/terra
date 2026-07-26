@@ -209,6 +209,19 @@ export default function App() {
     [switchWorkspace, activeSpaceId],
   );
 
+  // Hydrate preferences for the whole main window, unconditionally.
+  // init() both loads the persisted values and subscribes to
+  // onPreferencesChange, which is how a write in the separate settings window
+  // reaches this one. It used to be called only from useSpacesBoot's first-run
+  // branch, so returning users ran on DEFAULT_PREFERENCES and never saw a
+  // setting change take effect. Idempotent — useSpacesBoot may still call it.
+  useEffect(() => {
+    void usePreferencesStore
+      .getState()
+      .init()
+      .catch((e) => console.error("[prefs] hydrate failed", e));
+  }, []);
+
   useSpacesBoot({
     ready: launchCwdResolved,
     launchCwd,
