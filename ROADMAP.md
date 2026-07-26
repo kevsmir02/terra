@@ -34,6 +34,7 @@ The themes below frame every scope decision.
 - [x] Shell integration (cwd, prompt markers)
 - [x] Inline search, link detection, true-color
 - [x] Drag and drop in terminal (files as quoted paths)
+- [x] **Copy on Selection**: Opt-in, off by default — a drag-selection is copied on mouse-up. Off by default because a webview cannot reach the X11 primary selection, so this replaces the clipboard rather than a separate buffer.
 - [x] OSC 777 terminal agent detection & status notifications for CLI agents
 - [x] WSL bridge as workspace environment
 - [x] **Project Profiles & Auto-Launch**: Extended Spaces to save resizable panel split ratios (`panelSizes`) and auto-run startup commands (`startupCommands: ["pnpm dev", "pi"]`).
@@ -99,7 +100,6 @@ The themes below frame every scope decision.
 ### Coming next
 
 - [ ] **Terminal <-> Editor Quick Bridge**: Click file/error paths in terminal output to jump straight to the line in CodeMirror; send paths from Explorer to active PTY.
-- [ ] **Copy on Selection**: Opt-in, off by default. Writing the selection to the clipboard on mouse-up clobbers whatever the user had copied, since a webview cannot reach the X11 primary selection that makes this non-destructive on Linux.
 - [ ] **Rebindable Terminal Keys**: Terminal copy, paste, and Shift+Enter are hardcoded in the xterm key handler and bypass the shortcut system that already covers the other 40 actions.
 - [ ] **Shortcut Conflict Detection**: Binding a chord already claimed by another action silently shadows it; the shortcut editor should surface the clash while recording.
 - [ ] **Relative Paths on Drop**: Dropping a file into a pane pastes its absolute path; paste it relative to that pane's shell cwd when the file sits under it, so the path stays short for the shell and for CLI agents.
