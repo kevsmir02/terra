@@ -1,4 +1,11 @@
-import type { Theme, ThemeColors, ThemeVariant, TerminalPalette } from "./types";
+import {
+  BORDER_STYLES,
+  type BorderStyle,
+  type Theme,
+  type ThemeColors,
+  type ThemeVariant,
+  type TerminalPalette,
+} from "./types";
 
 export type ValidationResult =
   | { ok: true; theme: Theme }
@@ -19,6 +26,7 @@ const COLOR_KEYS: readonly (keyof ThemeColors)[] = [
   "sidebarAccent", "sidebarAccentForeground",
   "sidebarBorder", "sidebarRing",
   "radius",
+  "borderStyle",
 ];
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
@@ -41,7 +49,16 @@ function parseColors(raw: unknown, path: string): ThemeColors | string {
     }
     const v = raw[k];
     if (!isStr(v) || v.length === 0) return `${path}.${k} must be a non-empty string`;
-    out[k as keyof ThemeColors] = v;
+    // borderStyle lands in a CSS property that accepts a token sequence, so it
+    // is allowlisted rather than passed through like the colour values.
+    if (k === "borderStyle") {
+      if (!(BORDER_STYLES as readonly string[]).includes(v)) {
+        return `${path}.borderStyle must be one of: ${BORDER_STYLES.join(", ")}`;
+      }
+      out.borderStyle = v as BorderStyle;
+      continue;
+    }
+    out[k as Exclude<keyof ThemeColors, "borderStyle">] = v;
   }
   return out;
 }

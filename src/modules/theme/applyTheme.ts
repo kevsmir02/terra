@@ -28,6 +28,7 @@ const COLOR_VAR: Record<keyof ThemeColors, string> = {
   sidebarBorder: "--sidebar-border",
   sidebarRing: "--sidebar-ring",
   radius: "--radius",
+  borderStyle: "--border-style",
 };
 
 const ANSI_VARS: readonly string[] = [

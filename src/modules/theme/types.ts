@@ -1,5 +1,15 @@
 export type ThemeMode = "light" | "dark";
 
+export const BORDER_STYLES = [
+  "solid",
+  "dashed",
+  "dotted",
+  "double",
+  "none",
+] as const;
+
+export type BorderStyle = (typeof BORDER_STYLES)[number];
+
 export type ThemeColors = Partial<{
   background: string;
   foreground: string;
@@ -28,6 +38,7 @@ export type ThemeColors = Partial<{
   sidebarBorder: string;
   sidebarRing: string;
   radius: string;
+  borderStyle: BorderStyle;
 }>;
 
 export type TerminalPalette = Partial<{

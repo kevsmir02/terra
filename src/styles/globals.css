@@ -124,6 +124,12 @@
   * {
     @apply border-border outline-ring/50;
     }
+  /* Themable border style. Preflight sets `border: 0 solid`, so this changes
+   * the stroke of borders a utility already gave a width to, and never draws
+   * one. Utilities like `border-dashed` still win from the utilities layer. */
+  *, ::before, ::after {
+    border-style: var(--border-style, solid);
+    }
   body {
     @apply bg-background text-foreground;
     margin: 0;

@@ -65,6 +65,25 @@ describe("validateTheme", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("accepts an allowlisted borderStyle", () => {
+    const result = validateTheme(
+      baseTheme({ variants: { dark: { colors: { borderStyle: "dotted" } } } }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.theme.variants.dark?.colors?.borderStyle).toBe("dotted");
+    }
+  });
+
+  it("rejects a borderStyle outside the allowlist", () => {
+    for (const bad of ["groove", "dotted; content: url(x)", "SOLID"]) {
+      const result = validateTheme(
+        baseTheme({ variants: { dark: { colors: { borderStyle: bad } } } }),
+      );
+      expect(result.ok).toBe(false);
+    }
+  });
+
   it("requires the terminal ansi palette to have exactly 16 entries", () => {
     const result = validateTheme(
       baseTheme({ variants: { dark: { terminal: { ansi: ["#000"] } } } }),
