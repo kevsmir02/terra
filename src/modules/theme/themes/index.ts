@@ -1,45 +1,27 @@
 import { DEFAULT_THEME_ID, type Theme } from "../types";
-import { arcade } from "./arcade";
 import { caffeine } from "./caffeine";
-import { catppuccin } from "./catppuccin";
-import { claude } from "./claude";
-import { dracula } from "./dracula";
 import { everforest } from "./everforest";
 import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
 import { nord } from "./nord";
-import { organic } from "./organic";
-import { poster } from "./poster";
 import { stardew } from "./stardew";
-import { rosePine } from "./rose-pine";
 import { sage } from "./sage";
-import { solarized } from "./solarized";
 import { terraDefault } from "./terra-default";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
-import { wireframe } from "./wireframe";
 
 const BUILTIN: Theme[] = [
   terraDefault,
-  claude,
   kanagawa,
   kanagawaDragon,
   tokyoNight,
-  catppuccin,
-  rosePine,
   everforest,
   nord,
   gruvbox,
-  dracula,
-  solarized,
   tide,
   sage,
   caffeine,
-  organic,
-  poster,
-  wireframe,
-  arcade,
   stardew,
 ];
 
