@@ -21,8 +21,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "visible": false,
-        "dragDropEnabled": true,
-        "icon": "icons/icon.png"
+        "dragDropEnabled": true
       }
     ],
     "security": {
