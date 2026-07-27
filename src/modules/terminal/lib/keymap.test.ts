@@ -1,17 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  resolveTerminalKeyBindings,
   terminalDeleteSequence,
+  terminalKeyAction,
+  type TerminalKeyBindings,
+  type TerminalKeyEvent,
   terminalLineNavigationSequence,
   terminalReadlineSequence,
   terminalWordNavigationSequence,
-  type TerminalKeyEvent,
 } from "./keymap";
 
 const evt = (partial: Partial<TerminalKeyEvent>): TerminalKeyEvent => ({
   altKey: false,
   ctrlKey: false,
   metaKey: false,
+  shiftKey: false,
   key: "",
   code: "",
   ...partial,
@@ -177,3 +181,90 @@ describe("terminalReadlineSequence", () => {
     ).toBeNull();
   });
 });
+
+const BOUND: TerminalKeyBindings = {
+  copy: [{ ctrl: true, shift: true, key: "c" }],
+  paste: [{ ctrl: true, shift: true, key: "v" }],
+  newline: [{ shift: true, key: "Enter" }],
+};
+
+describe("terminalKeyAction", () => {
+  it("recognises the bound copy chord", () => {
+    expect(
+      terminalKeyAction(
+        evt({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }),
+        BOUND,
+      ),
+    ).toBe("copy");
+  });
+
+  it("recognises the bound paste chord", () => {
+    expect(
+      terminalKeyAction(
+        evt({ ctrlKey: true, shiftKey: true, key: "V", code: "KeyV" }),
+        BOUND,
+      ),
+    ).toBe("paste");
+  });
+
+  it("recognises the bound newline chord", () => {
+    expect(
+      terminalKeyAction(
+        evt({ shiftKey: true, key: "Enter", code: "Enter" }),
+        BOUND,
+      ),
+    ).toBe("newline");
+  });
+
+  it("ignores an unbound key so it reaches the shell", () => {
+    expect(terminalKeyAction(evt({ key: "a", code: "KeyA" }), BOUND)).toBeNull();
+  });
+
+  it("requires every modifier to match", () => {
+    // Plain Ctrl+C must still reach the PTY as SIGINT.
+    expect(
+      terminalKeyAction(evt({ ctrlKey: true, key: "c", code: "KeyC" }), BOUND),
+    ).toBeNull();
+  });
+
+  it("matches nothing for an unassigned action", () => {
+    expect(
+      terminalKeyAction(
+        evt({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }),
+        { ...BOUND, copy: [] },
+      ),
+    ).toBeNull();
+  });
+
+  it("matches nothing when every action is unassigned", () => {
+    // The macOS shape: copy and paste unbound so ⌘C/⌘V stay native.
+    const none: TerminalKeyBindings = { copy: [], paste: [], newline: [] };
+    expect(
+      terminalKeyAction(
+        evt({ ctrlKey: true, shiftKey: true, key: "C", code: "KeyC" }),
+        none,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("resolveTerminalKeyBindings", () => {
+  it("uses the factory defaults when nothing is customised", () => {
+    expect(resolveTerminalKeyBindings({})).toEqual(BOUND);
+  });
+
+  it("applies a user override", () => {
+    expect(
+      resolveTerminalKeyBindings({
+        "terminal.copy": [{ ctrl: true, alt: true, key: "c" }],
+      }).copy,
+    ).toEqual([{ ctrl: true, alt: true, key: "c" }]);
+  });
+
+  it("keeps a cleared action unassigned", () => {
+    expect(resolveTerminalKeyBindings({ "terminal.paste": [] }).paste).toEqual(
+      [],
+    );
+  });
+});
+
