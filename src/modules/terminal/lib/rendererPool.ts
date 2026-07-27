@@ -270,6 +270,9 @@ function createSlot(): Slot {
       return false;
     }
     if (action === "copy") {
+      // Swallowed even with nothing selected. Falling through would hand the
+      // chord to xterm, which can emit \x03 and SIGINT a running job — worse
+      // than doing nothing.
       if (event.type === "keydown" && slot.term.hasSelection()) {
         const sel = slot.term.getSelection();
         if (sel) void writeTerminalClipboard(sel);

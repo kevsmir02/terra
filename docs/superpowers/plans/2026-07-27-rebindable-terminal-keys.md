@@ -214,7 +214,7 @@ A pure module answering "which other actions already claim this chord". Used by 
 
   `activeBindings`, `conflictingShortcuts`, and `shortcutLabels` are re-exported from `@/modules/shortcuts`. `sameBinding` is not — nothing outside this module and its test uses it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/modules/shortcuts/lib/shortcutConflicts.test.ts`:
 
@@ -346,12 +346,12 @@ describe("shortcutLabels", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm test src/modules/shortcuts/lib/shortcutConflicts.test.ts`
 Expected: FAIL — cannot resolve `./shortcutConflicts`.
 
-- [ ] **Step 3: Write the resolver**
+- [x] **Step 3: Write the resolver**
 
 Create `src/modules/shortcuts/lib/shortcutConflicts.ts`:
 
@@ -428,6 +428,21 @@ export function shortcutLabels(ids: ShortcutId[]): string[] {
 }
 ```
 
+- [x] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test src/modules/shortcuts/lib/shortcutConflicts.test.ts`
+Expected: PASS, all cases — including `ships no conflicting defaults`.
+
+If that last case fails, it has found a real pre-existing collision in the default table. Do not weaken the test: report the colliding pair and stop.
+
+- [x] **Step 5: Add the macOS variant of the guard test**
+
+The table above is only the non-mac one, because `IS_MAC` is false under vitest. This change makes the defaults platform-conditional for the first time in a way that matters, so the mac table needs the same guard. `vi.mock` is hoisted and applies to a whole file, so this must be a separate file.
+
+Create `src/modules/shortcuts/lib/shortcutConflicts.mac.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from "vitest";
 
 // shortcuts.ts reads IS_MAC and MOD_PROP at module scope, so the macOS table
 // only exists under a mocked platform module plus a fresh import. Same pattern
@@ -472,12 +487,12 @@ describe("macOS default table", () => {
 });
 ```
 
-- [ ] **Step 6: Run the macOS variant**
+- [x] **Step 6: Run the macOS variant**
 
 Run: `pnpm test src/modules/shortcuts/lib/shortcutConflicts.mac.test.ts`
 Expected: PASS. `terminal.clear` holds ⌘K only on this table, and `MOD_PROP` becomes `meta`, so this is a genuinely different set of chords from the one checked in Step 4.
 
-- [ ] **Step 7: Re-export from the module index**
+- [x] **Step 7: Re-export from the module index**
 
 In `src/modules/shortcuts/index.ts`, add below the existing `shortcutScope` export:
 
@@ -492,12 +507,12 @@ export {
 
 `sameBinding` is intentionally not re-exported — only this module and its test use it, and an unconsumed re-export fails `pnpm knip`.
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 Run: `pnpm check-types && pnpm test`
 Expected: clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/modules/shortcuts/lib/shortcutConflicts.ts src/modules/shortcuts/lib/shortcutConflicts.test.ts src/modules/shortcuts/lib/shortcutConflicts.mac.test.ts src/modules/shortcuts/index.ts
@@ -523,7 +538,7 @@ The pure decision function the pool handler will call, plus the resolver turning
   - `terminalKeyAction(event: TerminalKeyEvent, bindings: TerminalKeyBindings): TerminalKeyAction | null`
   - `resolveTerminalKeyBindings(user: UserShortcuts): TerminalKeyBindings`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `src/modules/terminal/lib/keymap.test.ts`, extend the import and add `shiftKey: false` to the `evt` factory:
 
@@ -629,6 +644,28 @@ describe("resolveTerminalKeyBindings", () => {
       resolveTerminalKeyBindings({
         "terminal.copy": [{ ctrl: true, alt: true, key: "c" }],
       }).copy,
+    ).toEqual([{ ctrl: true, alt: true, key: "c" }]);
+  });
+
+  it("keeps a cleared action unassigned", () => {
+    expect(resolveTerminalKeyBindings({ "terminal.paste": [] }).paste).toEqual(
+      [],
+    );
+  });
+});
+```
+
+- [x] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm test src/modules/terminal/lib/keymap.test.ts`
+Expected: FAIL — `terminalKeyAction` is not exported.
+
+- [x] **Step 3: Implement in `keymap.ts`**
+
+Replace the `TerminalKeyEvent` definition at the top of `src/modules/terminal/lib/keymap.ts` and add the new exports. The existing sequence functions are unchanged.
+
+```ts
+import {
   activeBindings,
   type UserShortcuts,
 } from "@/modules/shortcuts";
@@ -682,17 +719,17 @@ export function resolveTerminalKeyBindings(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm test src/modules/terminal/lib/keymap.test.ts`
 Expected: PASS — the new cases plus all pre-existing readline-sequence cases.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `pnpm check-types && pnpm test`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/modules/terminal/lib/keymap.ts src/modules/terminal/lib/keymap.test.ts
@@ -712,7 +749,7 @@ Replaces the hardcoded predicates with the matcher, reading the live bindings fr
 - Consumes: `terminalKeyAction`, `resolveTerminalKeyBindings` from Task 3.
 - Produces: nothing. No new exports, no module state, no subscription — the handler reads `usePreferencesStore.getState().shortcuts` when a key arrives, which `rendererPool.ts` already does at lines 170, 620, 757, and 979.
 
-- [ ] **Step 1: Extend the keymap import**
+- [x] **Step 1: Extend the keymap import**
 
 In `src/modules/terminal/lib/rendererPool.ts`:
 
@@ -726,7 +763,7 @@ import {
 
 `usePreferencesStore` is already imported at line 2.
 
-- [ ] **Step 2: Rewrite the key handler**
+- [x] **Step 2: Rewrite the key handler**
 
 Replace the body of `term.attachCustomKeyEventHandler` at `rendererPool.ts:238` with the following. The IME comment block above `event.isComposing` is unchanged — keep it verbatim.
 
@@ -796,16 +833,16 @@ Replace the body of `term.attachCustomKeyEventHandler` at `rendererPool.ts:238` 
   });
 ```
 
-- [ ] **Step 3: Delete the hardcoded predicates**
+- [x] **Step 3: Delete the hardcoded predicates**
 
 Remove `isTerminalCopy`, `isTerminalPaste`, and `isShiftEnter` — the three functions at `rendererPool.ts:1032-1058`. **Keep the `IS_MAC` constant above them** (lines 1028-1030); it is still used by the `terminalReadlineSequence` call.
 
-- [ ] **Step 4: Verify the build and the suite**
+- [x] **Step 4: Verify the build and the suite**
 
 Run: `pnpm check-types && pnpm test && pnpm lint`
 Expected: clean. Nothing should reference the deleted predicates.
 
-- [ ] **Step 5: Manual verification**
+- [x] **Step 5: Manual verification**
 
 Run `pnpm tauri dev` and confirm each of these. There is no DOM test infrastructure, so this checklist is the only coverage for the wiring itself.
 
@@ -819,7 +856,7 @@ Run `pnpm tauri dev` and confirm each of these. There is no DOM test infrastruct
 - With an IME active (e.g. Pinyin), the Enter that commits a candidate does not send a newline to the shell.
 - On macOS if available: ⌘C and ⌘V still copy and paste with both rows unassigned.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/modules/terminal/lib/rendererPool.ts
@@ -839,7 +876,7 @@ The recorder currently commits on the first non-modifier keydown. It becomes: ca
 - Consumes: `conflictingShortcuts`, `shortcutLabels` from Task 2; `getBindingTokens`, `KeyBinding`, `ShortcutId` from `shortcuts.ts`.
 - Produces: `Recorder` gains a required `selfId: ShortcutId` prop.
 
-- [ ] **Step 1: Extend the imports**
+- [x] **Step 1: Extend the imports**
 
 In `src/settings/sections/ShortcutsSection.tsx`:
 
@@ -864,7 +901,7 @@ In `ShortcutRow`'s JSX, change the recorder element:
         ) : (
 ```
 
-- [ ] **Step 3: Replace the `Recorder` component**
+- [x] **Step 3: Replace the `Recorder` component**
 
 Replace the whole `Recorder` function (lines 250-328) with:
 
@@ -998,7 +1035,7 @@ The old `_mods` state and the `keyup` listener that maintained it are removed �
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: clean.
 
-- [ ] **Step 5: Manual verification**
+- [x] **Step 5: Manual verification**
 
 Run `pnpm tauri dev`, open Settings → Shortcuts:
 
@@ -1010,7 +1047,7 @@ Run `pnpm tauri dev`, open Settings → Shortcuts:
 - On the "Insert newline without submitting" row, press Shift+Enter — it must be **captured as a chord**, not treated as apply. Then press bare Enter to apply it.
 - Record a chord that clashes with two actions and confirm both labels are listed, comma-separated.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/settings/sections/ShortcutsSection.tsx
@@ -1097,7 +1134,7 @@ And render it under the label:
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: clean.
 
-- [ ] **Step 4: Manual verification**
+- [x] **Step 4: Manual verification**
 
 Run `pnpm tauri dev`, open Settings → Shortcuts:
 
