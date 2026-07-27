@@ -30,6 +30,9 @@ export type ShortcutId =
   | "pane.source"
   | "terminal.clear"
   | "terminal.toggleInput"
+  | "terminal.copy"
+  | "terminal.paste"
+  | "terminal.newline"
   | "blocks.prev"
   | "blocks.next"
   | "search.focus"
@@ -196,6 +199,30 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Toggle Shell input",
     group: "Terminal",
     defaultBindings: [{ [MOD_PROP]: true, key: "u" }],
+  },
+  {
+    id: "terminal.copy",
+    label: "Copy selection",
+    group: "Terminal",
+    // macOS routes ⌘C through the webview's own clipboard handling, which
+    // already works; leave it unbound there rather than replacing it. The row
+    // still shows in Settings so a mac user can bind something if they want.
+    defaultBindings: IS_MAC ? [] : [{ ctrl: true, shift: true, key: "c" }],
+  },
+  {
+    id: "terminal.paste",
+    label: "Paste into terminal",
+    group: "Terminal",
+    defaultBindings: IS_MAC ? [] : [{ ctrl: true, shift: true, key: "v" }],
+  },
+  {
+    id: "terminal.newline",
+    label: "Insert newline without submitting",
+    group: "Terminal",
+    // No allowRepeat: the pool handler never consults it. Held Shift+Enter
+    // still repeats because useGlobalShortcuts lets every keydown through to
+    // xterm for a shortcut it has no handler for.
+    defaultBindings: [{ shift: true, key: "Enter" }],
   },
   {
     id: "blocks.prev",
@@ -378,8 +405,15 @@ function keyFromCode(code: string): string | null {
   return CODE_TO_KEY[code] ?? null;
 }
 
+/** The subset of KeyboardEvent a chord comparison needs. Lets non-DOM callers
+ * (the terminal keymap) match without fabricating a whole KeyboardEvent. */
+export type KeyEventLike = Pick<
+  KeyboardEvent,
+  "key" | "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey"
+>;
+
 export function matchBinding(
-  e: KeyboardEvent,
+  e: KeyEventLike,
   binding: KeyBinding,
   id?: ShortcutId
 ): boolean {

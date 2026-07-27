@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getBindingTokens, type KeyBinding, matchBinding } from "./shortcuts";
+import {
+  getBindingTokens,
+  type KeyBinding,
+  matchBinding,
+  SHORTCUTS,
+  type ShortcutId,
+} from "./shortcuts";
 
 // These tests run in the vitest node environment, where the Tauri OS plugin is
 // unavailable so `IS_MAC` resolves to false. That makes the non-mac token
@@ -102,3 +108,56 @@ describe("matchBinding", () => {
     ).toBe(false);
   });
 });
+
+function byId(id: ShortcutId) {
+  const s = SHORTCUTS.find((x) => x.id === id);
+  if (!s) throw new Error(`no shortcut registered for ${id}`);
+  return s;
+}
+
+describe("terminal key shortcuts", () => {
+  it("defaults copy and paste to Ctrl+Shift+C / Ctrl+Shift+V off macOS", () => {
+    expect(byId("terminal.copy").defaultBindings).toEqual([
+      { ctrl: true, shift: true, key: "c" },
+    ]);
+    expect(byId("terminal.paste").defaultBindings).toEqual([
+      { ctrl: true, shift: true, key: "v" },
+    ]);
+  });
+
+  it("defaults newline to Shift+Enter on every platform", () => {
+    expect(byId("terminal.newline").defaultBindings).toEqual([
+      { shift: true, key: "Enter" },
+    ]);
+  });
+
+  it("groups all three under Terminal", () => {
+    for (const id of [
+      "terminal.copy",
+      "terminal.paste",
+      "terminal.newline",
+    ] as const) {
+      expect(byId(id).group).toBe("Terminal");
+    }
+  });
+
+  it("matches the recorder's raw e.key casing against the table", () => {
+    // The recorder stores e.key verbatim, so Ctrl+Shift+C is saved as "C".
+    expect(
+      matchBinding(
+        event({ key: "C", code: "KeyC", ctrlKey: true, shiftKey: true }),
+        byId("terminal.copy").defaultBindings[0],
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match Ctrl+C when the binding requires Shift", () => {
+    expect(
+      matchBinding(
+        event({ key: "c", code: "KeyC", ctrlKey: true }),
+        byId("terminal.copy").defaultBindings[0],
+      ),
+    ).toBe(false);
+  });
+});
+
