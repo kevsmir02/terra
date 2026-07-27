@@ -8,6 +8,9 @@ export const SIDEBAR_RAIL_HEIGHT = 36;
 type RailItem = {
   id: SidebarViewId;
   label: string;
+  // Full name for the accessible label and tooltip; `label` is what fits the
+  // rail, which is only wide enough for one short word per item.
+  title: string;
   icon: Parameters<typeof HugeiconsIcon>[0]["icon"];
   badge?: number;
 };
@@ -20,14 +23,20 @@ type Props = {
 
 export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
   const items: RailItem[] = [
-    { id: "explorer", label: "Files", icon: FolderTreeIcon },
+    { id: "explorer", label: "Files", title: "Files", icon: FolderTreeIcon },
     {
       id: "source-control",
-      label: "Source Control",
+      label: "Source",
+      title: "Source Control",
       icon: FolderGitTwoIcon,
       badge: changedCount,
     },
-    { id: "devices", label: "Devices", icon: AiPhone01Icon },
+    {
+      id: "devices",
+      label: "Devices",
+      title: "Devices",
+      icon: AiPhone01Icon,
+    },
   ];
 
   return (
@@ -42,11 +51,12 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
           <button
             key={item.id}
             type="button"
-            aria-label={item.label}
+            aria-label={item.title}
+            title={item.title}
             aria-pressed={isActive}
             onClick={() => onSelectView(item.id)}
             className={cn(
-              "group relative flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md text-[11px] font-medium outline-none transition-colors duration-[var(--dur-base)]",
+              "group relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[11px] font-medium outline-none transition-colors duration-[var(--dur-base)]",
               "focus-visible:ring-2 focus-visible:ring-primary/40",
               isActive
                 ? "bg-foreground/[0.07] text-foreground dark:bg-foreground/[0.09]"
@@ -59,7 +69,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
               strokeWidth={isActive ? 2 : 1.75}
               className="shrink-0 transition-[stroke-width] duration-[var(--dur-base)]"
             />
-            <span>{item.label}</span>
+            <span className="truncate">{item.label}</span>
             {showBadge ? (
               <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/60 bg-card px-1 text-[9px] font-semibold leading-none tabular-nums text-muted-foreground/95">
                 {item.badge! > 99 ? "99+" : item.badge}

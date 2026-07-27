@@ -76,11 +76,13 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
                     type="button"
                     disabled={d.state !== "device"}
                     onClick={() => onPick(d.serial)}
-                    className="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs hover:bg-accent/50 disabled:opacity-50"
+                    className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/50 disabled:opacity-50"
                     title={d.state === "device" ? "Open device preview" : `state: ${d.state}`}
                   >
                     <span className="truncate">{d.model ?? d.serial}</span>
-                    <span className="text-muted-foreground">{d.serial}</span>
+                    <span className="shrink-0 whitespace-nowrap text-muted-foreground">
+                      {d.serial}
+                    </span>
                   </button>
                 </li>
               ))}
