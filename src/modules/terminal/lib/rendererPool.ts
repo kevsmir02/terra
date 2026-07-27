@@ -13,7 +13,11 @@ import {
   readTerminalClipboard,
   writeTerminalClipboard,
 } from "./terminalClipboard";
-import { terminalReadlineSequence } from "./keymap";
+import {
+  resolveTerminalKeyBindings,
+  terminalKeyAction,
+  terminalReadlineSequence,
+} from "./keymap";
 
 export const POOL_MAX_SIZE = 5;
 const FIT_DEBOUNCE_MS = 8;
@@ -249,21 +253,23 @@ function createSlot(): Slot {
     if (leafId === null) return false;
     const bridge = adapter?.resolveLeaf(leafId);
     if (!bridge) return true;
-    const readlineSequence = terminalReadlineSequence(event, {
-      isMac: IS_MAC,
-      isAlternateScreen: isAltScreen(slot),
-    });
-    if (readlineSequence) {
-      event.preventDefault();
-      if (event.type === "keydown") bridge.writeToPty(readlineSequence);
-      return false;
-    }
-    if (isShiftEnter(event)) {
+
+    // User-configured chords are checked before the hardcoded readline remaps
+    // so an explicit binding always beats an implicit default. The shipped
+    // defaults do not overlap, so this only matters once someone rebinds.
+    // Read at point of use: a rebind lands on the very next keystroke, with no
+    // subscription to keep in sync. Before hydration `shortcuts` is {} and this
+    // resolves to the factory defaults.
+    const action = terminalKeyAction(
+      event,
+      resolveTerminalKeyBindings(usePreferencesStore.getState().shortcuts),
+    );
+    if (action === "newline") {
       event.preventDefault();
       if (event.type === "keydown") bridge.writeToPty("\x1b\r");
       return false;
     }
-    if (isTerminalCopy(event)) {
+    if (action === "copy") {
       if (event.type === "keydown" && slot.term.hasSelection()) {
         const sel = slot.term.getSelection();
         if (sel) void writeTerminalClipboard(sel);
@@ -271,7 +277,7 @@ function createSlot(): Slot {
       event.preventDefault();
       return false;
     }
-    if (isTerminalPaste(event)) {
+    if (action === "paste") {
       if (event.type === "keydown") {
         const targetLeafId = slot.currentLeafId;
         void readTerminalClipboard().then((text) => {
@@ -279,6 +285,16 @@ function createSlot(): Slot {
         });
       }
       event.preventDefault();
+      return false;
+    }
+
+    const readlineSequence = terminalReadlineSequence(event, {
+      isMac: IS_MAC,
+      isAlternateScreen: isAltScreen(slot),
+    });
+    if (readlineSequence) {
+      event.preventDefault();
+      if (event.type === "keydown") bridge.writeToPty(readlineSequence);
       return false;
     }
     return true;
@@ -1029,30 +1045,3 @@ const IS_MAC =
   typeof navigator !== "undefined" &&
   /Mac|iPhone|iPad/.test(navigator.userAgent);
 
-function isTerminalCopy(e: KeyboardEvent): boolean {
-  return (
-    !IS_MAC &&
-    e.ctrlKey &&
-    e.shiftKey &&
-    !e.altKey &&
-    !e.metaKey &&
-    (e.code === "KeyC" || e.key === "c" || e.key === "C")
-  );
-}
-
-function isTerminalPaste(e: KeyboardEvent): boolean {
-  return (
-    !IS_MAC &&
-    e.ctrlKey &&
-    e.shiftKey &&
-    !e.altKey &&
-    !e.metaKey &&
-    (e.code === "KeyV" || e.key === "v" || e.key === "V")
-  );
-}
-
-function isShiftEnter(e: KeyboardEvent): boolean {
-  return (
-    e.key === "Enter" && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey
-  );
-}
