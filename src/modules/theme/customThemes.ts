@@ -1,6 +1,7 @@
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { Theme } from "./types";
+import { validateTheme } from "./validateTheme";
 
 const STORE_PATH = "terra-custom-themes.json";
 const KEY = "themes";
@@ -8,9 +9,18 @@ const CHANGED_EVENT = "terra://custom-themes-changed";
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
 
+export function sanitizeStoredThemes(raw: unknown): Theme[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Theme[] = [];
+  for (const entry of raw) {
+    const result = validateTheme(entry);
+    if (result.ok) out.push(result.theme);
+  }
+  return out;
+}
+
 export async function listCustomThemes(): Promise<Theme[]> {
-  const v = await store.get<Theme[]>(KEY);
-  return Array.isArray(v) ? v : [];
+  return sanitizeStoredThemes(await store.get<unknown>(KEY));
 }
 
 export async function saveCustomTheme(theme: Theme): Promise<void> {
