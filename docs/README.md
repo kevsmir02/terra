@@ -8,6 +8,7 @@ If a guide conflicts with `TERRA.md`, `TERRA.md` wins.
 
 - [TERRA.md](../TERRA.md) - the architecture source of truth; read this first
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - how to contribute, quality bar, project layout
+- [THEME.md](../THEME.md) - authoring a theme: token reference, surface classes, terminal contrast rules, font metrics
 
 ## Architecture guides
 
