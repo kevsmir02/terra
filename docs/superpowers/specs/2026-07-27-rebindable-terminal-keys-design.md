@@ -131,19 +131,35 @@ Two contained type changes this forces:
 
 ### Binding delivery
 
-Follows the established `applyXPreference` push pattern used by
-`applyScrollback`, `applyWebglPreference`, and `applyFontSize`:
+The handler reads the current bindings at the point of use:
 
-- `rendererPool.ts` gains module-level binding state and
-  `applyTerminalKeyBindings(bindings)`.
-- `useTerminalSession` adds `usePreferencesStore((p) => p.shortcuts)` and an
-  effect that resolves each id (`shortcuts[id] ?? defaultBindings`) and pushes,
-  sitting directly beside the existing `applyScrollback` effect.
+```ts
+const action = terminalKeyAction(
+  event,
+  resolveTerminalKeyBindings(usePreferencesStore.getState().shortcuts),
+);
+```
+
+`rendererPool.ts` already reads preferences this way at four sites — lines 620,
+757, 979, and 170 — so this needs no new state, no exported setter, and no
+subscription. A rebind is picked up on the very next keystroke.
+
+The alternative considered was the `applyXPreference` push used by
+`applyScrollback` and `applyWebglPreference`: module-level binding state plus a
+`useTerminalSession` effect. It was rejected as more machinery for the same
+result. The push pattern earns its keep when the pool must *act* on a change
+(refit, reattach WebGL, reset scrollback); a chord table only needs to be
+correct when read, and the key handler is the only reader.
+
+Resolution is not memoised. `resolveTerminalKeyBindings` is three map lookups
+and a small object literal, against a handler that already does more work than
+that on every keydown.
 
 Resolution must use `??`, not a truthiness check that would treat `[]` as
 missing: a cleared row is stored as an empty array, and it has to survive
 resolution rather than fall back to the default. That empty array is what makes
-"Unassigned" mean unassigned.
+"Unassigned" mean unassigned. Before the store hydrates, `shortcuts` is `{}` and
+resolution yields the factory defaults, which is correct.
 
 Cross-window propagation already works: `writePref` mirrors every setter through
 `PREFS_CHANGED_EVENT` (`store.ts:275`) and `preferences.ts` re-hydrates the
@@ -319,8 +335,7 @@ plus `vi.resetModules()` and a dynamic re-import — the pattern
 | `src/modules/shortcuts/index.ts` | Re-export the conflict helpers |
 | `src/modules/terminal/lib/keymap.ts` | `terminalKeyAction`; `shiftKey` on `TerminalKeyEvent` |
 | `src/modules/terminal/lib/keymap.test.ts` | `shiftKey` in `evt`; `terminalKeyAction` cases |
-| `src/modules/terminal/lib/rendererPool.ts` | Rewrite handler at 238; delete 1032-1058; add `applyTerminalKeyBindings` |
-| `src/modules/terminal/lib/useTerminalSession.ts` | Effect pushing resolved bindings to the pool |
+| `src/modules/terminal/lib/rendererPool.ts` | Rewrite handler at 238; delete 1032-1058 |
 | `src/settings/sections/ShortcutsSection.tsx` | Two-step `Recorder`; conflict warnings on rows |
 | `ROADMAP.md` | Move both entries from Planned to Shipped |
 

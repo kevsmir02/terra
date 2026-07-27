@@ -4,7 +4,7 @@
 
 **Goal:** Make terminal copy, paste, and Shift+Enter user-rebindable through the existing shortcut system, and surface chord clashes in the shortcut editor while recording.
 
-**Architecture:** The three terminal chords get real entries in the `SHORTCUTS` table — so they gain the Settings row, cross-window persistence, and conflict detection for free — but dispatch stays inside `rendererPool`'s per-slot xterm key handler, which already owns the IME guard and the `slot` reference the clipboard operations need. Bindings reach the pool through the same `applyXPreference` push that `applyScrollback` and `applyWebglPreference` already use. Conflict detection is a pure resolver consumed by a two-step recorder that previews a captured chord before committing it.
+**Architecture:** The three terminal chords get real entries in the `SHORTCUTS` table — so they gain the Settings row, cross-window persistence, and conflict detection for free — but dispatch stays inside `rendererPool`'s per-slot xterm key handler, which already owns the IME guard and the `slot` reference the clipboard operations need. The handler reads the live bindings straight off the preferences store when a key arrives, the way `rendererPool` already reads four other preferences, so a rebind needs no subscription and lands on the next keystroke. Conflict detection is a pure resolver consumed by a two-step recorder that previews a captured chord before committing it.
 
 **Tech Stack:** TypeScript, React 19, zustand (preferences), xterm.js, Tauri 2, vitest (node environment — no jsdom, no React Testing Library), biome, knip.
 
@@ -740,40 +740,28 @@ git commit -m "feat(terminal): match terminal chords against user bindings"
 
 ### Task 4: Wire the pool to user bindings
 
-Replaces the hardcoded predicates with the matcher and pushes resolved bindings into the pool. **This is the task that makes rebinding actually work.**
+Replaces the hardcoded predicates with the matcher, reading the live bindings from the preferences store at the point of use. **This is the task that makes rebinding actually work.**
 
 **Files:**
 - Modify: `src/modules/terminal/lib/rendererPool.ts` (imports at 1-16; handler at 238-285; predicates at 1032-1058)
-- Modify: `src/modules/terminal/lib/useTerminalSession.ts` (pool imports at ~28-50; preference effects at ~887-928)
 
 **Interfaces:**
-- Consumes: `terminalKeyAction`, `resolveTerminalKeyBindings`, `TerminalKeyBindings` from Task 3.
-- Produces: `applyTerminalKeyBindings(b: TerminalKeyBindings): void` exported from `rendererPool.ts`.
+- Consumes: `terminalKeyAction`, `resolveTerminalKeyBindings` from Task 3.
+- Produces: nothing. No new exports, no module state, no subscription — the handler reads `usePreferencesStore.getState().shortcuts` when a key arrives, which `rendererPool.ts` already does at lines 170, 620, 757, and 979.
 
-- [ ] **Step 1: Add binding state and the push entry point**
+- [ ] **Step 1: Extend the keymap import**
 
-In `src/modules/terminal/lib/rendererPool.ts`, extend the keymap import:
+In `src/modules/terminal/lib/rendererPool.ts`:
 
 ```ts
 import {
   resolveTerminalKeyBindings,
   terminalKeyAction,
-  type TerminalKeyBindings,
   terminalReadlineSequence,
 } from "./keymap";
 ```
 
-Add below the `PTY_RESIZE_DEBOUNCE_MS` constant near the top:
-
-```ts
-// The three rebindable terminal chords. Seeded with the factory defaults so a
-// slot created before the first preference push still behaves correctly.
-let terminalKeyBindings: TerminalKeyBindings = resolveTerminalKeyBindings({});
-
-export function applyTerminalKeyBindings(b: TerminalKeyBindings): void {
-  terminalKeyBindings = b;
-}
-```
+`usePreferencesStore` is already imported at line 2.
 
 - [ ] **Step 2: Rewrite the key handler**
 
@@ -798,7 +786,13 @@ Replace the body of `term.attachCustomKeyEventHandler` at `rendererPool.ts:238` 
     // User-configured chords are checked before the hardcoded readline remaps
     // so an explicit binding always beats an implicit default. The shipped
     // defaults do not overlap, so this only matters once someone rebinds.
-    const action = terminalKeyAction(event, terminalKeyBindings);
+    // Read at point of use: a rebind lands on the very next keystroke, with no
+    // subscription to keep in sync. Before hydration `shortcuts` is {} and this
+    // resolves to the factory defaults.
+    const action = terminalKeyAction(
+      event,
+      resolveTerminalKeyBindings(usePreferencesStore.getState().shortcuts),
+    );
     if (action === "newline") {
       event.preventDefault();
       if (event.type === "keydown") bridge.writeToPty("\x1b\r");
@@ -843,31 +837,12 @@ Replace the body of `term.attachCustomKeyEventHandler` at `rendererPool.ts:238` 
 
 Remove `isTerminalCopy`, `isTerminalPaste`, and `isShiftEnter` — the three functions at `rendererPool.ts:1032-1058`. **Keep the `IS_MAC` constant above them** (lines 1028-1030); it is still used by the `terminalReadlineSequence` call.
 
-- [ ] **Step 4: Push resolved bindings from the session hook**
-
-In `src/modules/terminal/lib/useTerminalSession.ts`, add `applyTerminalKeyBindings` to the alphabetised import block from `./rendererPool`, and import the resolver:
-
-```ts
-import { resolveTerminalKeyBindings } from "./keymap";
-```
-
-Add this effect immediately after the existing `applyScrollback` effect (around line 908):
-
-```ts
-  const shortcuts = usePreferencesStore((p) => p.shortcuts);
-  useEffect(() => {
-    applyTerminalKeyBindings(resolveTerminalKeyBindings(shortcuts));
-  }, [shortcuts]);
-```
-
-`useTerminalSession` already imports `usePreferencesStore` and `useEffect`. If `keymap.ts` is not already imported in this file, add the import; otherwise extend the existing one.
-
-- [ ] **Step 5: Verify the build and the suite**
+- [ ] **Step 4: Verify the build and the suite**
 
 Run: `pnpm check-types && pnpm test && pnpm lint`
 Expected: clean. Nothing should reference the deleted predicates.
 
-- [ ] **Step 6: Manual verification**
+- [ ] **Step 5: Manual verification**
 
 Run `pnpm tauri dev` and confirm each of these. There is no DOM test infrastructure, so this checklist is the only coverage for the wiring itself.
 
@@ -881,10 +856,10 @@ Run `pnpm tauri dev` and confirm each of these. There is no DOM test infrastruct
 - With an IME active (e.g. Pinyin), the Enter that commits a candidate does not send a newline to the shell.
 - On macOS if available: ⌘C and ⌘V still copy and paste with both rows unassigned.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/modules/terminal/lib/rendererPool.ts src/modules/terminal/lib/useTerminalSession.ts
+git add src/modules/terminal/lib/rendererPool.ts
 git commit -m "feat(terminal): make copy, paste, and Shift+Enter rebindable"
 ```
 
