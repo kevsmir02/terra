@@ -25,6 +25,21 @@ describe("surface classes", () => {
     expect(b).toContain(`--surface-border-width: var(${token}, 1px)`);
   });
 
+  // Without this registration the property inherits, so `.terra-chrome` on the
+  // header would hand its border width to every control inside it.
+  it("registers --surface-border-width as non-inheriting", () => {
+    const b = block("@property --surface-border-width");
+    expect(b).toContain('syntax: "<length>"');
+    expect(b).toContain("inherits: false");
+    expect(b).toContain("initial-value: 1px");
+  });
+
+  // Inset from the window frame, so chrome never butts against a thick border.
+  // Must default to 0 or every non-opting theme gains a stray gutter.
+  it("insets the frame only when a theme asks for it", () => {
+    expect(block(".terra-frame")).toContain("padding: var(--frame-padding, 0px)");
+  });
+
   it("defaults every bevel input to a no-op", () => {
     for (const decl of [
       "--bevel-width: 0px",

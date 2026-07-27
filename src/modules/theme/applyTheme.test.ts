@@ -99,6 +99,8 @@ describe("resolveThemeVars", () => {
           dark: {
             shape: {
               frameWidth: "8px",
+              frameRadius: "0px",
+              framePadding: "4px",
               chromeWidth: "6px",
               panelWidth: "4px",
               slotWidth: "4px",
@@ -119,6 +121,8 @@ describe("resolveThemeVars", () => {
     expect(vars).toEqual(
       expect.arrayContaining([
         ["--frame-border-width", "8px"],
+        ["--frame-radius", "0px"],
+        ["--frame-padding", "4px"],
         ["--chrome-border-width", "6px"],
         ["--panel-border-width", "4px"],
         ["--slot-border-width", "4px"],

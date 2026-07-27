@@ -61,6 +61,8 @@ export type TextTransform = (typeof TEXT_TRANSFORMS)[number];
 
 export type ThemeShape = Partial<{
   frameWidth: string;
+  frameRadius: string;
+  framePadding: string;
   chromeWidth: string;
   panelWidth: string;
   slotWidth: string;

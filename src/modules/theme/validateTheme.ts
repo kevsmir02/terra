@@ -35,7 +35,8 @@ const COLOR_KEYS: readonly (keyof ThemeColors)[] = [
 ];
 
 const SHAPE_LENGTH_KEYS: readonly (keyof ThemeShape)[] = [
-  "frameWidth", "chromeWidth", "panelWidth", "slotWidth", "controlWidth",
+  "frameWidth", "frameRadius", "framePadding",
+  "chromeWidth", "panelWidth", "slotWidth", "controlWidth",
   "bevelWidth", "liftDepth", "spacing",
 ];
 

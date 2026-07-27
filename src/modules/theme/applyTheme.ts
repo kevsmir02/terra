@@ -33,6 +33,8 @@ const COLOR_VAR: Record<keyof ThemeColors, string> = {
 
 const SHAPE_VAR: Record<keyof ThemeShape, string> = {
   frameWidth: "--frame-border-width",
+  frameRadius: "--frame-radius",
+  framePadding: "--frame-padding",
   chromeWidth: "--chrome-border-width",
   panelWidth: "--panel-border-width",
   slotWidth: "--slot-border-width",
