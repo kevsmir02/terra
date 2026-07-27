@@ -6,9 +6,6 @@ Terra loads `TERRA.md` from the workspace root as agent memory (similar to AGENT
 
 **Terra**: open-source terminal IDE. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client.
 
-- Bundle id: `app.crynta.terra`
-- Package manager: **pnpm**
-- Platforms: macOS, Linux, Windows
 - Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`
 - Rust checks: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (local fallback: `cargo test --locked`)
 
@@ -22,10 +19,7 @@ Production-grade or it does not ship. Every change is judged against all of thes
 - **UI/UX**: polished, professional, premium. Every state and detail considered.
 - **Architecture**: new or changed logic lives in pure, dependency-light functions (functional core); tauri commands and React components stay thin (imperative shell). Keeps it testable without a later rewrite.
 
-Verify before claiming done:
-
-- Frontend: `pnpm lint`, `pnpm check-types`, `pnpm test`
-- Rust: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (or `cargo test --locked`)
+Run the checks listed under **Project** before claiming done.
 
 A change to a core subsystem (terminal/shell spawn, workspace auth, git, fs, IPC) needs a test that locks the invariant.
 
@@ -103,7 +97,6 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 
 - **shadcn/ui** is configured (`components.json`, style `radix-luma`, base `mist`, icon lib **hugeicons**). Primitives in `src/components/ui/` - don't hand-edit; re-run `pnpm dlx shadcn add` to upgrade.
 
-- **Tailwind v4** - no `tailwind.config.*`, config is in `src/App.css` via `@theme`. Use `cn()` from `@/lib/utils`.
 - Animation: `motion` (Framer Motion successor). Resizable layout: `react-resizable-panels`.
 - Path imports: always `@/…`, never relative across modules.
 - Cross-platform paths: anywhere a path may originate from OSC 7, the explorer, or the OS, normalize separators with `.split(/[\\/]/)` rather than `.split("/")`.
@@ -144,11 +137,4 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 
 ## Further reading
 
-Long-form contributor guides live under `docs/`. These guides elaborate on `TERRA.md`; if anything conflicts, `TERRA.md` wins.
-
-- `docs/README.md` - index of contributor guides
-- `docs/architecture/two-process-model.md` - IPC boundary and command reference
-- `docs/architecture/pty-shell-integration.md` - PTY, shell init scripts, OSC, ConPTY, Job Object
-- `docs/architecture/security-model.md` - consolidated security model and boundaries
-- `docs/architecture/terminal-renderer-pool.md` - renderer pool and DormantRing invariants
-- `docs/contributing/testing.md` - testing contract and core-subsystem invariants
+Long-form contributor guides live under `docs/` (index: `docs/README.md`). These guides elaborate on `TERRA.md`; if anything conflicts, `TERRA.md` wins.
