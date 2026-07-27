@@ -23,9 +23,6 @@ jobs:
           - platform: ubuntu-22.04
             args: ""
             rust-target: ""
-          - platform: windows-latest
-            args: ""
-            rust-target: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -71,7 +68,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Terra ${{ github.ref_name }}"
-          releaseBody: "Release build for Linux (.rpm, .deb, .AppImage), Windows (.exe), and macOS (.dmg)."
+          releaseBody: "Release build for Linux (.rpm, .deb, .AppImage) and macOS (.dmg). Windows is not released as a prebuilt bundle — build from source."
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

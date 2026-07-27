@@ -5,7 +5,7 @@
   <p><strong>Lightweight terminal IDE with native PTY, editor, explorer, and source control. No AI.</strong></p>
 
   <p>
-    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="platform" />
+    <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey" alt="platform" />
     <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license" />
     <img src="https://img.shields.io/badge/fork%20of-terax--ai-orange" alt="fork of terax-ai" />
   </p>
@@ -118,11 +118,13 @@ Net effect: ~22k lines deleted across 167 files, 11 npm dependencies and 5 Cargo
 
 ## Install
 
-This is a personal fork, so the primary path is building from source. Tag-triggered CI in this repo produces Linux (`.deb` / `.rpm` / AppImage), Windows (NSIS), and macOS (`.dmg`) bundles if you want to cut your own build.
+This is a personal fork, so the primary path is building from source. Tag-triggered CI in this repo produces Linux (`.deb` / `.rpm` / AppImage) and macOS (`.dmg`) bundles if you want to cut your own build.
 
 For prebuilt, signed, regularly released installers — plus the AUR package and Nix flake — use [upstream Terax](https://github.com/crynta/terax-ai/releases/latest) instead.
 
-### Windows notes
+### Windows
+
+Windows is not a released platform for this fork — no prebuilt bundle is published and no build here is ever run on Windows. The Windows code paths are still in the tree and still compiled and unit-tested in CI, so building from source should work: clone the repo and run `pnpm tauri build`. Treat it as untested.
 
 - Builds from this fork are not code-signed, so Windows shows "Windows protected your PC" on first launch. Click **More info** then **Run anyway**. (Upstream Terax has Windows builds signed via SignPath.)
 - Default shell detection: `pwsh.exe` (PowerShell 7+) -> `powershell.exe` (Windows PowerShell 5.1) -> `cmd.exe`.
