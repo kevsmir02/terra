@@ -16,6 +16,7 @@ import { solarized } from "./solarized";
 import { terraDefault } from "./terra-default";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
+import { wireframe } from "./wireframe";
 
 const BUILTIN: Theme[] = [
   terraDefault,
@@ -35,6 +36,7 @@ const BUILTIN: Theme[] = [
   caffeine,
   organic,
   poster,
+  wireframe,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));

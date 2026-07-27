@@ -31,7 +31,7 @@ describe("built-in themes", () => {
   });
 });
 
-describe.each(["organic", "poster"])("%s", (id) => {
+describe.each(["organic", "poster", "wireframe"])("%s", (id) => {
   const theme = getBuiltinTheme(id);
 
   it("defines both variants so the applied mode never falls back", () => {
