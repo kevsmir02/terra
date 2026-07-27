@@ -46,7 +46,7 @@ const SHAPE_VAR: Record<keyof ThemeShape, string> = {
   spacing: "--ui-spacing",
 };
 
-const TYPE_VAR: Record<keyof ThemeTypography, string> = {
+const TYPE_VAR: Record<Exclude<keyof ThemeTypography, "fonts">, string> = {
   sans: "--ui-font-sans",
   mono: "--ui-font-mono",
   display: "--ui-font-display",
@@ -136,6 +136,7 @@ function collectShape(out: ThemeVar[], s: ThemeShape): void {
 
 function collectType(out: ThemeVar[], t: ThemeTypography): void {
   for (const k of Object.keys(t) as (keyof ThemeTypography)[]) {
+    if (k === "fonts") continue;
     const v = t[k];
     if (v) out.push([TYPE_VAR[k], v]);
   }

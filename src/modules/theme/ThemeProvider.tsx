@@ -19,6 +19,7 @@ import {
   listCustomThemes,
   onCustomThemesChange,
 } from "./customThemes";
+import { loadFonts } from "./fonts";
 import { SurfaceLayer } from "./SurfaceLayer";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
@@ -139,7 +140,13 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       clearTheme();
       return;
     }
-    applyTheme(resolveTheme(effectiveId, customThemes), resolvedMode);
+    const resolved = resolveTheme(effectiveId, customThemes);
+    const fonts =
+      resolved.variants[resolvedMode]?.type?.fonts ??
+      resolved.variants.dark?.type?.fonts ??
+      resolved.variants.light?.type?.fonts;
+    if (fonts?.length) void loadFonts(fonts);
+    applyTheme(resolved, resolvedMode);
   }, [effectiveId, resolvedMode, customThemes]);
 
   const setMode = useCallback((next: ThemePref) => {

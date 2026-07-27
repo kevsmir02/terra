@@ -1,3 +1,5 @@
+import type { FontId } from "./fonts";
+
 export type ThemeMode = "light" | "dark";
 
 export const BORDER_STYLES = [
@@ -78,6 +80,7 @@ export type ThemeTypography = Partial<{
   display: string;
   chromeTracking: string;
   chromeTransform: TextTransform;
+  fonts?: readonly FontId[];
 }>;
 
 export type ThemeVariant = {

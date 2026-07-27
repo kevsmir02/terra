@@ -1,3 +1,4 @@
+import { isFontId } from "./fonts";
 import {
   BORDER_STYLES,
   TEXT_TRANSFORMS,
@@ -145,6 +146,13 @@ function parseTypography(raw: unknown, path: string): ThemeTypography | string {
   if (!isObj(raw)) return `${path} must be an object`;
   const out: ThemeTypography = {};
   for (const k of Object.keys(raw)) {
+    if (k === "fonts") {
+      if (!Array.isArray(raw.fonts) || !raw.fonts.every(isFontId)) {
+        return `${path}.fonts must be an array of bundled font ids`;
+      }
+      out.fonts = raw.fonts;
+      continue;
+    }
     const v = raw[k];
     if (!isStr(v) || v.length === 0) {
       return `${path}.${k} must be a non-empty string`;
