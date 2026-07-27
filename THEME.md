@@ -97,12 +97,12 @@ exactly 16 strings in the standard order.
 
 Rules that `terminalLegibility.test.ts` enforces across every built-in:
 
-- **No slot may equal the background.** Retro Pixel once shipped
+- **No slot may equal the background.** Stardew once shipped
   `brightWhite === background`, which is invisible text, not a colour choice.
 - **Blue must differ from cyan**, in both the normal and bright rows.
 - **`foreground` vs `background` must clear 4.5:1.**
 
-Rules the test only enforces numerically for Retro Pixel, but that you should
+Rules the test only enforces numerically for Stardew, but that you should
 hold anyway:
 
 - Normal slots 1-7 clear **4.5:1** against your background.
@@ -161,7 +161,7 @@ Always end a family string with a real fallback:
 
 **Think twice before setting `mono`.** Every `font-mono` site in Terra is an
 8.5px to 12px commit hash, file path, version string, or `kbd` chip. A display
-or pixel face is illegible at those sizes. Retro Pixel deliberately leaves `mono`
+or pixel face is illegible at those sizes. Stardew deliberately leaves `mono`
 unset and keeps JetBrains Mono.
 
 ## Fonts
@@ -258,7 +258,7 @@ highlight ring, set `bevelMid` and `bevelInner` to `"transparent"`.
 Value contrast between panels is the obvious way to separate surfaces, and often
 the wrong one. A warm or heavily themed palette usually reads better when
 surfaces stay close in tone and a **border does the separating** - that is how
-Retro Pixel works, and why its border colour is strong while its surfaces are
+Stardew works, and why its border colour is strong while its surfaces are
 nearly uniform.
 
 Corollaries:

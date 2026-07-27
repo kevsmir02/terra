@@ -31,7 +31,7 @@ describe("built-in themes", () => {
   });
 });
 
-describe.each(["organic", "poster", "wireframe", "arcade", "retro-pixel"])(
+describe.each(["organic", "poster", "wireframe", "arcade", "stardew"])(
   "%s",
   (id) => {
   const theme = getBuiltinTheme(id);

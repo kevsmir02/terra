@@ -72,11 +72,11 @@ describe.each(cases)("%s (%s) terminal palette", (_id, _mode, p) => {
   });
 });
 
-// Retro Pixel is authored to a contrast budget rather than transcribed from an
+// Stardew is authored to a contrast budget rather than transcribed from an
 // upstream palette, so it is the one theme that can hold the numeric floor.
-describe("retro-pixel terminal contrast budget", () => {
+describe("stardew terminal contrast budget", () => {
   const theme = listBuiltinThemes().find(
-    (t: Theme) => t.id === "retro-pixel",
+    (t: Theme) => t.id === "stardew",
   ) as Theme;
 
   describe.each(["light", "dark"] as ThemeMode[])("%s", (mode) => {

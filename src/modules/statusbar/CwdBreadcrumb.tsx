@@ -141,7 +141,11 @@ function BreadcrumbSegment({
     <>
       <BreadcrumbItem>
         <BreadcrumbLink asChild>
-          <button type="button" onClick={onClick} className="cursor-pointer">
+          <button
+            type="button"
+            onClick={onClick}
+            className="inline-flex items-center cursor-pointer"
+          >
             <Badge
               variant="outline"
               className="gap-1 text-muted-foreground hover:text-foreground"
