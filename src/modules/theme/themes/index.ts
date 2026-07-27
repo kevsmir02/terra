@@ -5,30 +5,47 @@ import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
 import { nord } from "./nord";
-import { stardew } from "./stardew";
+import { nothing } from "./nothing";
 import { sage } from "./sage";
+import { stardew } from "./stardew";
 import { terraDefault } from "./terra-default";
 import { tide } from "./tide";
 import { tokyoNight } from "./tokyo-night";
 
-const BUILTIN: Theme[] = [
+export {
   terraDefault,
+  stardew,
   kanagawa,
   kanagawaDragon,
-  tokyoNight,
   everforest,
-  nord,
   gruvbox,
-  tide,
-  sage,
+  tokyoNight,
+  nord,
   caffeine,
+  sage,
+  tide,
+  nothing,
+};
+
+export const BUILTIN: readonly Theme[] = [
+  terraDefault,
+  nothing,
   stardew,
+  kanagawa,
+  kanagawaDragon,
+  everforest,
+  gruvbox,
+  tokyoNight,
+  nord,
+  caffeine,
+  sage,
+  tide,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));
 
 export function listBuiltinThemes(): Theme[] {
-  return BUILTIN;
+  return BUILTIN as Theme[];
 }
 
 export function getBuiltinTheme(id: string): Theme | undefined {
