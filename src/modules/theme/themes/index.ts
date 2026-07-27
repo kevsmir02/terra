@@ -8,6 +8,7 @@ import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
 import { nord } from "./nord";
+import { organic } from "./organic";
 import { rosePine } from "./rose-pine";
 import { sage } from "./sage";
 import { solarized } from "./solarized";
@@ -31,6 +32,7 @@ const BUILTIN: Theme[] = [
   tide,
   sage,
   caffeine,
+  organic,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));
