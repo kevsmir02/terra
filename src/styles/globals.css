@@ -183,6 +183,13 @@
   --editor-font-size: 13px;
 }
 
+/* Catppuccin file and folder icons use pastel SVGs. In light mode, boost contrast
+ * and darken slightly so icons stay sharp, distinct, and high-contrast against
+ * light parchment and light theme backgrounds. */
+html:not(.dark) img[src^="data:image/svg+xml"] {
+  filter: contrast(1.45) brightness(0.65);
+}
+
 html[data-chrome="borderless"] .terra-bg-surface {
   border-radius: var(--frame-radius, 12px);
 }
