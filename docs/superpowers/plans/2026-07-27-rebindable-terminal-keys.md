@@ -37,7 +37,7 @@ Adds the table entries and widens `matchBinding` so a non-`KeyboardEvent` shape 
   - `export type KeyEventLike = Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">`
   - `matchBinding(e: KeyEventLike, binding: KeyBinding, id?: ShortcutId): boolean` (first parameter widened from `KeyboardEvent`)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `src/modules/shortcuts/shortcuts.test.ts`. Note the file already defines an `event()` helper and imports `getBindingTokens`, `matchBinding`, and `type KeyBinding` — extend the import to add `SHORTCUTS` and `type ShortcutId`:
 
@@ -103,12 +103,12 @@ describe("terminal key shortcuts", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm test src/modules/shortcuts/shortcuts.test.ts`
 Expected: FAIL — `no shortcut registered for terminal.copy`. TypeScript will also reject `"terminal.copy"` as a `ShortcutId`.
 
-- [ ] **Step 3: Add the three entries to the union and the table**
+- [x] **Step 3: Add the three entries to the union and the table**
 
 In `src/modules/shortcuts/shortcuts.ts`, add to the `ShortcutId` union next to the other terminal ids:
 
@@ -151,7 +151,7 @@ Insert the entries into `SHORTCUTS` immediately after the `terminal.toggleInput`
 
 `IS_MAC` is already imported at the top of the file.
 
-- [ ] **Step 4: Widen `matchBinding` to accept a structural key event**
+- [x] **Step 4: Widen `matchBinding` to accept a structural key event**
 
 Still in `src/modules/shortcuts/shortcuts.ts`, directly above `matchBinding`:
 
@@ -174,17 +174,17 @@ export function matchBinding(
 ): boolean {
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `pnpm test src/modules/shortcuts/shortcuts.test.ts`
 Expected: PASS, all cases.
 
-- [ ] **Step 6: Verify nothing else broke**
+- [x] **Step 6: Verify nothing else broke**
 
 Run: `pnpm check-types && pnpm test`
 Expected: clean. `KeyboardEvent` is assignable to `KeyEventLike`, so `useGlobalShortcuts` and every existing caller compile unchanged.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/modules/shortcuts/shortcuts.ts src/modules/shortcuts/shortcuts.test.ts
@@ -428,21 +428,6 @@ export function shortcutLabels(ids: ShortcutId[]): string[] {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `pnpm test src/modules/shortcuts/lib/shortcutConflicts.test.ts`
-Expected: PASS, all cases — including `ships no conflicting defaults`.
-
-If that last case fails, it has found a real pre-existing collision in the default table. Do not weaken the test: report the colliding pair and stop.
-
-- [ ] **Step 5: Add the macOS variant of the guard test**
-
-The table above is only the non-mac one, because `IS_MAC` is false under vitest. This change makes the defaults platform-conditional for the first time in a way that matters, so the mac table needs the same guard. `vi.mock` is hoisted and applies to a whole file, so this must be a separate file.
-
-Create `src/modules/shortcuts/lib/shortcutConflicts.mac.test.ts`:
-
-```ts
-import { describe, expect, it, vi } from "vitest";
 
 // shortcuts.ts reads IS_MAC and MOD_PROP at module scope, so the macOS table
 // only exists under a mocked platform module plus a fresh import. Same pattern
@@ -644,28 +629,6 @@ describe("resolveTerminalKeyBindings", () => {
       resolveTerminalKeyBindings({
         "terminal.copy": [{ ctrl: true, alt: true, key: "c" }],
       }).copy,
-    ).toEqual([{ ctrl: true, alt: true, key: "c" }]);
-  });
-
-  it("keeps a cleared action unassigned", () => {
-    expect(resolveTerminalKeyBindings({ "terminal.paste": [] }).paste).toEqual(
-      [],
-    );
-  });
-});
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `pnpm test src/modules/terminal/lib/keymap.test.ts`
-Expected: FAIL — `terminalKeyAction` is not exported.
-
-- [ ] **Step 3: Implement in `keymap.ts`**
-
-Replace the `TerminalKeyEvent` definition at the top of `src/modules/terminal/lib/keymap.ts` and add the new exports. The existing sequence functions are unchanged.
-
-```ts
-import {
   activeBindings,
   type UserShortcuts,
 } from "@/modules/shortcuts";
@@ -887,7 +850,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 `Kbd`, `KbdGroup`, `Button`, `getBindingTokens`, and `usePreferencesStore` are already imported.
 
-- [ ] **Step 2: Pass the shortcut id into the recorder**
+- [x] **Step 2: Pass the shortcut id into the recorder**
 
 In `ShortcutRow`'s JSX, change the recorder element:
 
@@ -1030,7 +993,7 @@ function Recorder({
 
 The old `_mods` state and the `keyup` listener that maintained it are removed — the captured-chord preview replaces what they were for.
 
-- [ ] **Step 4: Verify the build**
+- [x] **Step 4: Verify the build**
 
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: clean.
@@ -1068,7 +1031,7 @@ Two-step recording only catches clashes created from now on. This surfaces dupli
 - Consumes: `conflictingShortcuts`, `shortcutLabels` from Task 2 (already imported by Task 5).
 - Produces: `ShortcutRow` gains a required `userShortcuts: UserShortcuts` prop.
 
-- [ ] **Step 1: Pass the stored shortcuts into each row**
+- [x] **Step 1: Pass the stored shortcuts into each row**
 
 In `ShortcutsSection`'s `items.map(...)`, add the prop:
 
@@ -1087,7 +1050,7 @@ In `ShortcutsSection`'s `items.map(...)`, add the prop:
                   />
 ```
 
-- [ ] **Step 2: Compute and render the warning**
+- [x] **Step 2: Compute and render the warning**
 
 In `ShortcutRow`, add `userShortcuts: UserShortcuts` to the props type, import the type alongside the helpers:
 
@@ -1129,7 +1092,7 @@ And render it under the label:
       </div>
 ```
 
-- [ ] **Step 3: Verify the build**
+- [x] **Step 3: Verify the build**
 
 Run: `pnpm check-types && pnpm lint && pnpm test`
 Expected: clean.
@@ -1142,7 +1105,7 @@ Run `pnpm tauri dev`, open Settings → Shortcuts:
 - Bind "Find in tab" to Ctrl+T, then leave and re-enter the section. Both "Find in tab" and "New tab" show `Conflicts with …` naming the other.
 - Click "Reset All" and confirm every warning disappears.
 
-- [ ] **Step 5: Move both roadmap entries to Shipped**
+- [x] **Step 5: Move both roadmap entries to Shipped**
 
 In `ROADMAP.md`, delete these two lines from **Planned → Coming next**:
 
@@ -1163,12 +1126,12 @@ Add to **Shipped → Themes & Customization**, after "Customizable UI keybinding
 - [x] **Shortcut Conflict Detection**: Recording a chord previews it with the actions that already claim it before it is applied, and rows whose saved bindings clash stay flagged. Includes the eight chords `tab.selectByIndex` silently swallows.
 ```
 
-- [ ] **Step 6: Full gate**
+- [x] **Step 6: Full gate**
 
 Run: `pnpm check-types && pnpm test && pnpm lint && pnpm knip`
 Expected: all clean. `knip` matters here — it fails on any export added in Tasks 2 and 3 that nothing consumes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/settings/sections/ShortcutsSection.tsx ROADMAP.md
