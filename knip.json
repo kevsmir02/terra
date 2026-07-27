@@ -21,6 +21,7 @@
     "shadcn",
     "@fontsource-variable/inter",
     "@fontsource/jetbrains-mono",
+    "@fontsource/pixelify-sans",
     "@codemirror/autocomplete",
     "@uiw/codemirror-themes"
   ],
