@@ -50,7 +50,7 @@ const ANSI_VARS: readonly string[] = [
   "--terminal-ansi-bright-white",
 ];
 
-const ALL_VARS: readonly string[] = [
+export const ALL_VARS: readonly string[] = [
   ...Object.values(COLOR_VAR),
   "--terminal-background",
   "--terminal-foreground",
@@ -62,18 +62,27 @@ const ALL_VARS: readonly string[] = [
 
 let lastApplied: string | null = null;
 
+export type ThemeVar = readonly [name: string, value: string];
+
+export function resolveThemeVars(theme: Theme, mode: ThemeMode): ThemeVar[] | null {
+  const variant =
+    theme.variants[mode] ?? theme.variants.dark ?? theme.variants.light;
+  if (!variant) return null;
+  const out: ThemeVar[] = [];
+  if (variant.colors) collectColors(out, variant.colors);
+  if (variant.terminal) collectTerminal(out, variant.terminal);
+  return out;
+}
+
 export function applyTheme(theme: Theme, mode: ThemeMode): void {
-  const root = document.documentElement;
-  const variant = theme.variants[mode] ?? theme.variants.dark ?? theme.variants.light;
-  if (!variant) {
+  const vars = resolveThemeVars(theme, mode);
+  if (!vars) {
     clearTheme();
     return;
   }
-  const colors = variant.colors;
-  const terminal = variant.terminal;
+  const root = document.documentElement;
   for (const v of ALL_VARS) root.style.removeProperty(v);
-  if (colors) writeColors(root, colors);
-  if (terminal) writeTerminal(root, terminal);
+  for (const [name, value] of vars) root.style.setProperty(name, value);
   lastApplied = theme.id;
 }
 
@@ -84,22 +93,22 @@ export function clearTheme(): void {
   lastApplied = null;
 }
 
-function writeColors(root: HTMLElement, c: ThemeColors): void {
+function collectColors(out: ThemeVar[], c: ThemeColors): void {
   for (const k of Object.keys(c) as (keyof ThemeColors)[]) {
     const v = c[k];
-    if (v) root.style.setProperty(COLOR_VAR[k], v);
+    if (v) out.push([COLOR_VAR[k], v]);
   }
 }
 
-function writeTerminal(root: HTMLElement, t: TerminalPalette): void {
-  if (t.background) root.style.setProperty("--terminal-background", t.background);
-  if (t.foreground) root.style.setProperty("--terminal-foreground", t.foreground);
-  if (t.cursor) root.style.setProperty("--terminal-cursor", t.cursor);
-  if (t.cursorAccent) root.style.setProperty("--terminal-cursor-accent", t.cursorAccent);
-  if (t.selection) root.style.setProperty("--terminal-selection", t.selection);
+function collectTerminal(out: ThemeVar[], t: TerminalPalette): void {
+  if (t.background) out.push(["--terminal-background", t.background]);
+  if (t.foreground) out.push(["--terminal-foreground", t.foreground]);
+  if (t.cursor) out.push(["--terminal-cursor", t.cursor]);
+  if (t.cursorAccent) out.push(["--terminal-cursor-accent", t.cursorAccent]);
+  if (t.selection) out.push(["--terminal-selection", t.selection]);
   if (t.ansi) {
     for (let i = 0; i < ANSI_VARS.length && i < t.ansi.length; i++) {
-      root.style.setProperty(ANSI_VARS[i], t.ansi[i]);
+      out.push([ANSI_VARS[i], t.ansi[i]]);
     }
   }
 }
