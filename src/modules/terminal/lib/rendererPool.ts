@@ -9,6 +9,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type FontWeight, Terminal } from "@xterm/xterm";
 import { shouldCursorBlink } from "./cursorBlink";
+import { type CellSize, proposeDimensions } from "./fitDimensions";
 import {
   readTerminalClipboard,
   writeTerminalClipboard,
@@ -497,7 +498,7 @@ function bindSlot(slot: Slot, p: AcquireParams): void {
   }
 
   setupResizeObserver(slot, p);
-  slot.fitAddon.fit();
+  fitSlot(slot);
   slot.lastCols = slot.term.cols;
   slot.lastRows = slot.term.rows;
   slot.lastW = p.container.clientWidth;
@@ -567,7 +568,7 @@ function rewireSlot(slot: Slot, p: AcquireParams): void {
     p.container.appendChild(slot.host);
   }
   setupResizeObserver(slot, p);
-  slot.fitAddon.fit();
+  fitSlot(slot);
   slot.lastW = p.container.clientWidth;
   slot.lastH = p.container.clientHeight;
   if (slot.term.cols !== p.cols || slot.term.rows !== p.rows) {
@@ -607,7 +608,7 @@ function setupResizeObserver(slot: Slot, p: AcquireParams): void {
       if (w === slot.lastW && h === slot.lastH) return;
       slot.lastW = w;
       slot.lastH = h;
-      slot.fitAddon.fit();
+      fitSlot(slot);
       if (slot.ptyTimer) clearTimeout(slot.ptyTimer);
       slot.ptyTimer = setTimeout(flushPty, PTY_RESIZE_DEBOUNCE_MS);
     }, FIT_DEBOUNCE_MS);
@@ -885,6 +886,39 @@ export function applyWebglPreference(enabled: boolean): void {
   }
 }
 
+// xterm exposes measured cell size only on its internal render service. This
+// is the same field FitAddon reads; when it moves we fall back to FitAddon so
+// the terminal keeps fitting (with its 14px gutter) instead of breaking.
+function cellSize(term: Terminal): CellSize | null {
+  const core = (
+    term as unknown as {
+      _core?: { _renderService?: { dimensions?: { css?: { cell?: CellSize } } } };
+    }
+  )._core;
+  const cell = core?._renderService?.dimensions?.css?.cell;
+  return cell && cell.width > 0 && cell.height > 0 ? cell : null;
+}
+
+function fitSlot(slot: Slot): void {
+  const parent = slot.term.element?.parentElement;
+  const cell = cellSize(slot.term);
+  if (!parent || !cell) {
+    slot.fitAddon.fit();
+    return;
+  }
+  const style = window.getComputedStyle(parent);
+  const dims = proposeDimensions(
+    {
+      width: Number.parseFloat(style.getPropertyValue("width")),
+      height: Number.parseFloat(style.getPropertyValue("height")),
+    },
+    cell,
+  );
+  if (!dims) return;
+  if (slot.term.cols === dims.cols && slot.term.rows === dims.rows) return;
+  slot.term.resize(dims.cols, dims.rows);
+}
+
 // Parked and retained slots can't be measured (display:none); poison lastW
 // so the refit happens on unpark/rebind instead.
 function refitSlot(slot: Slot): void {
@@ -892,7 +926,7 @@ function refitSlot(slot: Slot): void {
     slot.lastW = -1;
     return;
   }
-  slot.fitAddon.fit();
+  fitSlot(slot);
   slot.lastCols = slot.term.cols;
   slot.lastRows = slot.term.rows;
   adapter
@@ -1007,7 +1041,7 @@ export function refreshLeafSlot(leafId: number): void {
   ) {
     slot.lastW = container.clientWidth;
     slot.lastH = container.clientHeight;
-    slot.fitAddon.fit();
+    fitSlot(slot);
     if (slot.term.cols !== slot.lastCols || slot.term.rows !== slot.lastRows) {
       slot.lastCols = slot.term.cols;
       slot.lastRows = slot.term.rows;
