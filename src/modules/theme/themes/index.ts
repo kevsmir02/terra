@@ -9,6 +9,7 @@ import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
 import { nord } from "./nord";
 import { organic } from "./organic";
+import { poster } from "./poster";
 import { rosePine } from "./rose-pine";
 import { sage } from "./sage";
 import { solarized } from "./solarized";
@@ -33,6 +34,7 @@ const BUILTIN: Theme[] = [
   sage,
   caffeine,
   organic,
+  poster,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));

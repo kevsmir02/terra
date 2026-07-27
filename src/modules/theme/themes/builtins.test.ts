@@ -31,17 +31,17 @@ describe("built-in themes", () => {
   });
 });
 
-describe("organic", () => {
-  const organic = getBuiltinTheme("organic");
+describe.each(["organic", "poster"])("%s", (id) => {
+  const theme = getBuiltinTheme(id);
 
   it("defines both variants so the applied mode never falls back", () => {
-    expect(organic?.variants.light?.colors).toBeDefined();
-    expect(organic?.variants.dark?.colors).toBeDefined();
+    expect(theme?.variants.light?.colors).toBeDefined();
+    expect(theme?.variants.dark?.colors).toBeDefined();
   });
 
   it("covers the same color keys in both variants", () => {
-    const light = Object.keys(organic?.variants.light?.colors ?? {}).sort();
-    const dark = Object.keys(organic?.variants.dark?.colors ?? {}).sort();
+    const light = Object.keys(theme?.variants.light?.colors ?? {}).sort();
+    const dark = Object.keys(theme?.variants.dark?.colors ?? {}).sort();
     expect(dark).toEqual(light);
   });
 });
