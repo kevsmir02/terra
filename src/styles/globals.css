@@ -184,7 +184,7 @@
 }
 
 html[data-chrome="borderless"] .terra-bg-surface {
-  border-radius: 12px;
+  border-radius: var(--radius, 12px);
 }
 .zoom-content {
   zoom: var(--app-zoom);
@@ -203,9 +203,9 @@ html[data-chrome="borderless"] body {
 html[data-chrome="borderless"] #root,
 html[data-chrome="borderless"] #settings-root {
   height: 100%;
-  border-radius: 12px;
+  border-radius: var(--radius, 12px);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: var(--frame-border-width, 1px) solid var(--border);
   background: var(--background);
 }
 
