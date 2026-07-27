@@ -1,4 +1,5 @@
 import { DEFAULT_THEME_ID, type Theme } from "../types";
+import { arcade } from "./arcade";
 import { caffeine } from "./caffeine";
 import { catppuccin } from "./catppuccin";
 import { claude } from "./claude";
@@ -37,6 +38,7 @@ const BUILTIN: Theme[] = [
   organic,
   poster,
   wireframe,
+  arcade,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));
