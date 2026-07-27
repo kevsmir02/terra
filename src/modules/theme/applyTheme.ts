@@ -1,4 +1,4 @@
-import type { Theme, ThemeColors, ThemeMode, TerminalPalette } from "./types";
+import type { Theme, ThemeColors, ThemeMode, TerminalPalette, ThemeShape, ThemeTypography } from "./types";
 
 const COLOR_VAR: Record<keyof ThemeColors, string> = {
   background: "--background",
@@ -31,6 +31,29 @@ const COLOR_VAR: Record<keyof ThemeColors, string> = {
   borderStyle: "--border-style",
 };
 
+const SHAPE_VAR: Record<keyof ThemeShape, string> = {
+  frameWidth: "--frame-border-width",
+  chromeWidth: "--chrome-border-width",
+  panelWidth: "--panel-border-width",
+  slotWidth: "--slot-border-width",
+  controlWidth: "--control-border-width",
+  bevelWidth: "--bevel-width",
+  bevelOuter: "--bevel-outer",
+  bevelMid: "--bevel-mid",
+  bevelInner: "--bevel-inner",
+  liftColor: "--lift-color",
+  liftDepth: "--lift-depth",
+  spacing: "--ui-spacing",
+};
+
+const TYPE_VAR: Record<keyof ThemeTypography, string> = {
+  sans: "--ui-font-sans",
+  mono: "--ui-font-mono",
+  display: "--ui-font-display",
+  chromeTracking: "--chrome-tracking",
+  chromeTransform: "--chrome-transform",
+};
+
 const ANSI_VARS: readonly string[] = [
   "--terminal-ansi-black",
   "--terminal-ansi-red",
@@ -52,6 +75,8 @@ const ANSI_VARS: readonly string[] = [
 
 export const ALL_VARS: readonly string[] = [
   ...Object.values(COLOR_VAR),
+  ...Object.values(SHAPE_VAR),
+  ...Object.values(TYPE_VAR),
   "--terminal-background",
   "--terminal-foreground",
   "--terminal-cursor",
@@ -71,6 +96,8 @@ export function resolveThemeVars(theme: Theme, mode: ThemeMode): ThemeVar[] | nu
   const out: ThemeVar[] = [];
   if (variant.colors) collectColors(out, variant.colors);
   if (variant.terminal) collectTerminal(out, variant.terminal);
+  if (variant.shape) collectShape(out, variant.shape);
+  if (variant.type) collectType(out, variant.type);
   return out;
 }
 
@@ -97,6 +124,20 @@ function collectColors(out: ThemeVar[], c: ThemeColors): void {
   for (const k of Object.keys(c) as (keyof ThemeColors)[]) {
     const v = c[k];
     if (v) out.push([COLOR_VAR[k], v]);
+  }
+}
+
+function collectShape(out: ThemeVar[], s: ThemeShape): void {
+  for (const k of Object.keys(s) as (keyof ThemeShape)[]) {
+    const v = s[k];
+    if (v) out.push([SHAPE_VAR[k], v]);
+  }
+}
+
+function collectType(out: ThemeVar[], t: ThemeTypography): void {
+  for (const k of Object.keys(t) as (keyof ThemeTypography)[]) {
+    const v = t[k];
+    if (v) out.push([TYPE_VAR[k], v]);
   }
 }
 

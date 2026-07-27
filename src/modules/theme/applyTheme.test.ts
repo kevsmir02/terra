@@ -91,4 +91,89 @@ describe("resolveThemeVars", () => {
     );
     for (const [name] of vars ?? []) expect(ALL_VARS).toContain(name);
   });
+
+  it("maps shape tokens to their CSS variable names", () => {
+    const vars = resolveThemeVars(
+      theme({
+        variants: {
+          dark: {
+            shape: {
+              frameWidth: "8px",
+              chromeWidth: "6px",
+              panelWidth: "4px",
+              slotWidth: "4px",
+              controlWidth: "3px",
+              bevelWidth: "4px",
+              bevelOuter: "#8a5a2e",
+              bevelMid: "#6b4226",
+              bevelInner: "#4a2d16",
+              liftColor: "#2a1a0d",
+              liftDepth: "6px",
+              spacing: "0.3rem",
+            },
+          },
+        },
+      }),
+      "dark",
+    );
+    expect(vars).toEqual(
+      expect.arrayContaining([
+        ["--frame-border-width", "8px"],
+        ["--chrome-border-width", "6px"],
+        ["--panel-border-width", "4px"],
+        ["--slot-border-width", "4px"],
+        ["--control-border-width", "3px"],
+        ["--bevel-width", "4px"],
+        ["--bevel-outer", "#8a5a2e"],
+        ["--bevel-mid", "#6b4226"],
+        ["--bevel-inner", "#4a2d16"],
+        ["--lift-color", "#2a1a0d"],
+        ["--lift-depth", "6px"],
+        ["--ui-spacing", "0.3rem"],
+      ]),
+    );
+  });
+
+  it("maps typography tokens to their CSS variable names", () => {
+    const vars = resolveThemeVars(
+      theme({
+        variants: {
+          dark: {
+            type: {
+              sans: "'VT323', monospace",
+              mono: "'VT323', monospace",
+              display: "'Press Start 2P', monospace",
+              chromeTracking: "1px",
+              chromeTransform: "uppercase",
+            },
+          },
+        },
+      }),
+      "dark",
+    );
+    expect(vars).toEqual(
+      expect.arrayContaining([
+        ["--ui-font-sans", "'VT323', monospace"],
+        ["--ui-font-mono", "'VT323', monospace"],
+        ["--ui-font-display", "'Press Start 2P', monospace"],
+        ["--chrome-tracking", "1px"],
+        ["--chrome-transform", "uppercase"],
+      ]),
+    );
+  });
+
+  it("keeps ALL_VARS a superset of every emitted shape and type name", () => {
+    const vars = resolveThemeVars(
+      theme({
+        variants: {
+          dark: {
+            shape: { frameWidth: "8px", bevelOuter: "#000", spacing: "1rem" },
+            type: { sans: "x", display: "y", chromeTransform: "uppercase" },
+          },
+        },
+      }),
+      "dark",
+    );
+    for (const [name] of vars ?? []) expect(ALL_VARS).toContain(name);
+  });
 });
