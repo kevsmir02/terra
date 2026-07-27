@@ -11,6 +11,7 @@ import { kanagawaDragon } from "./kanagawa-dragon";
 import { nord } from "./nord";
 import { organic } from "./organic";
 import { poster } from "./poster";
+import { retroPixel } from "./retro-pixel";
 import { rosePine } from "./rose-pine";
 import { sage } from "./sage";
 import { solarized } from "./solarized";
@@ -39,6 +40,7 @@ const BUILTIN: Theme[] = [
   poster,
   wireframe,
   arcade,
+  retroPixel,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));
