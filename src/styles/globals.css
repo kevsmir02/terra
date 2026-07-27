@@ -480,3 +480,55 @@ html *::-webkit-scrollbar {
     background-position: 0% center;
   }
 }
+
+:root {
+  --bevel-width: 0px;
+  --bevel-outer: transparent;
+  --bevel-mid: transparent;
+  --bevel-inner: transparent;
+  --lift-color: transparent;
+  --lift-depth: 0px;
+}
+
+/* Surface classes are variable scopes, not style overrides. Setting
+ * --surface-border-width on the element changes what that element's own
+ * border utility resolves to, so nothing competes on border-width and an
+ * explicit border-b-0 still wins. */
+@layer components {
+  .terra-frame {
+    --surface-border-width: var(--frame-border-width, 1px);
+    box-shadow:
+      inset 0 0 0 calc(var(--bevel-width) * 1) var(--bevel-outer),
+      inset 0 0 0 calc(var(--bevel-width) * 2) var(--bevel-mid),
+      inset 0 0 0 calc(var(--bevel-width) * 3) var(--bevel-inner),
+      0 var(--lift-depth) 0 var(--lift-color);
+  }
+
+  .terra-chrome {
+    --surface-border-width: var(--chrome-border-width, 1px);
+  }
+
+  .terra-panel {
+    --surface-border-width: var(--panel-border-width, 1px);
+    box-shadow:
+      inset 0 0 0 calc(var(--bevel-width) * 1) var(--bevel-outer),
+      inset 0 0 0 calc(var(--bevel-width) * 2) var(--bevel-mid),
+      inset 0 0 0 calc(var(--bevel-width) * 3) var(--bevel-inner);
+  }
+
+  .terra-slot {
+    --surface-border-width: var(--slot-border-width, 1px);
+    box-shadow: inset 0 0 0 var(--bevel-width) var(--bevel-outer);
+  }
+
+  .terra-control {
+    --surface-border-width: var(--control-border-width, 1px);
+  }
+
+  .terra-chrome-label {
+    font-family: var(--ui-font-display, inherit);
+    letter-spacing: var(--chrome-tracking, inherit);
+    text-transform: var(--chrome-transform, none);
+  }
+}
+
