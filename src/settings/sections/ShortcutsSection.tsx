@@ -27,7 +27,11 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { conflictingShortcuts, shortcutLabels } from "@/modules/shortcuts";
+import {
+  conflictingShortcuts,
+  shortcutLabels,
+  type UserShortcuts,
+} from "@/modules/shortcuts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
@@ -130,6 +134,7 @@ export function ShortcutsSection() {
                     onClear={() => onClear(s.id)}
                     onReset={() => onResetShortcut(s.id)}
                     userBindings={userShortcuts[s.id]}
+                    userShortcuts={userShortcuts}
                   />
                 ))}
               </div>
@@ -171,6 +176,7 @@ function ShortcutRow({
   onClear,
   onReset,
   userBindings,
+  userShortcuts,
 }: {
   shortcut: Shortcut;
   isRecording: boolean;
@@ -180,16 +186,35 @@ function ShortcutRow({
   onClear: () => void;
   onReset: () => void;
   userBindings?: KeyBinding[];
+  userShortcuts: UserShortcuts;
 }) {
   const bindings =
     userBindings !== undefined ? userBindings : shortcut.defaultBindings;
   const isModified = userBindings !== undefined;
   const hasBindings = bindings && bindings.length > 0;
 
+  // Two-step recording only catches clashes made from now on; a duplicate
+  // saved before this shipped would otherwise stay invisible.
+  const conflicts = useMemo(
+    () => [
+      ...new Set(
+        (bindings ?? []).flatMap((b) =>
+          conflictingShortcuts(b, shortcut.id, userShortcuts),
+        ),
+      ),
+    ],
+    [bindings, shortcut.id, userShortcuts],
+  );
+
   return (
     <div className="group flex items-center justify-between px-3 py-2.5 transition-colors hover:bg-muted/30">
       <div className="flex flex-col gap-0.5">
         <span className="text-[12.5px] font-medium">{shortcut.label}</span>
+        {conflicts.length > 0 && (
+          <span className="text-[11px] text-destructive">
+            Conflicts with {shortcutLabels(conflicts).join(", ")}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
