@@ -1,8 +1,12 @@
 import {
   BORDER_STYLES,
+  TEXT_TRANSFORMS,
   type BorderStyle,
+  type TextTransform,
   type Theme,
   type ThemeColors,
+  type ThemeShape,
+  type ThemeTypography,
   type ThemeVariant,
   type TerminalPalette,
 } from "./types";
@@ -28,6 +32,21 @@ const COLOR_KEYS: readonly (keyof ThemeColors)[] = [
   "radius",
   "borderStyle",
 ];
+
+const SHAPE_LENGTH_KEYS: readonly (keyof ThemeShape)[] = [
+  "frameWidth", "chromeWidth", "panelWidth", "slotWidth", "controlWidth",
+  "bevelWidth", "liftDepth", "spacing",
+];
+
+const SHAPE_COLOR_KEYS: readonly (keyof ThemeShape)[] = [
+  "bevelOuter", "bevelMid", "bevelInner", "liftColor",
+];
+
+// Lengths compose into a shared box-shadow, so they are matched rather than
+// passed through: a comma or a function call would rewrite the declaration.
+const LENGTH_RE = /^(0|-?\d+(\.\d+)?(px|rem|em))$/;
+
+const TYPE_STRING_KEYS = ["sans", "mono", "display", "chromeTracking"] as const;
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 
@@ -99,14 +118,65 @@ function parseTerminal(raw: unknown, path: string): TerminalPalette | string {
   return out;
 }
 
+function parseShape(raw: unknown, path: string): ThemeShape | string {
+  if (raw === undefined) return {};
+  if (!isObj(raw)) return `${path} must be an object`;
+  const out: ThemeShape = {};
+  for (const k of Object.keys(raw)) {
+    const isLength = (SHAPE_LENGTH_KEYS as string[]).includes(k);
+    const isColor = (SHAPE_COLOR_KEYS as string[]).includes(k);
+    if (!isLength && !isColor) {
+      return `${path}.${k} is not a recognized shape key`;
+    }
+    const v = raw[k];
+    if (!isStr(v) || v.length === 0) {
+      return `${path}.${k} must be a non-empty string`;
+    }
+    if (isLength && !LENGTH_RE.test(v)) {
+      return `${path}.${k} must be a CSS length such as 4px or 0`;
+    }
+    out[k as keyof ThemeShape] = v;
+  }
+  return out;
+}
+
+function parseTypography(raw: unknown, path: string): ThemeTypography | string {
+  if (raw === undefined) return {};
+  if (!isObj(raw)) return `${path} must be an object`;
+  const out: ThemeTypography = {};
+  for (const k of Object.keys(raw)) {
+    const v = raw[k];
+    if (!isStr(v) || v.length === 0) {
+      return `${path}.${k} must be a non-empty string`;
+    }
+    if (k === "chromeTransform") {
+      if (!(TEXT_TRANSFORMS as readonly string[]).includes(v)) {
+        return `${path}.chromeTransform must be one of: ${TEXT_TRANSFORMS.join(", ")}`;
+      }
+      out.chromeTransform = v as TextTransform;
+      continue;
+    }
+    if (!(TYPE_STRING_KEYS as readonly string[]).includes(k)) {
+      return `${path}.${k} is not a recognized typography key`;
+    }
+    out[k as (typeof TYPE_STRING_KEYS)[number]] = v;
+  }
+  return out;
+}
+
 function parseVariant(raw: unknown, path: string): ThemeVariant | string {
   if (!isObj(raw)) return `${path} must be an object`;
   const colors = parseColors(raw.colors, `${path}.colors`);
   if (typeof colors === "string") return colors;
   const terminal = parseTerminal(raw.terminal, `${path}.terminal`);
   if (typeof terminal === "string") return terminal;
-  return { colors, terminal };
+  const shape = parseShape(raw.shape, `${path}.shape`);
+  if (typeof shape === "string") return shape;
+  const type = parseTypography(raw.type, `${path}.type`);
+  if (typeof type === "string") return type;
+  return { colors, terminal, shape, type };
 }
+
 
 export function validateTheme(raw: unknown): ValidationResult {
   if (!isObj(raw)) return { ok: false, error: "Theme must be a JSON object" };

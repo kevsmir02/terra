@@ -53,10 +53,40 @@ export type TerminalPalette = Partial<{
   ];
 }>;
 
+export const TEXT_TRANSFORMS = ["none", "uppercase", "lowercase"] as const;
+
+export type TextTransform = (typeof TEXT_TRANSFORMS)[number];
+
+export type ThemeShape = Partial<{
+  frameWidth: string;
+  chromeWidth: string;
+  panelWidth: string;
+  slotWidth: string;
+  controlWidth: string;
+  bevelWidth: string;
+  bevelOuter: string;
+  bevelMid: string;
+  bevelInner: string;
+  liftColor: string;
+  liftDepth: string;
+  spacing: string;
+}>;
+
+export type ThemeTypography = Partial<{
+  sans: string;
+  mono: string;
+  display: string;
+  chromeTracking: string;
+  chromeTransform: TextTransform;
+}>;
+
 export type ThemeVariant = {
   colors?: ThemeColors;
   terminal?: TerminalPalette;
+  shape?: ThemeShape;
+  type?: ThemeTypography;
 };
+
 
 export type Theme = {
   id: string;

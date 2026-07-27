@@ -109,4 +109,91 @@ describe("validateTheme", () => {
       expect(result.theme.editorTheme).toEqual({ dark: "tokyo" });
     }
   });
+
+  it("accepts shape lengths and colors", () => {
+    const result = validateTheme(
+      baseTheme({
+        variants: {
+          dark: {
+            shape: {
+              frameWidth: "8px",
+              chromeWidth: "6px",
+              panelWidth: "4px",
+              slotWidth: "4px",
+              controlWidth: "3px",
+              bevelWidth: "4px",
+              bevelOuter: "#8a5a2e",
+              bevelMid: "#6b4226",
+              bevelInner: "#4a2d16",
+              liftColor: "#2a1a0d",
+              liftDepth: "6px",
+              spacing: "0.25rem",
+            },
+          },
+        },
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.theme.variants.dark?.shape?.frameWidth).toBe("8px");
+      expect(result.theme.variants.dark?.shape?.bevelOuter).toBe("#8a5a2e");
+    }
+  });
+
+  it("rejects shape lengths that are not plain CSS lengths", () => {
+    for (const bad of [
+      "4px, 0 0 99px red",
+      "calc(1px + 2px)",
+      "url(x)",
+      "4",
+      "",
+    ]) {
+      const result = validateTheme(
+        baseTheme({ variants: { dark: { shape: { bevelWidth: bad } } } }),
+      );
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it("accepts zero as a length", () => {
+    const result = validateTheme(
+      baseTheme({ variants: { dark: { shape: { bevelWidth: "0" } } } }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects unrecognized shape keys", () => {
+    const result = validateTheme(
+      baseTheme({ variants: { dark: { shape: { nope: "1px" } } } }),
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: "variants.dark.shape.nope is not a recognized shape key",
+    });
+  });
+
+  it("accepts typography keys and allowlists chromeTransform", () => {
+    const ok = validateTheme(
+      baseTheme({
+        variants: {
+          dark: {
+            type: {
+              sans: "'Press Start 2P', monospace",
+              display: "'Press Start 2P', monospace",
+              chromeTracking: "1px",
+              chromeTransform: "uppercase",
+            },
+          },
+        },
+      }),
+    );
+    expect(ok.ok).toBe(true);
+    const bad = validateTheme(
+      baseTheme({
+        variants: { dark: { type: { chromeTransform: "capitalize; x:y" } } },
+      }),
+    );
+    expect(bad.ok).toBe(false);
+  });
 });
+
