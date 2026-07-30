@@ -1,34 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Theme, ThemeMode, ThemeVariant } from "../types";
 import { listBuiltinThemes } from "./index";
-
-function channel(v: number): number {
-  const c = v / 255;
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
-function luminance(hex: string): number {
-  const h = hex.replace("#", "");
-  const n = Number.parseInt(
-    h.length === 3
-      ? h
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : h,
-    16,
-  );
-  return (
-    0.2126 * channel((n >> 16) & 0xff) +
-    0.7152 * channel((n >> 8) & 0xff) +
-    0.0722 * channel(n & 0xff)
-  );
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
+import { contrast } from "../oklab";
 
 type Palette = { bg: string; fg: string; ansi: readonly string[] };
 
