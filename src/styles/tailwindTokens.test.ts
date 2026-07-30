@@ -77,3 +77,43 @@ describe("no element combines a bare border with an explicit width", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+const STATUS_ROLE_NAMES = [
+  "added", "modified", "deleted", "renamed", "warning", "conflict", "ok",
+] as const;
+
+describe("status tokens", () => {
+  it("wires every role through @theme inline", () => {
+    for (const role of STATUS_ROLE_NAMES) {
+      expect(GLOBALS).toContain(
+        `--color-status-${role}: var(--status-${role});`,
+      );
+    }
+  });
+
+  it("declares a light and a dark default for every role", () => {
+    const root = GLOBALS.slice(
+      GLOBALS.indexOf(":root {"),
+      GLOBALS.indexOf(".dark {"),
+    );
+    const dark = GLOBALS.slice(GLOBALS.indexOf(".dark {"));
+    for (const role of STATUS_ROLE_NAMES) {
+      expect(root).toContain(`--status-${role}:`);
+      expect(dark).toContain(`--status-${role}:`);
+    }
+  });
+
+  it("compiles text and bg utilities for every role", async () => {
+    const inline = GLOBALS.slice(
+      GLOBALS.indexOf("@theme inline"),
+      GLOBALS.indexOf("@utility border"),
+    );
+    const css = await build(
+      `@import "tailwindcss";\n${inline}`,
+      STATUS_ROLE_NAMES.flatMap((r) => [`text-status-${r}`, `bg-status-${r}`]),
+    );
+    for (const role of STATUS_ROLE_NAMES) {
+      expect(css).toContain(`var(--status-${role})`);
+    }
+  });
+});
