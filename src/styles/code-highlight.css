@@ -3,43 +3,43 @@
  * Light/dark split through the existing `.dark` variant. */
 
 :root {
-  --tok-keyword: oklch(0.45 0.15 270);
-  --tok-name: oklch(0.32 0.05 250);
-  --tok-type: oklch(0.55 0.13 200);
-  --tok-property: oklch(0.42 0.13 25);
-  --tok-operator: oklch(0.55 0.04 250);
-  --tok-comment: oklch(0.55 0.02 250);
-  --tok-string: oklch(0.48 0.13 150);
-  --tok-number: oklch(0.52 0.14 50);
-  --tok-bool: oklch(0.52 0.15 30);
-  --tok-regexp: oklch(0.5 0.15 0);
-  --tok-meta: oklch(0.5 0.1 290);
-  --tok-tag: oklch(0.45 0.16 25);
-  --tok-attr: oklch(0.5 0.14 70);
-  --tok-punctuation: oklch(0.5 0.02 250);
-  --tok-heading: oklch(0.42 0.13 25);
-  --tok-link: oklch(0.5 0.15 240);
-  --tok-invalid: oklch(0.55 0.22 25);
+  --tok-keyword: var(--syntax-keyword, oklch(0.45 0.15 270));
+  --tok-name: var(--syntax-variable, oklch(0.32 0.05 250));
+  --tok-type: var(--syntax-type, oklch(0.55 0.13 200));
+  --tok-property: var(--syntax-property, oklch(0.42 0.13 25));
+  --tok-operator: var(--syntax-operator, oklch(0.55 0.04 250));
+  --tok-comment: var(--syntax-comment, oklch(0.55 0.02 250));
+  --tok-string: var(--syntax-string, oklch(0.48 0.13 150));
+  --tok-number: var(--syntax-number, oklch(0.52 0.14 50));
+  --tok-bool: var(--syntax-constant, oklch(0.52 0.15 30));
+  --tok-regexp: var(--syntax-string, oklch(0.5 0.15 0));
+  --tok-meta: var(--syntax-comment, oklch(0.5 0.1 290));
+  --tok-tag: var(--syntax-tag, oklch(0.45 0.16 25));
+  --tok-attr: var(--syntax-attr, oklch(0.5 0.14 70));
+  --tok-punctuation: var(--syntax-operator, oklch(0.5 0.02 250));
+  --tok-heading: var(--syntax-heading, oklch(0.42 0.13 25));
+  --tok-link: var(--syntax-link, oklch(0.5 0.15 240));
+  --tok-invalid: var(--syntax-invalid, oklch(0.55 0.22 25));
 }
 
 :is(.dark *) {
-  --tok-keyword: oklch(0.78 0.13 305);
-  --tok-name: oklch(0.92 0.01 250);
-  --tok-type: oklch(0.83 0.11 200);
-  --tok-property: oklch(0.82 0.1 25);
-  --tok-operator: oklch(0.72 0.03 250);
-  --tok-comment: oklch(0.6 0.02 250);
-  --tok-string: oklch(0.82 0.12 145);
-  --tok-number: oklch(0.82 0.13 60);
-  --tok-bool: oklch(0.82 0.14 30);
-  --tok-regexp: oklch(0.8 0.14 10);
-  --tok-meta: oklch(0.78 0.1 290);
-  --tok-tag: oklch(0.78 0.14 25);
-  --tok-attr: oklch(0.83 0.12 70);
-  --tok-punctuation: oklch(0.72 0.02 250);
-  --tok-heading: oklch(0.82 0.1 25);
-  --tok-link: oklch(0.78 0.13 240);
-  --tok-invalid: oklch(0.7 0.22 25);
+  --tok-keyword: var(--syntax-keyword, oklch(0.78 0.13 305));
+  --tok-name: var(--syntax-variable, oklch(0.92 0.01 250));
+  --tok-type: var(--syntax-type, oklch(0.83 0.11 200));
+  --tok-property: var(--syntax-property, oklch(0.82 0.1 25));
+  --tok-operator: var(--syntax-operator, oklch(0.72 0.03 250));
+  --tok-comment: var(--syntax-comment, oklch(0.6 0.02 250));
+  --tok-string: var(--syntax-string, oklch(0.82 0.12 145));
+  --tok-number: var(--syntax-number, oklch(0.82 0.13 60));
+  --tok-bool: var(--syntax-constant, oklch(0.82 0.14 30));
+  --tok-regexp: var(--syntax-string, oklch(0.8 0.14 10));
+  --tok-meta: var(--syntax-comment, oklch(0.78 0.1 290));
+  --tok-tag: var(--syntax-tag, oklch(0.78 0.14 25));
+  --tok-attr: var(--syntax-attr, oklch(0.83 0.12 70));
+  --tok-punctuation: var(--syntax-operator, oklch(0.72 0.02 250));
+  --tok-heading: var(--syntax-heading, oklch(0.82 0.1 25));
+  --tok-link: var(--syntax-link, oklch(0.78 0.13 240));
+  --tok-invalid: var(--syntax-invalid, oklch(0.7 0.22 25));
 }
 
 .tok-keyword,
