@@ -50,12 +50,18 @@ describe("ensureContrast", () => {
   });
 
   // The whole reason for moving lightness rather than blending toward the
-  // foreground: blending desaturates into mud, this keeps the hue.
-  it("preserves OKLab a and b so hue and chroma survive", () => {
+  // foreground: blending desaturates into mud, this keeps the hue. Asserted as
+  // hue angle and chroma retention rather than raw a/b, because a darker target
+  // is often outside sRGB and the clamp acts as a gamut projection, which shifts
+  // a and b while leaving hue intact.
+  it("preserves hue and most of the chroma", () => {
+    const hue = ([, a, b]: [number, number, number]) =>
+      (Math.atan2(b, a) * 180) / Math.PI;
+    const chroma = ([, a, b]: [number, number, number]) => Math.hypot(a, b);
     const before = toOklab("#8da101");
     const after = toOklab(ensureContrast("#8da101", "#fdf6e3", 4.5));
-    expect(after[1]).toBeCloseTo(before[1], 2);
-    expect(after[2]).toBeCloseTo(before[2], 2);
+    expect(Math.abs(hue(after) - hue(before))).toBeLessThan(2);
+    expect(chroma(after) / chroma(before)).toBeGreaterThan(0.75);
   });
 
   it("keeps everforest string vivid rather than grey", () => {
