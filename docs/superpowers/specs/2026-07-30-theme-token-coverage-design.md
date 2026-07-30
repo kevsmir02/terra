@@ -169,6 +169,8 @@ Derivation outranks `editorTheme` deliberately. All 12 built-ins declare an `edi
 
 An explicit editor-theme preference other than `auto` always wins over all of this. Derivation only ever changes what `auto` resolves to.
 
+One clarification the chain diagram overstates: `syntax` is not an independent tier above derivation, it is an override *within* it. `syntaxFromAnsi` gates on `terminal.ansi` before consulting the override, so a theme supplying a full explicit `syntax` block but no ANSI palette derives nothing and falls through to the pairing. That is coherent rather than a bug, because `applyTheme` gates emission of the `--syntax-*` variables through the same call, so the variables the derived extension would read are never written either. The practical rule for authors: `syntax` refines an ANSI-derived palette, it does not replace the need for one.
+
 ### Resulting behaviour per built-in
 
 | Theme | Derived syntax and status |

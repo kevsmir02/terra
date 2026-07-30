@@ -462,6 +462,29 @@ const ansi = [
 const terminal: TerminalPalette = { background: "#000000", foreground: "#eeeeee", ansi };
 const colors = { background: "#000000", foreground: "#eeeeee", card: "#111111" };
 
+const hue = (hex: string) => {
+  const [, a, b] = toOklab(hex);
+  return (Math.atan2(b, a) * 180) / Math.PI;
+};
+
+// Pins a normalized value back to the slot it came from. An absolute hue
+// tolerance is the wrong tool here: gamut clipping drifts slot 4 by 2 to 3
+// degrees, so a 2 degree bound sits exactly on the boundary, while the nearest
+// other slot is 18 degrees away. Relative distance has a 16 degree margin.
+const nearestSlotByHue = (got: string | undefined): number => {
+  const h = hue(got ?? "");
+  let best = -1;
+  let bestDist = Number.POSITIVE_INFINITY;
+  ansi.forEach((c, i) => {
+    const d = Math.abs(h - hue(c));
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  });
+  return best;
+};
+
 describe("syntaxFromAnsi", () => {
   it("returns null without an ansi palette", () => {
     expect(syntaxFromAnsi({ background: "#000" }, colors, undefined)).toBeNull();
@@ -476,18 +499,22 @@ describe("syntaxFromAnsi", () => {
     }
   });
 
+  // Every slot-mapped role is pinned. A role left unasserted here could be
+  // silently remapped to any other legible slot without a test failing, which is
+  // the whole risk the mapping table carries for Tasks 4, 7, 8 and 9. The three
+  // slot-4 roles (func, heading, renamed) are pinned by hue below instead,
+  // because slot 4 fails its floor on this background and gets raised.
   it("maps roles to their documented ansi slots", () => {
     const p = syntaxFromAnsi(terminal, colors, undefined);
     expect(p?.keyword).toBe("#ff00ff");
     expect(p?.string).toBe("#00ff00");
     expect(p?.number).toBe("#ffff00");
-    // func (slot 4, pure blue) is only 2.44:1 on this background, so
-    // normalization raises it and it cannot be asserted unmodified here. The
-    // "raises a low-contrast slot" test below pins it to slot 4 by hue instead.
     expect(p?.property).toBe("#00ffff");
     expect(p?.type).toBe("#80ffff");
     expect(p?.constant).toBe("#ff80ff");
     expect(p?.attr).toBe("#ffff80");
+    expect(p?.attrValue).toBe("#00ff00");
+    expect(p?.link).toBe("#00ffff");
     expect(p?.tag).toBe("#ff0000");
     expect(p?.invalid).toBe("#ff8080");
   });
@@ -521,19 +548,19 @@ describe("syntaxFromAnsi", () => {
     expect(p?.keyword).toBe("#ff00ff");
   });
 
-  it("raises a low-contrast slot to its floor while keeping its hue", () => {
-    // Slot 4 pure blue on black is 2.44:1 and must be lifted. The hue assertion
-    // is what pins func to slot 4: without it, remapping func to any slot that
-    // is already legible would still satisfy the contrast check.
-    const hue = (hex: string) => {
-      const [, a, b] = toOklab(hex);
-      return (Math.atan2(b, a) * 180) / Math.PI;
-    };
-    const p = syntaxFromAnsi(terminal, colors, undefined);
-    expect(contrast(p?.func ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
-    expect(p?.func).not.toBe("#0000ff");
-    expect(Math.abs(hue(p?.func ?? "") - hue("#0000ff"))).toBeLessThan(2);
-  });
+  // Slot 4 pure blue is 2.44:1 on this background and must be lifted, so it
+  // cannot be asserted by value. The hue check is what pins these roles to slot
+  // 4: remapping either to any already-legible slot would still pass a bare
+  // contrast assertion.
+  it.each(["func", "heading"] as const)(
+    "raises %s from slot 4 to its floor while keeping its hue",
+    (role) => {
+      const p = syntaxFromAnsi(terminal, colors, undefined);
+      expect(contrast(p?.[role] ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
+      expect(p?.[role]).not.toBe("#0000ff");
+      expect(nearestSlotByHue(p?.[role])).toBe(4);
+    },
+  );
 
   it("holds dim roles to 3:1 rather than 4.5:1", () => {
     const dim: TerminalPalette = {
@@ -574,8 +601,36 @@ describe("statusFromAnsi", () => {
     expect(s?.added).toBe("#00ff00");
     expect(s?.modified).toBe("#ffff00");
     expect(s?.deleted).toBe("#ff0000");
+    expect(s?.warning).toBe("#ffff00");
     expect(s?.conflict).toBe("#00ffff");
     expect(s?.ok).toBe("#00ff00");
+  });
+
+  // renamed is the one status role on slot 4, which fails its floor against both
+  // surfaces here, so it is pinned by hue for the same reason func and heading are.
+  it("raises renamed from slot 4 while keeping its hue", () => {
+    const s = statusFromAnsi(terminal, colors, undefined);
+    expect(s?.renamed).not.toBe("#0000ff");
+    expect(nearestSlotByHue(s?.renamed)).toBe(4);
+    expect(contrast(s?.renamed ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Opposite-polarity surfaces cannot both be cleared by one lightness, so the
+  // canvas keeps its guarantee rather than being silently undone by the card pass.
+  //
+  // The card value matters. Against a black canvas the colour needs luminance
+  // >= 0.175, and a near-white card still permits <= 0.183, so pure white leaves
+  // an overlap band and the test cannot bite. #eeeeee permits only <= 0.151,
+  // which is a genuine empty intersection.
+  it("keeps the canvas floor when background and card have opposite polarity", () => {
+    const s = statusFromAnsi(
+      terminal,
+      { background: "#000000", foreground: "#f5f5f5", card: "#eeeeee" },
+      undefined,
+    );
+    for (const role of STATUS_ROLES) {
+      expect(contrast(s?.[role] ?? "", "#000000")).toBeGreaterThanOrEqual(4.48);
+    }
   });
 
   it("clears the floor against both background and card", () => {
@@ -604,7 +659,7 @@ Expected: FAIL, cannot resolve `./derive`.
 Create `src/modules/theme/derive.ts`:
 
 ```ts
-import { ensureContrast, isHexColor } from "./oklab";
+import { contrast, ensureContrast, isHexColor } from "./oklab";
 import {
   STATUS_ROLES,
   SYNTAX_ROLES,
@@ -686,14 +741,16 @@ export function statusFromAnsi(
   for (const role of STATUS_ROLES) {
     const base = pick(override, role) ?? ansi[STATUS_SLOT[role]];
     if (base === undefined) return null;
-    let value = base;
-    // Status text lands on the app canvas and on card surfaces both. Two
-    // sequential passes converge because a variant's surfaces share polarity.
-    if (isHexColor(value) && isHexColor(bg)) {
-      value = ensureContrast(value, bg, 4.5);
-    }
+    // Status text lands on the app canvas and on card surfaces both. When the
+    // two surfaces sit on opposite sides of the luminance midpoint no single
+    // lightness clears both, so the canvas wins as the larger surface.
+    let value =
+      isHexColor(base) && isHexColor(bg)
+        ? ensureContrast(base, bg, 4.5)
+        : base;
     if (isHexColor(value) && isHexColor(card)) {
-      value = ensureContrast(value, card, 4.5);
+      const withCard = ensureContrast(value, card, 4.5);
+      if (!isHexColor(bg) || contrast(withCard, bg) >= 4.5) value = withCard;
     }
     out[role] = value;
   }
@@ -704,7 +761,7 @@ export function statusFromAnsi(
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `pnpm vitest run src/modules/theme/derive.test.ts`
-Expected: PASS, 17 tests.
+Expected: PASS, 20 tests.
 
 - [ ] **Step 6: Run typecheck**
 
@@ -937,8 +994,10 @@ Append to `src/modules/theme/validateTheme.test.ts`:
 
 ```ts
 describe("syntax and status overrides", () => {
+  // The id must clear ID_RE, which requires 2 to 64 characters. A single-letter
+  // id fails validation first and would mask what these cases actually assert.
   function withVariant(variant: unknown) {
-    return { id: "t", name: "T", variants: { dark: variant } };
+    return { id: "ok-id", name: "T", variants: { dark: variant } };
   }
 
   it("accepts a partial syntax override", () => {
@@ -973,7 +1032,7 @@ describe("syntax and status overrides", () => {
 
 describe("shape colour validation", () => {
   function withShape(shape: unknown) {
-    return { id: "t", name: "T", variants: { dark: { shape } } };
+    return { id: "ok-id", name: "T", variants: { dark: { shape } } };
   }
 
   it.each(["#abc", "#aabbcc", "transparent", "rgb(1,2,3)", "rgba(1,2,3,0.5)", "oklch(0.5 0.1 200)"])(
@@ -1130,11 +1189,12 @@ describe("status tokens", () => {
   });
 
   it("declares a light and a dark default for every role", () => {
-    const root = GLOBALS.slice(
-      GLOBALS.indexOf(":root {"),
-      GLOBALS.indexOf(".dark {"),
-    );
-    const dark = GLOBALS.slice(GLOBALS.indexOf(".dark {"));
+    const darkStart = GLOBALS.indexOf(".dark {");
+    const root = GLOBALS.slice(GLOBALS.indexOf(":root {"), darkStart);
+    // Both slices must be bounded. Left open, the dark slice runs to EOF, and
+    // four more :root blocks follow it, so a default misplaced outside .dark
+    // would still be found and this test would pass while dark mode broke.
+    const dark = GLOBALS.slice(darkStart, GLOBALS.indexOf("}", darkStart) + 1);
     for (const role of STATUS_ROLE_NAMES) {
       expect(root).toContain(`--status-${role}:`);
       expect(dark).toContain(`--status-${role}:`);
@@ -1439,6 +1499,16 @@ const darkOnly: Theme = {
   },
 };
 
+// No ansi palette and only a dark pairing, so the cross-mode fallback inside the
+// editorTheme chain is the only thing that can resolve light mode. Without a
+// theme shaped like this, deleting that fallback passes every other test.
+const asymmetricPairing: Theme = {
+  id: "asymmetric-pairing",
+  name: "Asymmetric Pairing",
+  editorTheme: { dark: "dracula" },
+  variants: { dark: {}, light: {} },
+};
+
 describe("resolveEditorTheme", () => {
   it("returns an explicit pref as a preset, ignoring the app theme", () => {
     expect(resolveEditorTheme("nord", "with-ansi", [withAnsi], "dark")).toEqual({
@@ -1465,6 +1535,14 @@ describe("resolveEditorTheme", () => {
       kind: "derived",
       mode: "dark",
     });
+  });
+
+  // Pins the cross-mode fallback inside the pairing chain. A mutant reducing it
+  // to `theme.editorTheme?.[mode]` passes every other test in this file.
+  it("falls back across modes within the editorTheme pairing", () => {
+    expect(
+      resolveEditorTheme("auto", "asymmetric-pairing", [asymmetricPairing], "light"),
+    ).toEqual({ kind: "preset", id: "dracula" });
   });
 
   it("falls through to the editorTheme pairing without an ansi palette", () => {
@@ -1676,19 +1754,27 @@ type Case = {
 };
 
 const cases: Case[] = [];
+const seen = new Set<string>();
 for (const theme of listBuiltinThemes()) {
   for (const mode of ["light", "dark"] as ThemeMode[]) {
     const resolved = resolveVariant(theme, mode);
     if (!resolved) continue;
+    // Key on the mode that actually supplied the variant, not the requested one.
+    // A dark-only theme resolves to its dark variant in both modes, so using the
+    // requested mode would label one case "(light)" while testing dark data, and
+    // would count the same palette twice.
+    const key = `${theme.id}:${resolved.mode}`;
+    if (seen.has(key)) continue;
     const { variant } = resolved;
     const bg = variant.colors?.background;
     if (!isHexColor(bg) || !variant.terminal?.ansi) continue;
     const syntax = syntaxFromAnsi(variant.terminal, variant.colors, variant.syntax);
     const status = statusFromAnsi(variant.terminal, variant.colors, variant.status);
     if (!syntax || !status) continue;
+    seen.add(key);
     cases.push({
       id: theme.id,
-      mode,
+      mode: resolved.mode,
       bg,
       card: variant.colors?.card,
       syntax,
@@ -1698,6 +1784,9 @@ for (const theme of listBuiltinThemes()) {
   }
 }
 
+// 20 distinct combinations today: nine two-variant themes with an ansi palette,
+// plus one case each for the two dark-only themes. Adding a theme raises this,
+// so a failure here means coverage was lost.
 it("covers every built-in that declares an ansi palette", () => {
   expect(cases.length).toBeGreaterThanOrEqual(20);
 });
@@ -1705,10 +1794,15 @@ it("covers every built-in that declares an ansi palette", () => {
 describe.each(cases.map((c) => [c.id, c.mode, c] as const))(
   "%s (%s) derived palette",
   (_id, _mode, c) => {
+    // Assert hex rather than skipping on it. Vitest reports a body that returns
+    // without asserting as passed, so an early return here would let malformed
+    // output from the OKLab maths silently delete the floor check, which is the
+    // exact regression this file exists to catch. The card check stays
+    // conditional because `card` is legitimately optional on a variant.
     it.each(SYNTAX_ROLES.map((r) => [r, c.syntax[r]] as const))(
       "%s clears its floor against the app background",
       (role, color) => {
-        if (!isHexColor(color)) return;
+        expect(isHexColor(color)).toBe(true);
         const floor = DIM.has(role) ? 3 : 4.5;
         expect(contrast(color, c.bg)).toBeGreaterThanOrEqual(floor - 0.02);
       },
@@ -1717,7 +1811,7 @@ describe.each(cases.map((c) => [c.id, c.mode, c] as const))(
     it.each(STATUS_ROLES.map((r) => [r, c.status[r]] as const))(
       "status %s clears 4.5:1 on canvas and card",
       (_role, color) => {
-        if (!isHexColor(color)) return;
+        expect(isHexColor(color)).toBe(true);
         expect(contrast(color, c.bg)).toBeGreaterThanOrEqual(4.48);
         if (isHexColor(c.card)) {
           expect(contrast(color, c.card)).toBeGreaterThanOrEqual(4.48);
@@ -1740,10 +1834,17 @@ describe.each(cases.map((c) => [c.id, c.mode, c] as const))(
 // upstream palette. If normalization ever has to touch them, either a floor or
 // the mapping has drifted.
 describe.each(["stardew", "kanagawa-dragon"])("%s needs no adjustment", (id) => {
-  it.each(["light", "dark"] as ThemeMode[])("in %s mode", (mode) => {
-    const c = cases.find((x) => x.id === id && x.mode === mode);
-    expect(c).toBeDefined();
-    if (!c) return;
+  const themeCases = cases.filter((c) => c.id === id);
+
+  // Guards the block against silently covering nothing if a theme is renamed or
+  // stops declaring an ansi palette.
+  it("contributes at least one derived case", () => {
+    expect(themeCases.length).toBeGreaterThan(0);
+  });
+
+  // Driven by the cases that exist rather than by both modes, because a
+  // dark-only theme contributes one case, not two.
+  it.each(themeCases.map((c) => [c.mode, c] as const))("in %s mode", (_mode, c) => {
     for (const role of SYNTAX_ROLES) {
       if (role === "variable" || role === "operator") continue;
       expect(c.rawAnsi).toContain(c.syntax[role]);
