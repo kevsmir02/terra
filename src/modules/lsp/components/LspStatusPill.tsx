@@ -242,7 +242,7 @@ function ActivePill({
               className="animate-spin"
             />
           ) : (
-            <span className="size-1.5 rounded-full bg-emerald-500" />
+            <span className="size-1.5 rounded-full bg-status-ok" />
           )}
           <span>{preset.name} LSP</span>
         </button>

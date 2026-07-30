@@ -161,14 +161,14 @@ function compactDate(secs: number): string {
 function statusTone(code: string): string {
   switch (code.toUpperCase()) {
     case "A":
-      return "text-emerald-600 dark:text-emerald-400";
+      return "text-status-added";
     case "M":
-      return "text-amber-600 dark:text-amber-300";
+      return "text-status-modified";
     case "D":
-      return "text-rose-600 dark:text-rose-400";
+      return "text-status-deleted";
     case "R":
     case "C":
-      return "text-sky-600 dark:text-sky-300";
+      return "text-status-renamed";
     default:
       return "text-muted-foreground";
   }
@@ -787,12 +787,12 @@ const CommitRow = memo(function CommitRow({
         {totalStat > 0 ? (
           <span className="inline-flex items-center gap-1">
             {commit.insertions > 0 ? (
-              <span className="font-semibold text-emerald-600/85 dark:text-emerald-400/85">
+              <span className="font-semibold text-status-added/85">
                 +{commit.insertions}
               </span>
             ) : null}
             {commit.deletions > 0 ? (
-              <span className="font-semibold text-rose-600/85 dark:text-rose-400/85">
+              <span className="font-semibold text-status-deleted/85">
                 −{commit.deletions}
               </span>
             ) : null}
@@ -1010,12 +1010,12 @@ const FileRow = memo(function FileRow({
         ) : (
           <>
             {file.added > 0 ? (
-              <span className="text-emerald-600 dark:text-emerald-400">
+              <span className="text-status-added">
                 +{file.added}
               </span>
             ) : null}
             {file.removed > 0 ? (
-              <span className="text-rose-600 dark:text-rose-400">
+              <span className="text-status-deleted">
                 −{file.removed}
               </span>
             ) : null}

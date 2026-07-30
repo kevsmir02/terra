@@ -21,7 +21,7 @@ export function DiagnosticsBadge({ filePath }: Props) {
         </span>
       ) : null}
       {counts.warnings > 0 ? (
-        <span className="flex items-center gap-0.5 text-amber-700 dark:text-amber-400">
+        <span className="flex items-center gap-0.5 text-status-warning">
           <HugeiconsIcon icon={Alert02Icon} size={11} strokeWidth={2} />
           {counts.warnings}
         </span>

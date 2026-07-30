@@ -83,7 +83,7 @@ function ServerRow({
         <span className="flex items-center gap-1.5">
           {server.name}
           {detected ? (
-            <span className="size-1.5 rounded-full bg-emerald-500" />
+            <span className="size-1.5 rounded-full bg-status-ok" />
           ) : null}
         </span>
       }
