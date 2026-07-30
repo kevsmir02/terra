@@ -1,4 +1,4 @@
-import { ensureContrast, isHexColor } from "./oklab";
+import { contrast, ensureContrast, isHexColor } from "./oklab";
 import {
   STATUS_ROLES,
   SYNTAX_ROLES,
@@ -80,14 +80,16 @@ export function statusFromAnsi(
   for (const role of STATUS_ROLES) {
     const base = pick(override, role) ?? ansi[STATUS_SLOT[role]];
     if (base === undefined) return null;
-    let value = base;
-    // Status text lands on the app canvas and on card surfaces both. Two
-    // sequential passes converge because a variant's surfaces share polarity.
-    if (isHexColor(value) && isHexColor(bg)) {
-      value = ensureContrast(value, bg, 4.5);
-    }
+    // Status text lands on the app canvas and on card surfaces both. When the
+    // two surfaces sit on opposite sides of the luminance midpoint no single
+    // lightness clears both, so the canvas wins as the larger surface.
+    let value =
+      isHexColor(base) && isHexColor(bg)
+        ? ensureContrast(base, bg, 4.5)
+        : base;
     if (isHexColor(value) && isHexColor(card)) {
-      value = ensureContrast(value, card, 4.5);
+      const withCard = ensureContrast(value, card, 4.5);
+      if (!isHexColor(bg) || contrast(withCard, bg) >= 4.5) value = withCard;
     }
     out[role] = value;
   }

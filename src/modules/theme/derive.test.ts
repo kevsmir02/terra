@@ -14,6 +14,28 @@ const ansi = [
 const terminal: TerminalPalette = { background: "#000000", foreground: "#eeeeee", ansi };
 const colors = { background: "#000000", foreground: "#eeeeee", card: "#111111" };
 
+const hue = (hex: string) => {
+  const [, a, b] = toOklab(hex);
+  return (Math.atan2(b, a) * 180) / Math.PI;
+};
+// Pins a normalized value back to the slot it came from. An absolute hue
+// tolerance is the wrong tool here: gamut clipping drifts slot 4 by 2 to 3
+// degrees, so a 2 degree bound sits exactly on the boundary, while the nearest
+// other slot is 18 degrees away. Relative distance has a 16 degree margin.
+const nearestSlotByHue = (got: string | undefined): number => {
+  const h = hue(got ?? "");
+  let best = -1;
+  let bestDist = Number.POSITIVE_INFINITY;
+  ansi.forEach((c, i) => {
+    const d = Math.abs(h - hue(c));
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  });
+  return best;
+};
+
 describe("syntaxFromAnsi", () => {
   it("returns null without an ansi palette", () => {
     expect(syntaxFromAnsi({ background: "#000" }, colors, undefined)).toBeNull();
@@ -33,14 +55,17 @@ describe("syntaxFromAnsi", () => {
     expect(p?.keyword).toBe("#ff00ff");
     expect(p?.string).toBe("#00ff00");
     expect(p?.number).toBe("#ffff00");
-    // func (slot 4, pure blue) is exercised in "raises a low-contrast slot to
-    // its floor while keeping its hue" below instead: on this background it
-    // fails 4.5:1 and must be raised, so it cannot also be asserted unmodified
-    // here. That test pins func to slot 4 by hue.
+    // Every slot-mapped role is pinned. A role left unasserted here could be
+    // silently remapped to any other legible slot without a test failing, which is
+    // the whole risk the mapping table carries for Tasks 4, 7, 8 and 9. The three
+    // slot-4 roles (func, heading, renamed) are pinned by hue below instead,
+    // because slot 4 fails its floor on this background and gets raised.
     expect(p?.property).toBe("#00ffff");
     expect(p?.type).toBe("#80ffff");
     expect(p?.constant).toBe("#ff80ff");
     expect(p?.attr).toBe("#ffff80");
+    expect(p?.attrValue).toBe("#00ff00");
+    expect(p?.link).toBe("#00ffff");
     expect(p?.tag).toBe("#ff0000");
     expect(p?.invalid).toBe("#ff8080");
   });
@@ -74,19 +99,19 @@ describe("syntaxFromAnsi", () => {
     expect(p?.keyword).toBe("#ff00ff");
   });
 
-  it("raises a low-contrast slot to its floor while keeping its hue", () => {
-    // Slot 4 pure blue on black is 2.44:1 and must be lifted. The hue assertion
-    // is what pins func to slot 4: without it, remapping func to any slot that
-    // is already legible would still satisfy the contrast check.
-    const hue = (hex: string) => {
-      const [, a, b] = toOklab(hex);
-      return (Math.atan2(b, a) * 180) / Math.PI;
-    };
-    const p = syntaxFromAnsi(terminal, colors, undefined);
-    expect(contrast(p?.func ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
-    expect(p?.func).not.toBe("#0000ff");
-    expect(Math.abs(hue(p?.func ?? "") - hue("#0000ff"))).toBeLessThan(2);
-  });
+  // Slot 4 pure blue is 2.44:1 on this background and must be lifted, so it
+  // cannot be asserted by value. The hue check is what pins these roles to slot
+  // 4: remapping either to any already-legible slot would still pass a bare
+  // contrast assertion.
+  it.each(["func", "heading"] as const)(
+    "raises %s from slot 4 to its floor while keeping its hue",
+    (role) => {
+      const p = syntaxFromAnsi(terminal, colors, undefined);
+      expect(contrast(p?.[role] ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
+      expect(p?.[role]).not.toBe("#0000ff");
+      expect(nearestSlotByHue(p?.[role])).toBe(4);
+    },
+  );
 
   it("holds dim roles to 3:1 rather than 4.5:1", () => {
     const dim: TerminalPalette = {
@@ -127,8 +152,36 @@ describe("statusFromAnsi", () => {
     expect(s?.added).toBe("#00ff00");
     expect(s?.modified).toBe("#ffff00");
     expect(s?.deleted).toBe("#ff0000");
+    expect(s?.warning).toBe("#ffff00");
     expect(s?.conflict).toBe("#00ffff");
     expect(s?.ok).toBe("#00ff00");
+  });
+
+  // renamed is the one status role on slot 4, which fails its floor against both
+  // surfaces here, so it is pinned by hue for the same reason func and heading are.
+  it("raises renamed from slot 4 while keeping its hue", () => {
+    const s = statusFromAnsi(terminal, colors, undefined);
+    expect(s?.renamed).not.toBe("#0000ff");
+    expect(nearestSlotByHue(s?.renamed)).toBe(4);
+    expect(contrast(s?.renamed ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Opposite-polarity surfaces cannot both be cleared by one lightness, so the
+  // canvas keeps its guarantee rather than being silently undone by the card pass.
+  //
+  // The card value matters. Against a black canvas the colour needs luminance
+  // >= 0.175, and a near-white card still permits <= 0.183, so pure white leaves
+  // an overlap band and the test cannot bite. #eeeeee permits only <= 0.151,
+  // which is a genuine empty intersection.
+  it("keeps the canvas floor when background and card have opposite polarity", () => {
+    const s = statusFromAnsi(
+      terminal,
+      { background: "#000000", foreground: "#f5f5f5", card: "#eeeeee" },
+      undefined,
+    );
+    for (const role of STATUS_ROLES) {
+      expect(contrast(s?.[role] ?? "", "#000000")).toBeGreaterThanOrEqual(4.48);
+    }
   });
 
   it("clears the floor against both background and card", () => {
