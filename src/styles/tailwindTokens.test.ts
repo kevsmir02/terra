@@ -92,11 +92,12 @@ describe("status tokens", () => {
   });
 
   it("declares a light and a dark default for every role", () => {
-    const root = GLOBALS.slice(
-      GLOBALS.indexOf(":root {"),
-      GLOBALS.indexOf(".dark {"),
-    );
-    const dark = GLOBALS.slice(GLOBALS.indexOf(".dark {"));
+    const darkStart = GLOBALS.indexOf(".dark {");
+    const root = GLOBALS.slice(GLOBALS.indexOf(":root {"), darkStart);
+    // Both slices must be bounded. Left open, the dark slice runs to EOF, and
+    // four more :root blocks follow it, so a default misplaced outside .dark
+    // would still be found and this test would pass while dark mode broke.
+    const dark = GLOBALS.slice(darkStart, GLOBALS.indexOf("}", darkStart) + 1);
     for (const role of STATUS_ROLE_NAMES) {
       expect(root).toContain(`--status-${role}:`);
       expect(dark).toContain(`--status-${role}:`);
