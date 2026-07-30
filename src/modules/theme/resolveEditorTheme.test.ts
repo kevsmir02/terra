@@ -1,59 +1,103 @@
 import { describe, expect, it } from "vitest";
-import { resolveEditorThemeId } from "./resolveEditorTheme";
+import { resolveEditorTheme } from "./resolveEditorTheme";
 import type { Theme } from "./types";
 
-const custom: Theme = {
-  id: "my-theme",
-  name: "Mine",
+const ansi = Array.from({ length: 16 }, (_, i) =>
+  `#${(i * 16).toString(16).padStart(2, "0").repeat(3)}`,
+) as unknown as never;
+
+const noAnsi: Theme = {
+  id: "no-ansi",
+  name: "No Ansi",
   editorTheme: { dark: "dracula", light: "github-light" },
   variants: { dark: {}, light: {} },
 };
 
-describe("resolveEditorThemeId", () => {
-  it("returns an explicit pref unchanged, ignoring app theme", () => {
-    expect(resolveEditorThemeId("nord", "kanagawa", [], "dark")).toBe("nord");
-    expect(resolveEditorThemeId("nord", "kanagawa", [], "light")).toBe("nord");
+const withAnsi: Theme = {
+  id: "with-ansi",
+  name: "With Ansi",
+  editorTheme: { dark: "dracula", light: "github-light" },
+  variants: {
+    dark: { colors: { background: "#000000", foreground: "#ffffff" }, terminal: { ansi } },
+    light: { colors: { background: "#ffffff", foreground: "#000000" }, terminal: { ansi } },
+  },
+};
+
+const darkOnly: Theme = {
+  id: "dark-only",
+  name: "Dark Only",
+  variants: {
+    dark: { colors: { background: "#000000", foreground: "#ffffff" }, terminal: { ansi } },
+  },
+};
+
+describe("resolveEditorTheme", () => {
+  it("returns an explicit pref as a preset, ignoring the app theme", () => {
+    expect(resolveEditorTheme("nord", "with-ansi", [withAnsi], "dark")).toEqual({
+      kind: "preset",
+      id: "nord",
+    });
   });
 
-  it("auto follows the builtin app theme pairing per mode", () => {
-    expect(resolveEditorThemeId("auto", "kanagawa", [], "dark")).toBe("kanagawa");
-    expect(resolveEditorThemeId("auto", "kanagawa", [], "light")).toBe(
-      "kanagawa-lotus",
-    );
+  it("derives when the theme has an ansi palette, outranking editorTheme", () => {
+    expect(resolveEditorTheme("auto", "with-ansi", [withAnsi], "dark")).toEqual({
+      kind: "derived",
+      mode: "dark",
+    });
+    expect(resolveEditorTheme("auto", "with-ansi", [withAnsi], "light")).toEqual({
+      kind: "derived",
+      mode: "light",
+    });
   });
 
-  it("auto falls back to the other mode when a pairing is missing", () => {
-    // Dragon only declares a dark pairing.
-    expect(resolveEditorThemeId("auto", "kanagawa-dragon", [], "light")).toBe(
-      "kanagawa-dragon",
-    );
+  // The variant that supplied the colours decides the frame, so a dark-only
+  // theme in light mode must not mount a light editor over dark syntax.
+  it("reports the winning variant mode for a single-variant theme", () => {
+    expect(resolveEditorTheme("auto", "dark-only", [darkOnly], "light")).toEqual({
+      kind: "derived",
+      mode: "dark",
+    });
   });
 
-  it("auto prefers a matching custom theme over builtins", () => {
-    expect(resolveEditorThemeId("auto", "my-theme", [custom], "dark")).toBe(
-      "dracula",
-    );
-    expect(resolveEditorThemeId("auto", "my-theme", [custom], "light")).toBe(
-      "github-light",
-    );
+  it("falls through to the editorTheme pairing without an ansi palette", () => {
+    expect(resolveEditorTheme("auto", "no-ansi", [noAnsi], "dark")).toEqual({
+      kind: "preset",
+      id: "dracula",
+    });
+    expect(resolveEditorTheme("auto", "no-ansi", [noAnsi], "light")).toEqual({
+      kind: "preset",
+      id: "github-light",
+    });
   });
 
-  it("auto with an unknown app theme uses the default theme pairing", () => {
-    expect(resolveEditorThemeId("auto", "does-not-exist", [], "dark")).toBe(
-      "atomone",
-    );
+  it("resolves terra-default to its atomone pairing", () => {
+    expect(resolveEditorTheme("auto", "terra-default", [], "dark")).toEqual({
+      kind: "preset",
+      id: "atomone",
+    });
   });
 
-  it("auto falls back to a neutral theme when the pairing is invalid", () => {
+  it("uses the default theme pairing for an unknown app theme", () => {
+    expect(resolveEditorTheme("auto", "does-not-exist", [], "dark")).toEqual({
+      kind: "preset",
+      id: "atomone",
+    });
+  });
+
+  it("falls back to a neutral preset when the pairing is invalid", () => {
     const bad: Theme = {
       id: "bad",
       name: "Bad",
       editorTheme: { dark: "not-a-real-theme" },
       variants: { dark: {} },
     };
-    expect(resolveEditorThemeId("auto", "bad", [bad], "dark")).toBe("atomone");
-    expect(resolveEditorThemeId("auto", "bad", [bad], "light")).toBe(
-      "github-light",
-    );
+    expect(resolveEditorTheme("auto", "bad", [bad], "dark")).toEqual({
+      kind: "preset",
+      id: "atomone",
+    });
+    expect(resolveEditorTheme("auto", "bad", [bad], "light")).toEqual({
+      kind: "preset",
+      id: "github-light",
+    });
   });
 });

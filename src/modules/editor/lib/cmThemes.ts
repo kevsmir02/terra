@@ -120,6 +120,41 @@ function build(p: Palette): Extension {
   });
 }
 
+function varPalette(mode: "light" | "dark"): Palette {
+  return {
+    mode,
+    // buildSharedExtensions() owns the editor surface, so these stay inert.
+    bg: "transparent",
+    caret: "transparent",
+    selection: "transparent",
+    lineHighlight: "transparent",
+    fg: "var(--foreground)",
+    gutterFg: "var(--syntax-gutter-fg)",
+    comment: "var(--syntax-comment)",
+    keyword: "var(--syntax-keyword)",
+    string: "var(--syntax-string)",
+    number: "var(--syntax-number)",
+    constant: "var(--syntax-constant)",
+    func: "var(--syntax-func)",
+    variable: "var(--syntax-variable)",
+    property: "var(--syntax-property)",
+    type: "var(--syntax-type)",
+    operator: "var(--syntax-operator)",
+    tag: "var(--syntax-tag)",
+    tagBracket: "var(--syntax-tag-bracket)",
+    attr: "var(--syntax-attr)",
+    attrValue: "var(--syntax-attr-value)",
+    heading: "var(--syntax-heading)",
+    link: "var(--syntax-link)",
+    invalid: "var(--syntax-invalid)",
+  };
+}
+
+// Built once. A theme switch only changes the variables these read, so the
+// extension identity is stable and no mounted editor reconfigures.
+export const derivedLight = build(varPalette("light"));
+export const derivedDark = build(varPalette("dark"));
+
 export const kanagawa = build({
   mode: "dark",
   bg: "#1f1f28",

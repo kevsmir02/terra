@@ -4,6 +4,8 @@ import {
   type EditorThemeId,
   type EditorThemePref,
 } from "@/modules/settings/store";
+import { syntaxFromAnsi } from "./derive";
+import { resolveVariant } from "./resolveVariant";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
 
@@ -12,25 +14,39 @@ const FALLBACK: Record<"light" | "dark", EditorThemeId> = {
   dark: "atomone",
 };
 
+export type EditorThemeResolution =
+  | { kind: "derived"; mode: "light" | "dark" }
+  | { kind: "preset"; id: EditorThemeId };
+
 /**
- * Resolve the concrete CodeMirror theme to apply. In "auto" the editor follows
- * the active app theme's editorTheme pairing for the current mode (live, so it
- * never goes stale); an explicit pref always wins.
+ * Resolves what the editor should render. In "auto" a theme that can derive a
+ * syntax palette from its own ansi colours does so, which is what makes the
+ * editor match the theme instead of a hand-picked third-party pairing.
  */
-export function resolveEditorThemeId(
+export function resolveEditorTheme(
   pref: EditorThemePref,
   themeId: string,
   customThemes: Theme[],
   mode: "light" | "dark",
-): EditorThemeId {
-  if (pref !== EDITOR_THEME_AUTO) return pref;
+): EditorThemeResolution {
+  if (pref !== EDITOR_THEME_AUTO) return { kind: "preset", id: pref };
   const theme =
     customThemes.find((t) => t.id === themeId) ??
     getBuiltinTheme(themeId) ??
     getDefaultTheme();
+  const resolved = resolveVariant(theme, mode);
+  if (resolved) {
+    const { variant } = resolved;
+    if (syntaxFromAnsi(variant.terminal, variant.colors, variant.syntax)) {
+      return { kind: "derived", mode: resolved.mode };
+    }
+  }
   const mapped =
     theme.editorTheme?.[mode] ??
     theme.editorTheme?.dark ??
     theme.editorTheme?.light;
-  return isEditorThemeId(mapped) ? mapped : FALLBACK[mode];
+  return {
+    kind: "preset",
+    id: isEditorThemeId(mapped) ? mapped : FALLBACK[mode],
+  };
 }
