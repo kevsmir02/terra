@@ -41,7 +41,7 @@ So the colours needed already exist inside every theme file. Nothing needs autho
 In scope:
 
 - Syntax palette derived from ANSI, with an optional explicit override
-- Six semantic status tokens, same derivation and override
+- Seven semantic status tokens, same derivation and override
 - `--tok-*` driven from the same source
 - `starterTheme()` emitting both variants
 - `SHAPE_COLOR_KEYS` validation
@@ -51,6 +51,8 @@ Deferred to their own spec and plan cycles, because both are large mechanical mi
 
 - The 323 opacity-modified themeable colour sites (`border-border/60` and similar) that dilute authored values
 - Finishing `.terra-slot` and `.terra-control` adoption, which `2026-07-27-themable-surfaces-design.md:152-153` specified but never landed
+
+Also left alone deliberately: `SourceControlPanel.tsx:102`, which hardcodes `bg-zinc-950 text-zinc-100` for a tooltip and repeats it under `dark:`. That duplication reads as a deliberate choice to keep the tooltip dark in both modes, the way VS Code does, so changing it is a design decision rather than a token fix. It stays hardcoded and is noted as a follow-up.
 
 Also deferred: making the 22-theme CodeMirror registry lazy per id. Approach A means most users never need any of the 9 external `@uiw/codemirror-theme-*` packages, so there is a real bundle win, but it is an independent change.
 
@@ -64,18 +66,42 @@ Also deferred: making the 22-theme CodeMirror registry lazy per id. Approach A m
 
 ## Architecture
 
-### Two pure functions
+### Three pure modules
 
 New modules under `src/modules/theme/`:
 
 ```ts
-syntaxFromAnsi(terminal, colors, mode) → SyntaxPalette | null
-statusFromAnsi(terminal, mode)         → StatusTokens  | null
+// oklab.ts
+ensureContrast(color, bg, minRatio) → string
+
+// derive.ts
+syntaxFromAnsi(terminal, colors, override) → SyntaxPalette | null
+statusFromAnsi(terminal, colors, override) → StatusTokens  | null
 ```
 
-Both return `null` when `terminal.ansi` is absent. That `null` is the signal that drives precedence fall-through, not an error. No side effects, no DOM access, fully unit-testable, which keeps the logic in the functional core and `applyTheme` a thin imperative shell.
+The derivation functions return `null` when `terminal.ansi` is absent. That `null` is the signal that drives precedence fall-through, not an error. No side effects, no DOM access, fully unit-testable, which keeps the logic in the functional core and `applyTheme` a thin imperative shell.
 
 `types.ts` gains `syntax?: Partial<SyntaxPalette>` and `status?: Partial<StatusTokens>` on `ThemeVariant`. Both are partial, so an override supplies only the keys it cares about and derivation fills the rest. The merge happens inside the pure function, not at the call site.
+
+### Lightness normalization is required, not optional
+
+Raw ANSI cannot be used directly. Measured across all 11 derivable built-ins, a 4.5:1 floor against `colors.background` fails for 9 of them, and a 3:1 floor still fails for 7. The codebase already knows why: `terminalLegibility.test.ts:75-77` records that Stardew "is authored to a contrast budget rather than transcribed from an upstream palette, so it is the one theme that can hold the numeric floor." Transcribed upstream palettes do not hold a numeric floor against an app surface.
+
+`ensureContrast` fixes this by moving **lightness only** in OKLab, preserving the `a` and `b` components so hue and chroma survive. It binary-searches L for 14 iterations toward whichever direction the background requires.
+
+An earlier approach, blending the colour toward the theme's `foreground`, also converged but destroyed the palette:
+
+| Role | blend toward fg | OKLab lightness only |
+|---|---|---|
+| everforest `string` | `#8da101` to `#677658` | `#8da101` to `#687900` |
+| everforest `property` | `#35a77c` to `#537874` | `#35a77c` to `#008159` |
+| nord `number` | `#ebcb8b` to `#746c5c` | `#ebcb8b` to `#866829` |
+
+The left column is mud. The right column is what a designer would pick.
+
+Floors, matching THEME.md's existing tiering for slot 8: **3:1** for the three dim roles (`comment`, `gutterFg`, `tagBracket`) and **4.5:1** for the other 15. Status tokens clear 4.5:1 against `background` and `card` both, applied as two sequential passes, which converges because both surfaces are always the same polarity within a variant.
+
+Measured outcome: zero failures across all 22 theme and mode combinations. `stardew` and `kanagawa-dragon` need zero adjustments in either mode, which is the independent confirmation that the floors are set correctly rather than tuned to pass.
 
 ### The mapping
 
@@ -93,9 +119,17 @@ Both return `null` when `terminal.ansi` is absent. That `null` is the signal tha
 
 `foreground` resolves as `terminal.foreground ?? colors.foreground`.
 
-Status: `added` to 2, `modified` to 3, `deleted` to 1, `renamed` to 4, `warning` to 3, `info` to 4. Error keeps the existing `destructive` token rather than adding a seventh.
+Status, seven tokens: `added` to 2, `modified` to 3, `deleted` to 1, `renamed` to 4, `warning` to 3, `conflict` to 6, `ok` to 2. Error keeps the existing `destructive` token, which `DiagnosticsBadge.tsx:18` already uses.
 
-Two sets of colours collide by design. `attrValue` and `string` both land on green, `heading` and `func` both on blue, and `modified` shares a hue with `warning` as `renamed` does with `info`. Each pair occupies a disjoint context, so the two members never render adjacent, and the override exists for an author who wants them distinct.
+The set changed from the six originally sketched, on evidence from enumerating every consumer:
+
+- **`info` dropped.** `DiagnosticsBadge.tsx` renders only errors and warnings. No surface consumes an info or hint colour, so the token would have no consumer. YAGNI.
+- **`conflict` added.** `SourceControlPanel.tsx:142` gives status `U` its own teal, distinct from the emerald it uses for `A`. Without a token that distinction cannot survive.
+- **`ok` added.** `LspStatusPill.tsx:245` and `LspServersGroup.tsx:86` both hardcode `bg-emerald-500` for a health dot. That is a status, and it is not "added".
+
+Some roles collide by design. `attrValue` and `string` both land on green, `heading` and `func` both on blue, `modified` shares a hue with `warning`, and `ok` shares one with `added`. Each pair occupies a disjoint context, so the two members never render adjacent, and the override exists for an author who wants them distinct.
+
+`explorer/lib/gitStatusColor.ts:8-9` groups `A` and `U` on one colour while `SourceControlPanel` separates them. That disagreement is preserved rather than fixed here: the explorer keeps mapping both to `added`, so this work changes no semantics. Reconciling them is a follow-up.
 
 `cmThemes.ts:6-8` records that `background`, `selection` and `caret` from a CodeMirror palette are overridden by `buildSharedExtensions()`, and `chromeTheme.ts` confirms it by owning those properties through `var(--)` already. So the derived palette carries syntax roles only. It does not need to express surfaces.
 
@@ -147,13 +181,25 @@ An explicit editor-theme preference other than `auto` always wins over all of th
 
 ## Components
 
+### `resolveVariant.ts`
+
+A new shared primitive, because `applyTheme` and `resolveEditorTheme` must agree on which variant won:
+
+```ts
+resolveVariant(theme, mode) → { variant: ThemeVariant; mode: ThemeMode } | null
+```
+
+It reproduces the existing `mode ?? dark ?? light` precedence from `applyTheme.ts:95-96` but also reports **which** mode actually supplied the variant.
+
+That second return field fixes a latent bug this work would otherwise introduce. A dark-only theme such as tokyo-night viewed in light mode falls back to its dark variant, so the derived syntax vars hold dark colours. If the editor picked its extension from the *requested* mode it would mount the light CodeMirror frame around dark syntax colours. Because the whole app is already showing that theme's dark surfaces in this situation, the correct extension is the dark one, and `resolveVariant` is what makes both call sites reach that conclusion from the same logic.
+
 ### `applyTheme.ts`
 
 Gains `SYNTAX_VAR` and `STATUS_VAR` maps alongside the existing three. Derivation is called inside `resolveThemeVars`, which is already the pure, exported and tested function that produces `ThemeVar[]`. Two consequences worth stating: `applyTheme` stays a DOM writer with no new logic, and `ALL_VARS` picks up the new names automatically from `Object.values`, so `clearTheme()` keeps working with no edit.
 
 ### `globals.css`
 
-Six `@theme inline` entries so Tailwind generates the utilities:
+Seven `@theme inline` entries so Tailwind generates the utilities:
 
 ```css
 --color-status-added: var(--status-added);
@@ -161,7 +207,11 @@ Six `@theme inline` entries so Tailwind generates the utilities:
 
 That yields `text-status-added`, `bg-status-added` and `border-status-added`, so consumers use the same utility grammar as every other colour in the app.
 
-`:root` and `.dark` gain `--status-*` defaults set to exactly today's rendered values: emerald-700 and `#73C991`, amber-700 and amber-300, rose-700 and rose-300, sky-700 and sky-300. This is what preserves the zero-change invariant.
+`:root` and `.dark` gain `--status-*` defaults, taken verbatim from `node_modules/tailwindcss/theme.css` so they match the utilities they replace exactly.
+
+One token cannot reproduce today's rendering exactly, because today is not consistent. "Added" is emerald-700 in the explorer, emerald-600 in git history and the diff pane, and emerald-500 at 85% in the source-control dot. Consolidating three shades into one token necessarily moves some sites.
+
+The rule applied: **pick the shade that maximizes text legibility**, since text is the dominant use and a status dot stays visible at any of these shades. That means the darker shade for light mode and the lighter shade for dark mode. Concretely, light mode takes the 700 shades and dark mode the 300 or 400 shades, which preserves the majority of sites and improves the rest. `ok` keeps emerald-500 in both modes, matching its only two consumers exactly.
 
 No `--syntax-*` defaults are added. When a theme cannot derive, the editor takes the preset path, so the var-driven theme is never active without values behind it. Adding defaults would imply a functional path that does not exist.
 
@@ -213,13 +263,17 @@ Tests come before implementation for both pure functions.
 
 **`syntaxFromAnsi.test.ts` and `statusFromAnsi.test.ts`.** Table-driven across all 18 and 6 roles. Returns `null` when `ansi` is absent. A partial override replaces only its own keys and leaves the rest derived. `variable` and `operator` resolve `terminal.foreground ?? colors.foreground`.
 
-**`syntaxLegibility.test.ts`.** For every built-in with derivable ANSI, each derived syntax role must clear 4.5:1 against `colors.background`, not against the terminal background. That distinction is the real risk in this design: ANSI is tuned against the terminal surface, while the editor renders as glass over the app surface. Status tokens are checked against both `background`, where the explorer draws them, and `card`, where the source-control panel does.
+**`oklab.test.ts`.** Round-trips hex through OKLab within a 1/255 tolerance. `ensureContrast` returns the input unchanged when it already clears the floor, and otherwise returns a colour meeting the floor whose OKLab `a` and `b` are unchanged within floating-point tolerance. That last assertion is the one that guarantees hue and chroma survive, which is the whole reason for choosing lightness-only over blending.
 
-This test is expected to fail for some built-ins on its first run, and that is its purpose. It produces the exact list of themes needing an explicit override, which cannot be obtained by reading the files. The alternative is assuming nine palettes happen to be legible on their app backgrounds.
+**`syntaxLegibility.test.ts`.** For every built-in with derivable ANSI, each derived syntax role clears its floor against `colors.background`, not against the terminal background. That distinction matters because ANSI is tuned against the terminal surface while the editor renders as glass over the app surface. Status tokens are checked against `background`, where the explorer draws them, and `card`, where the source-control panel does.
 
-The contrast helper in `terminalLegibility.test.ts:5-31` is hex-only and test-local. It moves to a shared module so both suites use one implementation, skipping any theme whose `background` is not hex, following the defensive `return null` pattern `palette()` already uses.
+This test passes by construction, because `ensureContrast` enforces the floors it asserts. It is a regression guard on the derivation, not a discovery mechanism. Its value is that it fails loudly if the mapping table, the floors, or the OKLab math regress. It also asserts that `stardew` and `kanagawa-dragon` require zero adjustment, pinning the property that made the floors trustworthy in the first place.
 
-**Extensions to existing suites.** `applyTheme.test.ts`: new variables written, and present in `ALL_VARS` so `clearTheme` removes them. `validateTheme.test.ts`: unknown syntax or status key rejected, partial override accepted. `resolveEditorTheme.test.ts`: the full precedence chain, including tokyo-night deriving dark and falling back light. `tailwindTokens.test.ts`: the six new `@theme inline` entries.
+Themes whose `colors.background` is not plain hex are skipped, following the defensive `return null` pattern `palette()` already uses in `terminalLegibility.test.ts:35-39`.
+
+The contrast helper in `terminalLegibility.test.ts:5-31` is hex-only and test-local. It moves into `oklab.ts` as production code so both suites and the derivation share one implementation.
+
+**Extensions to existing suites.** `applyTheme.test.ts`: new variables written, and present in `ALL_VARS` so `clearTheme` removes them. `validateTheme.test.ts`: unknown syntax or status key rejected, partial override accepted. `resolveEditorTheme.test.ts`: the full precedence chain, including tokyo-night resolving to the *dark* derived extension in light mode, because `resolveVariant` reports that its dark variant is the one that supplied the colours. `tailwindTokens.test.ts`: the seven new `@theme inline` entries.
 
 **Manual verification.** The tests catch dead and illegible colours but cannot say whether the result looks good. Requires looking at kanagawa, nothing and stardew running, with an editor and a markdown preview side by side.
 
