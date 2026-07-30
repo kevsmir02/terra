@@ -246,12 +246,52 @@ So `bevelWidth: "4px"` with three opaque colours paints **12px** of solid ring
 inside the element, which is almost always more than intended. For a single
 highlight ring, set `bevelMid` and `bevelInner` to `"transparent"`.
 
-## Editor pairing
+### `syntax` and `status` (variant-level, optional)
 
-`editorTheme: { light, dark }` names a CodeMirror theme from `EDITOR_THEMES` in
-`src/modules/settings/store.ts`. It applies when the user's editor preference is
-`auto`. Pair each mode with a theme of the **same** mode: pointing `dark` at
-`solarized-light` gives a light editor inside a dark app.
+Both are **derived from your `terminal.ansi` palette**, so a theme that
+declares 16 ANSI colours gets a matching editor and matching git colours for
+free. Declare either block only to override a role.
+
+Syntax roles and their source slot:
+
+| Role | Slot | Role | Slot |
+|---|---|---|---|
+| `comment` | 8 | `type` | 14 |
+| `keyword` | 5 | `operator` | foreground |
+| `string` | 2 | `tag` | 1 |
+| `number` | 3 | `tagBracket` | 8 |
+| `constant` | 13 | `attr` | 11 |
+| `func` | 4 | `attrValue` | 2 |
+| `variable` | foreground | `heading` | 4 |
+| `property` | 6 | `link` | 6 |
+| `gutterFg` | 8 | `invalid` | 9 |
+
+Status roles: `added` (2), `modified` (3), `deleted` (1), `renamed` (4),
+`warning` (3), `conflict` (6), `ok` (2). Errors use `destructive`.
+
+**Every derived value is lightness-normalized.** ANSI is tuned against the
+terminal background, but the editor renders over `colors.background`, so each
+value is raised in OKLab until it clears 4.5:1 there, or 3:1 for the three dim
+roles (`comment`, `gutterFg`, `tagBracket`). Only lightness moves: hue and
+chroma are preserved, so the colour stays yours. Status roles are normalized
+against `card` as well.
+
+This means a low-contrast ANSI palette produces legible syntax automatically,
+and it also means the value you see may not be the exact hex you wrote. To pin
+an exact value, set it in `syntax` and pick one that already clears the floor.
+
+### Editor pairing and precedence
+
+`editorTheme` still names a CodeMirror preset, but derivation outranks it:
+
+```
+syntax block  ->  derived from ansi  ->  editorTheme pairing  ->  fallback
+```
+
+So a theme with an ANSI palette gets derived syntax even if it names a preset.
+`editorTheme` is the escape hatch for a theme that genuinely wants, say,
+github-dark, and it is what themes with no ANSI palette fall back to. An
+explicit editor-theme preference in Settings always wins over all of this.
 
 ## Design guidance
 
@@ -290,6 +330,8 @@ Checklist:
 - [ ] Any new token added to `types.ts`, `applyTheme.ts`, `validateTheme.ts`,
       `globals.css`, **and** the assertions in `applyTheme.test.ts`
 - [ ] `mutedForeground` clears 4.5:1 against both `card` and `background`
+- [ ] If the theme declares `terminal.ansi`, looked at the derived editor and a
+      markdown code block side by side
 - [ ] Looked at it running. The tests catch dead and invisible colours; they
       cannot tell you whether it looks good.
 
@@ -299,7 +341,8 @@ Five parallel edits, in this order:
 
 1. `types.ts` - add the key to `ThemeShape` or `ThemeTypography`
 2. `applyTheme.ts` - map it in `SHAPE_VAR` or `TYPE_VAR` (`ALL_VARS` derives
-   from these, so clearing works automatically)
+   from these, so clearing works automatically). For a syntax or status role,
+   add it to `SYNTAX_ROLES`/`STATUS_ROLES` in `types.ts` and the mapping tables in `derive.ts`.
 3. `validateTheme.ts` - add it to the right key list, or user themes using it
    fail to load
 4. `globals.css` - consume it, always with a `var(--x, <today's value>)`
