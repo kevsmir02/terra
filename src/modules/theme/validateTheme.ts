@@ -1,6 +1,8 @@
 import { isFontId } from "./fonts";
 import {
   BORDER_STYLES,
+  SYNTAX_ROLES,
+  STATUS_ROLES,
   TEXT_TRANSFORMS,
   type BorderStyle,
   type TextTransform,
@@ -47,6 +49,11 @@ const SHAPE_COLOR_KEYS: readonly (keyof ThemeShape)[] = [
 // Lengths compose into a shared box-shadow, so they are matched rather than
 // passed through: a comma or a function call would rewrite the declaration.
 const LENGTH_RE = /^(0|-?\d+(\.\d+)?(px|rem|em))$/;
+
+// Shape colours compose into a shared box-shadow, so the value is matched
+// rather than passed through: one bad token takes out every ring and the lift.
+const COLOR_RE =
+  /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch)\([^;{}()]*\))$/;
 
 const TYPE_STRING_KEYS = ["sans", "mono", "display", "chromeTracking"] as const;
 
@@ -137,6 +144,9 @@ function parseShape(raw: unknown, path: string): ThemeShape | string {
     if (isLength && !LENGTH_RE.test(v)) {
       return `${path}.${k} must be a CSS length such as 4px or 0`;
     }
+    if (isColor && !COLOR_RE.test(v)) {
+      return `${path}.${k} must be a colour such as #rrggbb, transparent, or oklch(...)`;
+    }
     out[k as keyof ThemeShape] = v;
   }
   return out;
@@ -173,6 +183,28 @@ function parseTypography(raw: unknown, path: string): ThemeTypography | string {
   return out;
 }
 
+function parseRoleMap<T extends string>(
+  raw: unknown,
+  path: string,
+  roles: readonly T[],
+  label: string,
+): Partial<Record<T, string>> | string {
+  if (raw === undefined) return {};
+  if (!isObj(raw)) return `${path} must be an object`;
+  const out: Partial<Record<T, string>> = {};
+  for (const k of Object.keys(raw)) {
+    if (!(roles as readonly string[]).includes(k)) {
+      return `${path}.${k} is not a recognized ${label} role`;
+    }
+    const v = raw[k];
+    if (!isStr(v) || v.length === 0) {
+      return `${path}.${k} must be a non-empty string`;
+    }
+    out[k as T] = v;
+  }
+  return out;
+}
+
 function parseVariant(raw: unknown, path: string): ThemeVariant | string {
   if (!isObj(raw)) return `${path} must be an object`;
   const colors = parseColors(raw.colors, `${path}.colors`);
@@ -183,7 +215,11 @@ function parseVariant(raw: unknown, path: string): ThemeVariant | string {
   if (typeof shape === "string") return shape;
   const type = parseTypography(raw.type, `${path}.type`);
   if (typeof type === "string") return type;
-  return { colors, terminal, shape, type };
+  const syntax = parseRoleMap(raw.syntax, `${path}.syntax`, SYNTAX_ROLES, "syntax");
+  if (typeof syntax === "string") return syntax;
+  const status = parseRoleMap(raw.status, `${path}.status`, STATUS_ROLES, "status");
+  if (typeof status === "string") return status;
+  return { colors, terminal, shape, type, syntax, status };
 }
 
 

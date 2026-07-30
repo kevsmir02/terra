@@ -197,3 +197,58 @@ describe("validateTheme", () => {
   });
 });
 
+describe("syntax and status overrides", () => {
+  function withVariant(variant: unknown) {
+    return { id: "ok-id", name: "T", variants: { dark: variant } };
+  }
+
+  it("accepts a partial syntax override", () => {
+    const r = validateTheme(withVariant({ syntax: { keyword: "#abcdef" } }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.theme.variants.dark?.syntax?.keyword).toBe("#abcdef");
+  });
+
+  it("accepts a partial status override", () => {
+    const r = validateTheme(withVariant({ status: { modified: "#abcdef" } }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.theme.variants.dark?.status?.modified).toBe("#abcdef");
+  });
+
+  it("rejects an unknown syntax key", () => {
+    const r = validateTheme(withVariant({ syntax: { notARole: "#abcdef" } }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("notARole");
+  });
+
+  it("rejects an unknown status key", () => {
+    const r = validateTheme(withVariant({ status: { info: "#abcdef" } }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("info");
+  });
+
+  it("rejects a non-string syntax value", () => {
+    const r = validateTheme(withVariant({ syntax: { keyword: 5 } }));
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("shape colour validation", () => {
+  function withShape(shape: unknown) {
+    return { id: "ok-id", name: "T", variants: { dark: { shape } } };
+  }
+
+  it.each(["#abc", "#aabbcc", "transparent", "rgb(1,2,3)", "rgba(1,2,3,0.5)", "oklch(0.5 0.1 200)"])(
+    "accepts %s",
+    (value) => {
+      expect(validateTheme(withShape({ bevelOuter: value })).ok).toBe(true);
+    },
+  );
+
+  it.each(["red; color: blue", "url(x)", "}", "#12", "notacolour"])(
+    "rejects %s",
+    (value) => {
+      expect(validateTheme(withShape({ bevelOuter: value })).ok).toBe(false);
+    },
+  );
+});
+
