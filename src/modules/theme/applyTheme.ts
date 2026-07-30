@@ -1,4 +1,15 @@
-import type { Theme, ThemeColors, ThemeMode, TerminalPalette, ThemeShape, ThemeTypography } from "./types";
+import { statusFromAnsi, syntaxFromAnsi } from "./derive";
+import { resolveVariant } from "./resolveVariant";
+import type {
+  StatusRole,
+  SyntaxRole,
+  Theme,
+  ThemeColors,
+  ThemeMode,
+  TerminalPalette,
+  ThemeShape,
+  ThemeTypography,
+} from "./types";
 
 const COLOR_VAR: Record<keyof ThemeColors, string> = {
   background: "--background",
@@ -75,10 +86,43 @@ const ANSI_VARS: readonly string[] = [
   "--terminal-ansi-bright-white",
 ];
 
+const SYNTAX_VAR: Record<SyntaxRole, string> = {
+  comment: "--syntax-comment",
+  keyword: "--syntax-keyword",
+  string: "--syntax-string",
+  number: "--syntax-number",
+  constant: "--syntax-constant",
+  func: "--syntax-func",
+  variable: "--syntax-variable",
+  property: "--syntax-property",
+  gutterFg: "--syntax-gutter-fg",
+  type: "--syntax-type",
+  operator: "--syntax-operator",
+  tag: "--syntax-tag",
+  tagBracket: "--syntax-tag-bracket",
+  attr: "--syntax-attr",
+  attrValue: "--syntax-attr-value",
+  heading: "--syntax-heading",
+  link: "--syntax-link",
+  invalid: "--syntax-invalid",
+};
+
+const STATUS_VAR: Record<StatusRole, string> = {
+  added: "--status-added",
+  modified: "--status-modified",
+  deleted: "--status-deleted",
+  renamed: "--status-renamed",
+  warning: "--status-warning",
+  conflict: "--status-conflict",
+  ok: "--status-ok",
+};
+
 export const ALL_VARS: readonly string[] = [
   ...Object.values(COLOR_VAR),
   ...Object.values(SHAPE_VAR),
   ...Object.values(TYPE_VAR),
+  ...Object.values(SYNTAX_VAR),
+  ...Object.values(STATUS_VAR),
   "--terminal-background",
   "--terminal-foreground",
   "--terminal-cursor",
@@ -92,14 +136,26 @@ let lastApplied: string | null = null;
 export type ThemeVar = readonly [name: string, value: string];
 
 export function resolveThemeVars(theme: Theme, mode: ThemeMode): ThemeVar[] | null {
-  const variant =
-    theme.variants[mode] ?? theme.variants.dark ?? theme.variants.light;
-  if (!variant) return null;
+  const resolved = resolveVariant(theme, mode);
+  if (!resolved) return null;
+  const { variant } = resolved;
   const out: ThemeVar[] = [];
   if (variant.colors) collectColors(out, variant.colors);
   if (variant.terminal) collectTerminal(out, variant.terminal);
   if (variant.shape) collectShape(out, variant.shape);
   if (variant.type) collectType(out, variant.type);
+  const syntax = syntaxFromAnsi(variant.terminal, variant.colors, variant.syntax);
+  if (syntax) {
+    for (const role of Object.keys(syntax) as SyntaxRole[]) {
+      out.push([SYNTAX_VAR[role], syntax[role]]);
+    }
+  }
+  const status = statusFromAnsi(variant.terminal, variant.colors, variant.status);
+  if (status) {
+    for (const role of Object.keys(status) as StatusRole[]) {
+      out.push([STATUS_VAR[role], status[role]]);
+    }
+  }
   return out;
 }
 

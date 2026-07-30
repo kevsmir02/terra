@@ -180,4 +180,64 @@ describe("resolveThemeVars", () => {
     );
     for (const [name] of vars ?? []) expect(ALL_VARS).toContain(name);
   });
+
+  it("derives syntax and status variables from an ansi palette", () => {
+    const ansi = [
+      "#100000", "#ff0000", "#00ff00", "#ffff00",
+      "#0000ff", "#ff00ff", "#00ffff", "#cccccc",
+      "#888888", "#ff8080", "#80ff80", "#ffff80",
+      "#8080ff", "#ff80ff", "#80ffff", "#ffffff",
+    ];
+    const vars = resolveThemeVars(
+      theme({
+        variants: {
+          dark: {
+            colors: { background: "#000000", foreground: "#eeeeee" },
+            terminal: {
+              background: "#000000",
+              foreground: "#eeeeee",
+              ansi: ansi as unknown as never,
+            },
+          },
+        },
+      }),
+      "dark",
+    );
+    const names = vars?.map(([n]) => n) ?? [];
+    expect(names).toContain("--syntax-keyword");
+    expect(names).toContain("--syntax-gutter-fg");
+    expect(names).toContain("--syntax-tag-bracket");
+    expect(names).toContain("--syntax-attr-value");
+    expect(names).toContain("--status-added");
+    expect(names).toContain("--status-conflict");
+    expect(names).toContain("--status-ok");
+  });
+
+  it("emits no syntax or status variables without an ansi palette", () => {
+    const vars = resolveThemeVars(
+      theme({
+        variants: { dark: { colors: { background: "#000" }, terminal: { background: "#000" } } },
+      }),
+      "dark",
+    );
+    const names = vars?.map(([n]) => n) ?? [];
+    expect(names.some((n) => n.startsWith("--syntax-"))).toBe(false);
+    expect(names.some((n) => n.startsWith("--status-"))).toBe(false);
+  });
+
+  it("keeps every derived name clearable through ALL_VARS", () => {
+    const ansi = Array.from({ length: 16 }, (_, i) => `#${(i * 17).toString(16).padStart(2, "0").repeat(3)}`);
+    const vars = resolveThemeVars(
+      theme({
+        variants: {
+          dark: {
+            colors: { background: "#000000", foreground: "#ffffff", card: "#111111" },
+            terminal: { foreground: "#ffffff", ansi: ansi as unknown as never },
+          },
+        },
+      }),
+      "dark",
+    );
+    for (const [name] of vars ?? []) expect(ALL_VARS).toContain(name);
+  });
 });
