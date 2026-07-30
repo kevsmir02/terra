@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { statusFromAnsi, syntaxFromAnsi } from "./derive";
-import { contrast } from "./oklab";
+import { contrast, toOklab } from "./oklab";
 import { SYNTAX_ROLES, STATUS_ROLES, type TerminalPalette } from "./types";
 
 // Distinct, high-contrast slots so mapping assertions are unambiguous.
@@ -34,8 +34,9 @@ describe("syntaxFromAnsi", () => {
     expect(p?.string).toBe("#00ff00");
     expect(p?.number).toBe("#ffff00");
     // func (slot 4, pure blue) is exercised in "raises a low-contrast slot to
-    // its floor" below instead: on this background it fails 4.5:1 and must be
-    // raised, so it cannot also be asserted unmodified here.
+    // its floor while keeping its hue" below instead: on this background it
+    // fails 4.5:1 and must be raised, so it cannot also be asserted unmodified
+    // here. That test pins func to slot 4 by hue.
     expect(p?.property).toBe("#00ffff");
     expect(p?.type).toBe("#80ffff");
     expect(p?.constant).toBe("#ff80ff");
@@ -73,10 +74,18 @@ describe("syntaxFromAnsi", () => {
     expect(p?.keyword).toBe("#ff00ff");
   });
 
-  it("raises a low-contrast slot to its floor", () => {
-    // Slot 4 pure blue on black is about 2.4:1 and must be lifted.
+  it("raises a low-contrast slot to its floor while keeping its hue", () => {
+    // Slot 4 pure blue on black is 2.44:1 and must be lifted. The hue assertion
+    // is what pins func to slot 4: without it, remapping func to any slot that
+    // is already legible would still satisfy the contrast check.
+    const hue = (hex: string) => {
+      const [, a, b] = toOklab(hex);
+      return (Math.atan2(b, a) * 180) / Math.PI;
+    };
     const p = syntaxFromAnsi(terminal, colors, undefined);
     expect(contrast(p?.func ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
+    expect(p?.func).not.toBe("#0000ff");
+    expect(Math.abs(hue(p?.func ?? "") - hue("#0000ff"))).toBeLessThan(2);
   });
 
   it("holds dim roles to 3:1 rather than 4.5:1", () => {
