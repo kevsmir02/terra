@@ -85,11 +85,30 @@ export type ThemeTypography = Partial<{
   fonts?: readonly FontId[];
 }>;
 
+export const SYNTAX_ROLES = [
+  "comment", "keyword", "string", "number", "constant", "func",
+  "variable", "property", "gutterFg", "type", "operator", "tag",
+  "tagBracket", "attr", "attrValue", "heading", "link", "invalid",
+] as const;
+
+export type SyntaxRole = (typeof SYNTAX_ROLES)[number];
+
+export const STATUS_ROLES = [
+  "added", "modified", "deleted", "renamed", "warning", "conflict", "ok",
+] as const;
+
+export type StatusRole = (typeof STATUS_ROLES)[number];
+
+export type SyntaxPalette = Record<SyntaxRole, string>;
+export type StatusTokens = Record<StatusRole, string>;
+
 export type ThemeVariant = {
   colors?: ThemeColors;
   terminal?: TerminalPalette;
   shape?: ThemeShape;
   type?: ThemeTypography;
+  syntax?: Partial<Record<SyntaxRole, string>>;
+  status?: Partial<Record<StatusRole, string>>;
 };
 
 
