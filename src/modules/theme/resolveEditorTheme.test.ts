@@ -31,6 +31,16 @@ const darkOnly: Theme = {
   },
 };
 
+// No ansi palette and only a dark pairing, so the cross-mode fallback inside the
+// editorTheme chain is the only thing that can resolve light mode. Without a
+// theme shaped like this, deleting that fallback passes every other test.
+const asymmetricPairing: Theme = {
+  id: "asymmetric-pairing",
+  name: "Asymmetric Pairing",
+  editorTheme: { dark: "dracula" },
+  variants: { dark: {}, light: {} },
+};
+
 describe("resolveEditorTheme", () => {
   it("returns an explicit pref as a preset, ignoring the app theme", () => {
     expect(resolveEditorTheme("nord", "with-ansi", [withAnsi], "dark")).toEqual({
@@ -57,6 +67,14 @@ describe("resolveEditorTheme", () => {
       kind: "derived",
       mode: "dark",
     });
+  });
+
+  // Pins the cross-mode fallback inside the pairing chain. A mutant reducing it
+  // to `theme.editorTheme?.[mode]` passes every other test in this file.
+  it("falls back across modes within the editorTheme pairing", () => {
+    expect(
+      resolveEditorTheme("auto", "asymmetric-pairing", [asymmetricPairing], "light"),
+    ).toEqual({ kind: "preset", id: "dracula" });
   });
 
   it("falls through to the editorTheme pairing without an ansi palette", () => {
