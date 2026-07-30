@@ -87,7 +87,9 @@ The derivation functions return `null` when `terminal.ansi` is absent. That `nul
 
 Raw ANSI cannot be used directly. Measured across all 11 derivable built-ins, a 4.5:1 floor against `colors.background` fails for 9 of them, and a 3:1 floor still fails for 7. The codebase already knows why: `terminalLegibility.test.ts:75-77` records that Stardew "is authored to a contrast budget rather than transcribed from an upstream palette, so it is the one theme that can hold the numeric floor." Transcribed upstream palettes do not hold a numeric floor against an app surface.
 
-`ensureContrast` fixes this by moving **lightness only** in OKLab, preserving the `a` and `b` components so hue and chroma survive. It binary-searches L for 14 iterations toward whichever direction the background requires.
+`ensureContrast` fixes this by moving **lightness only** in OKLab, holding `a` and `b` fixed so hue survives. It binary-searches L for 14 iterations toward whichever direction the background requires.
+
+A darker target is frequently outside the sRGB gamut, and the byte clamp then acts as a gamut projection, which does shift `a` and `b`. Hue is what survives exactly; chroma is largely retained. Measured on the worst case in the built-in set, `#8da101` darkened against `#fdf6e3`, whose blue channel is already `0x01` and goes to -57 through -89 before clamping: hue drifts **0.78 degrees** and **81.8 percent** of chroma is retained. So the guarantee is hue preservation plus high chroma retention, not bit-exact `a`/`b`.
 
 An earlier approach, blending the colour toward the theme's `foreground`, also converged but destroyed the palette:
 
@@ -263,7 +265,7 @@ Tests come before implementation for both pure functions.
 
 **`syntaxFromAnsi.test.ts` and `statusFromAnsi.test.ts`.** Table-driven across all 18 and 6 roles. Returns `null` when `ansi` is absent. A partial override replaces only its own keys and leaves the rest derived. `variable` and `operator` resolve `terminal.foreground ?? colors.foreground`.
 
-**`oklab.test.ts`.** Round-trips hex through OKLab within a 1/255 tolerance. `ensureContrast` returns the input unchanged when it already clears the floor, and otherwise returns a colour meeting the floor whose OKLab `a` and `b` are unchanged within floating-point tolerance. That last assertion is the one that guarantees hue and chroma survive, which is the whole reason for choosing lightness-only over blending.
+**`oklab.test.ts`.** Round-trips hex through OKLab within a 1/255 tolerance. `ensureContrast` returns the input unchanged when it already clears the floor, and otherwise returns a colour meeting the floor whose hue angle is within 2 degrees of the input and which retains more than 75 percent of its chroma. Those last two are what guarantee the result still looks like the theme, which is the whole reason for choosing lightness-only over blending.
 
 **`syntaxLegibility.test.ts`.** For every built-in with derivable ANSI, each derived syntax role clears its floor against `colors.background`, not against the terminal background. That distinction matters because ANSI is tuned against the terminal surface while the editor renders as glass over the app surface. Status tokens are checked against `background`, where the explorer draws them, and `card`, where the source-control panel does.
 

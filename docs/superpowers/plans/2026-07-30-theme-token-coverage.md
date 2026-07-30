@@ -126,12 +126,18 @@ describe("ensureContrast", () => {
   });
 
   // The whole reason for moving lightness rather than blending toward the
-  // foreground: blending desaturates into mud, this keeps the hue.
-  it("preserves OKLab a and b so hue and chroma survive", () => {
+  // foreground: blending desaturates into mud, this keeps the hue. Asserted as
+  // hue angle and chroma retention rather than raw a/b, because a darker target
+  // is often outside sRGB and the clamp acts as a gamut projection, which shifts
+  // a and b while leaving hue intact.
+  it("preserves hue and most of the chroma", () => {
+    const hue = ([, a, b]: [number, number, number]) =>
+      (Math.atan2(b, a) * 180) / Math.PI;
+    const chroma = ([, a, b]: [number, number, number]) => Math.hypot(a, b);
     const before = toOklab("#8da101");
     const after = toOklab(ensureContrast("#8da101", "#fdf6e3", 4.5));
-    expect(after[1]).toBeCloseTo(before[1], 2);
-    expect(after[2]).toBeCloseTo(before[2], 2);
+    expect(Math.abs(hue(after) - hue(before))).toBeLessThan(2);
+    expect(chroma(after) / chroma(before)).toBeGreaterThan(0.75);
   });
 
   it("keeps everforest string vivid rather than grey", () => {
@@ -262,7 +268,13 @@ Leave everything from `type Palette = ...` onward untouched.
 - [ ] **Step 6: Run the theme suite to verify nothing regressed**
 
 Run: `pnpm vitest run src/modules/theme`
-Expected: PASS. The terminal legibility counts stay identical, because the extracted `contrast` is byte-for-byte the same formula.
+Expected: PASS, with the terminal legibility test counts unchanged.
+
+The extracted `contrast` is the same formula with one deliberate correction: the local
+`channel()` used the sRGB breakpoint `0.03928`, and `oklab.ts` uses `0.04045`, the value
+from IEC 61966-2-1. That only affects channel bytes around 10/255 and flips no assertion
+in the suite, but it is a real difference, so do not describe the extraction as
+byte-identical.
 
 - [ ] **Step 7: Commit**
 
@@ -436,7 +448,7 @@ Create `src/modules/theme/derive.test.ts`:
 ```ts
 import { describe, expect, it } from "vitest";
 import { statusFromAnsi, syntaxFromAnsi } from "./derive";
-import { contrast } from "./oklab";
+import { contrast, toOklab } from "./oklab";
 import { SYNTAX_ROLES, STATUS_ROLES, type TerminalPalette } from "./types";
 
 // Distinct, high-contrast slots so mapping assertions are unambiguous.
@@ -445,7 +457,7 @@ const ansi = [
   "#0000ff", "#ff00ff", "#00ffff", "#cccccc",
   "#888888", "#ff8080", "#80ff80", "#ffff80",
   "#8080ff", "#ff80ff", "#80ffff", "#ffffff",
-] as unknown as TerminalPalette["ansi"];
+] as unknown as NonNullable<TerminalPalette["ansi"]>;
 
 const terminal: TerminalPalette = { background: "#000000", foreground: "#eeeeee", ansi };
 const colors = { background: "#000000", foreground: "#eeeeee", card: "#111111" };
@@ -469,7 +481,9 @@ describe("syntaxFromAnsi", () => {
     expect(p?.keyword).toBe("#ff00ff");
     expect(p?.string).toBe("#00ff00");
     expect(p?.number).toBe("#ffff00");
-    expect(p?.func).toBe("#0000ff");
+    // func (slot 4, pure blue) is only 2.44:1 on this background, so
+    // normalization raises it and it cannot be asserted unmodified here. The
+    // "raises a low-contrast slot" test below pins it to slot 4 by hue instead.
     expect(p?.property).toBe("#00ffff");
     expect(p?.type).toBe("#80ffff");
     expect(p?.constant).toBe("#ff80ff");
@@ -507,10 +521,18 @@ describe("syntaxFromAnsi", () => {
     expect(p?.keyword).toBe("#ff00ff");
   });
 
-  it("raises a low-contrast slot to its floor", () => {
-    // Slot 4 pure blue on black is about 2.4:1 and must be lifted.
+  it("raises a low-contrast slot to its floor while keeping its hue", () => {
+    // Slot 4 pure blue on black is 2.44:1 and must be lifted. The hue assertion
+    // is what pins func to slot 4: without it, remapping func to any slot that
+    // is already legible would still satisfy the contrast check.
+    const hue = (hex: string) => {
+      const [, a, b] = toOklab(hex);
+      return (Math.atan2(b, a) * 180) / Math.PI;
+    };
     const p = syntaxFromAnsi(terminal, colors, undefined);
     expect(contrast(p?.func ?? "", "#000000")).toBeGreaterThanOrEqual(4.5);
+    expect(p?.func).not.toBe("#0000ff");
+    expect(Math.abs(hue(p?.func ?? "") - hue("#0000ff"))).toBeLessThan(2);
   });
 
   it("holds dim roles to 3:1 rather than 4.5:1", () => {
@@ -682,7 +704,7 @@ export function statusFromAnsi(
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `pnpm vitest run src/modules/theme/derive.test.ts`
-Expected: PASS, 18 tests.
+Expected: PASS, 17 tests.
 
 - [ ] **Step 6: Run typecheck**
 
