@@ -31,3 +31,7 @@ stats.html
 # It belongs in ~/.tauri/ and in the TAURI_SIGNING_PRIVATE_KEY repo secret.
 *.key
 !*.key.pub
+
+# Isolated worktrees and subagent-driven-development scratch.
+.worktrees/
+.superpowers/
