@@ -25,6 +25,7 @@ not to add CSS to the theme.
 | `src/modules/theme/validateTheme.ts` | allowlist for user-supplied themes |
 | `src/modules/theme/themes/` | one file per built-in, re-exported from `index.ts` |
 | `src/modules/theme/fonts.ts` | registry of bundled fonts a theme may name |
+| `src/modules/theme/resolveTerminalFont.ts` | folds a theme's terminal font into the user's preferences |
 | `src/styles/globals.css` | variable defaults and the `.terra-*` surface classes |
 
 Built-in themes are TypeScript objects and **skip validation**. User themes
@@ -87,8 +88,9 @@ correct if the sidebar primitive is adopted, but do not rely on them for a look.
 
 ### `terminal` (variant-level)
 
-`background`, `foreground`, `cursor`, `cursorAccent`, `selection`, and `ansi`:
-exactly 16 strings in the standard order.
+Colour keys are `background`, `foreground`, `cursor`, `cursorAccent`,
+`selection`, and `ansi`: exactly 16 strings in the standard order. The three
+optional font keys are covered under [Terminal font](#terminal-font) below.
 
 ```
 0-7   black red green yellow blue magenta cyan white
@@ -118,8 +120,33 @@ rose-pine `#191724` is 19%). Above roughly 30% the background stops being a tint
 and becomes a colour, and it visibly pushes its hue into every slot drawn on it.
 Pick your hue from the theme, then pull saturation down.
 
-The terminal **font** is a user preference (`terminalFontFamily`), not a theme
-token. A theme controls terminal colour only.
+### Terminal font
+
+A theme may also declare the terminal font. These three are optional and sit
+alongside the colour keys in `terminal`:
+
+| Key | Type | Accepted values |
+|---|---|---|
+| `fontFamily` | string | any non-empty family string |
+| `fontWeight` | string | `normal`, `bold`, or `100`-`900` in hundreds |
+| `fontSize` | number | integer from 8 to 32 |
+
+**A theme font is a default, not an override.** `resolveTerminalFont` compares
+each preference against its shipped default (`terminalFontFamily` is `""`,
+`terminalFontWeight` is `normal`, `terminalFontSize` is
+`TERMINAL_FONT_SIZE_DEFAULT`). A field still sitting at its default takes the
+theme's value; a field the user has changed keeps the user's value and the theme
+loses. This is per field, so a theme can set the family of a user who never
+picked one while still respecting the size they did pick.
+
+This is a deliberate divergence from upstream Terax, where the theme wins
+outright. Switching themes here never discards a font someone chose on purpose.
+
+**Name a family you actually ship.** `fontFamily` is passed to xterm as-is, so a
+face that is neither bundled nor installed on the system silently falls back to
+the next family in the stack. If your theme needs a bundled face, list it in
+`type.fonts` as well so `ThemeProvider` loads it. End the string with a real
+fallback, exactly as with the UI font stacks.
 
 ### `shape` (variant-level)
 
