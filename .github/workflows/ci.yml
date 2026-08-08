@@ -43,8 +43,14 @@ jobs:
       - name: Unused files, deps and exports
         run: pnpm knip
 
-      - name: Dependency advisories
+      # Split so a failure says immediately whether it ships to users or only
+      # affects the build toolchain. Both gate: a compromised build dependency
+      # can inject into the bundle just as effectively as a runtime one.
+      - name: Dependency advisories (production)
         run: pnpm audit --prod
+
+      - name: Dependency advisories (including dev)
+        run: pnpm audit
 
   rust-linux:
     runs-on: ubuntu-22.04

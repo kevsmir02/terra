@@ -6,7 +6,7 @@ Terra loads `TERRA.md` from the workspace root as agent memory (similar to AGENT
 
 **Terra**: open-source terminal IDE. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client.
 
-- Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm knip`, `pnpm audit --prod`
+- Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm knip`, `pnpm audit` (CI runs `--prod` and the full tree as separate steps)
 - Rust checks: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (local fallback: `cargo test --locked`), `cd src-tauri && cargo audit`
 
 `pnpm lint` runs with `--error-on-warnings`: biome warnings fail the build, so a
