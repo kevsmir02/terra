@@ -114,7 +114,7 @@ export const GraphRail = memo(function GraphRail({
       width={width}
       height={rowHeight}
       viewBox={`0 0 ${width} ${rowHeight}`}
-      aria-hidden
+      aria-hidden="true"
       className="shrink-0 overflow-visible"
     >
       {row.topEdges.map((e) => renderTopEdge(e, midY))}

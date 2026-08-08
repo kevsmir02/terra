@@ -603,7 +603,7 @@ export async function setDefaultWorkspaceEnv(value: string): Promise<void> {
 }
 
 export async function setShortcuts(
-  value: Record<ShortcutId, KeyBinding[]> | {},
+  value: Record<ShortcutId, KeyBinding[]> | Record<string, never>,
 ): Promise<void> {
   await writePref(KEY_SHORTCUTS, value);
 }

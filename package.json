@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check-types": "tsc --noEmit",
-    "lint": "biome lint ./src",
+    "lint": "biome lint --error-on-warnings ./src",
     "lint:fix": "biome lint --write ./src",
     "format": "biome format --write ./src",
     "format:check": "biome format ./src",

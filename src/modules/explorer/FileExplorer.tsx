@@ -109,7 +109,7 @@ function buildRows(
 
   const walk = (parent: string, depth: number, parentIgnored: boolean) => {
     const node = tree.nodes[parent];
-    if (!node || node.status !== "loaded") return;
+    if (node?.status !== "loaded") return;
     for (const entry of node.entries) {
       const path = tree.joinPath(parent, entry.name);
       const isDir = entry.kind === "dir";
@@ -206,12 +206,12 @@ export const FileExplorer = memo(
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: tree identity churns every render; the listed fields are buildRows' real inputs
     const { rows, entryIndexByPath } = useMemo(() => {
       if (!rootPath) return { rows: [] as Row[], entryIndexByPath: new Map<string, number>() };
       return buildRows(rootPath, tree, lookupGitStatus);
       // `tree` is intentionally omitted: its identity changes every render, but
       // the listed fields are the only inputs buildRows actually reads.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
       rootPath,
       tree.nodes,
@@ -482,9 +482,11 @@ export const FileExplorer = memo(
     };
 
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: focusable panel that delegates arrow-key navigation to the tree below
       <div
         ref={containerRef}
         className="terra-panel flex h-full flex-col outline-none"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: the panel is the keyboard entry point for the tree
         tabIndex={0}
         onKeyDown={handleKeyDown}
       >

@@ -246,6 +246,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     };
   }, [fetchChildren]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: prefs only; `nodes` would refetch every expanded dir on any tree edit
   useEffect(() => {
     if (!rootPath) return;
     const loadedPaths = Object.entries(nodes)
@@ -255,7 +256,6 @@ export function useFileTree(rootPath: string | null, options?: Options) {
     // Re-list loaded directories when visibility or git-decoration prefs change.
     // `nodes` is intentionally omitted so ordinary tree edits don't refetch
     // every expanded directory.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showHidden, gitDecorations, rootPath, fetchChildren]);
 
   const toggle = useCallback(

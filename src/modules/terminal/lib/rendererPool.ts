@@ -373,17 +373,18 @@ function pickSlotFor(leafId: number): PickResult {
   }
   if (retained) return { slot: retained, previousLeafId: null };
 
-  let best: Slot | null = null;
+  // The pool is full here (the size check above returns), so slots[0] is a
+  // real starting candidate and the result never needs an assertion.
+  let chosen: Slot = slots[0];
   let bestScore = Number.POSITIVE_INFINITY;
   for (const s of slots) {
     if (s.currentLeafId === leafId) return { slot: s, previousLeafId: null };
     const score = evictionScore(s);
     if (score < bestScore) {
       bestScore = score;
-      best = s;
+      chosen = s;
     }
   }
-  const chosen = best!;
   return { slot: chosen, previousLeafId: chosen.currentLeafId };
 }
 

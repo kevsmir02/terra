@@ -30,20 +30,24 @@ export function useExplorerDnd({ rootPath, isDir, onMove }: Options) {
   const optsRef = useRef({ rootPath, isDir, onMove });
   optsRef.current = { rootPath, isDir, onMove };
 
-  const placeGhost = (x: number, y: number) => {
+  const placeGhost = useCallback((x: number, y: number) => {
     lastPosRef.current = { x, y };
     const g = ghostElRef.current;
     if (g) {
       g.style.left = `${x + 12}px`;
       g.style.top = `${y + 8}px`;
     }
-  };
-
-  const ghostRef = useCallback((el: HTMLDivElement | null) => {
-    ghostElRef.current = el;
-    if (el) placeGhost(lastPosRef.current.x, lastPosRef.current.y);
   }, []);
 
+  const ghostRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      ghostElRef.current = el;
+      if (el) placeGhost(lastPosRef.current.x, lastPosRef.current.y);
+    },
+    [placeGhost],
+  );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: placeGhost only touches refs, so the first-render identity behaves identically
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-fs-path]");

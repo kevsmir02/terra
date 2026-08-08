@@ -18,9 +18,18 @@ type Props = {
   onSelect: (env: WorkspaceEnv) => void;
 };
 
+/**
+ * WSL only exists on Windows, so the selector renders nothing elsewhere. The
+ * store subscriptions live in the inner component rather than behind an early
+ * return, which would make hook order conditional; this way non-Windows still
+ * subscribes to nothing.
+ */
 export function WorkspaceEnvSelector({ onSelect }: Props) {
   if (!IS_WINDOWS) return null;
+  return <WindowsWorkspaceEnvSelector onSelect={onSelect} />;
+}
 
+function WindowsWorkspaceEnvSelector({ onSelect }: Props) {
   const env = useWorkspaceEnvStore((s) => s.env);
   const distros = useWorkspaceEnvStore((s) => s.distros);
   const loading = useWorkspaceEnvStore((s) => s.loading);

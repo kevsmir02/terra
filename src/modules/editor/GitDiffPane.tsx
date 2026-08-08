@@ -145,6 +145,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
 
   const key = cacheKey(source);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: `key` is the cache identity the fetch is keyed on
   useEffect(() => {
     if (!active) return;
     const cached = loadStateFromCache(source);
