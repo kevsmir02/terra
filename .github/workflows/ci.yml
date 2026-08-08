@@ -43,6 +43,9 @@ jobs:
       - name: Unused files, deps and exports
         run: pnpm knip
 
+      - name: Dependency advisories
+        run: pnpm audit --prod
+
   rust-linux:
     runs-on: ubuntu-22.04
     steps:
@@ -76,6 +79,13 @@ jobs:
       - name: cargo test
         working-directory: src-tauri
         run: cargo test --locked
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Dependency advisories
+        working-directory: src-tauri
+        run: cargo audit
 
   rust-matrix:
     name: rust-test (${{ matrix.os }})
