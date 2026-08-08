@@ -1115,7 +1115,7 @@ export default function App() {
                   }
                 }}
               >
-                <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-card">
+                <div className="flex h-full min-h-0 flex-col border-r border-border/(--emph-strong) bg-card">
                   <div
                     key={sidebarView}
                     className="min-h-0 flex-1 terra-panel-in"

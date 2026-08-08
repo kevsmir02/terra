@@ -157,7 +157,7 @@ export default function ShellInput({
       onCopyCapture={onCopyCapture}
     >
       <span
-        className="select-none pt-px text-primary/80"
+        className="select-none pt-px text-primary/(--emph-bold)"
         style={{
           fontFamily,
           fontSize: `${fontSize}px`,

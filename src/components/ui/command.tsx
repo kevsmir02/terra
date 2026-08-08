@@ -70,7 +70,7 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-9 bg-input/50">
+      <InputGroup className="h-9 bg-input/(--emph-medium)">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
@@ -139,7 +139,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn("my-1.5 h-px bg-border/50", className)}
+      className={cn("my-1.5 h-px bg-border/(--emph-medium)", className)}
       {...props}
     />
   )

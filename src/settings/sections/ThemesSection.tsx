@@ -210,7 +210,7 @@ export function ThemesSection() {
             className={cn(
               "rounded-md border px-2.5 py-1.5 text-[11.5px]",
               importMessage.type === "error"
-                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                ? "border-destructive/(--emph-soft) bg-destructive/(--emph-faint) text-destructive"
                 : "border-orange-500/40 bg-orange-500/10 text-orange-500",
             )}
           >
@@ -236,12 +236,12 @@ export function ThemesSection() {
                 className={cn(
                   "group flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
                   selected
-                    ? "border-foreground/60 ring-1 ring-foreground/20"
-                    : "border-border/60 hover:border-border",
+                    ? "border-foreground/(--emph-strong) ring-1 ring-foreground/(--emph-subtle)"
+                    : "border-border/(--emph-strong) hover:border-border",
                 )}
               >
                 <div
-                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/40"
+                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/(--emph-soft)"
                   style={{ background: swatchBg }}
                 >
                   <span
@@ -313,12 +313,12 @@ export function ThemesSection() {
             <div className="flex flex-col gap-2">
               {rejectedThemes.map((rt, idx) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: multiple rejected themes might have the same 'unknown' id
-                <div key={`${rt.id}-${idx}`} className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
+                <div key={`${rt.id}-${idx}`} className="rounded-md border border-destructive/(--emph-soft) bg-destructive/(--emph-faint) px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
                   <div className="flex flex-col">
                     <span className="font-semibold">{rt.id}</span>
                     <span>{rt.diagnostics[0]?.message}</span>
                   </div>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 hover:bg-destructive/20 text-destructive" onClick={() => void onRemoveCustomTheme(rt.id)}>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 hover:bg-destructive/(--emph-subtle) text-destructive" onClick={() => void onRemoveCustomTheme(rt.id)}>
                     Remove
                   </Button>
                 </div>
@@ -416,12 +416,12 @@ export function ThemesSection() {
           </div>
         </div>
         {bgError ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive">
+          <div className="rounded-md border border-destructive/(--emph-soft) bg-destructive/(--emph-faint) px-2.5 py-1.5 text-[11.5px] text-destructive">
             {bgError}
           </div>
         ) : null}
         {backgroundKind === "image" && backgroundImageId ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-border/60 p-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-border/(--emph-strong) p-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[11.5px] text-muted-foreground">
                 Opacity

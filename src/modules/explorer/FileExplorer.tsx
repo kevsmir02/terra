@@ -490,9 +490,9 @@ export const FileExplorer = memo(
         tabIndex={0}
         onKeyDown={handleKeyDown}
       >
-        <div className="terra-chrome flex h-8 shrink-0 items-center gap-1 border-b border-border/60 px-2">
+        <div className="terra-chrome flex h-8 shrink-0 items-center gap-1 border-b border-border/(--emph-strong) px-2">
           <span
-            className="terra-chrome-label flex flex-1 items-center truncate text-xs font-medium text-foreground/80"
+            className="terra-chrome-label flex flex-1 items-center truncate text-xs font-medium text-foreground/(--emph-bold)"
             title={rootPath}
           >
             <img
@@ -568,7 +568,7 @@ export const FileExplorer = memo(
                 className={cn(
                   "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]",
                   rootIsDropTarget &&
-                    "rounded-sm ring-1 ring-inset ring-primary/50",
+                    "rounded-sm ring-1 ring-inset ring-primary/(--emph-medium)",
                 )}
                 onPointerDown={dnd.onPointerDown}
                 onClickCapture={dnd.onClickCapture}
@@ -798,7 +798,7 @@ export const FileExplorer = memo(
         {dnd.dragLabel ? (
           <div
             ref={dnd.ghostRef}
-            className="pointer-events-none fixed left-0 top-0 z-50 flex items-center gap-1.5 rounded-sm border border-border/70 bg-card/95 px-2 py-1 text-[12px] text-foreground shadow-md"
+            className="pointer-events-none fixed left-0 top-0 z-50 flex items-center gap-1.5 rounded-sm border border-border/(--emph-strong) bg-card/(--emph-bold) px-2 py-1 text-[12px] text-foreground shadow-md"
           >
             {dnd.dragLabel}
           </div>

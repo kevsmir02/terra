@@ -86,7 +86,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
               Name
             </span>
             <input
@@ -107,7 +107,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
               Root directory
             </span>
             <input
@@ -129,7 +129,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </label>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
               Accent color
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -140,8 +140,8 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                 className={cn(
                   "size-5 rounded-full ring-1 ring-inset transition",
                   space.color == null
-                    ? "ring-foreground/80"
-                    : "ring-border hover:ring-foreground/40",
+                    ? "ring-foreground/(--emph-bold)"
+                    : "ring-border hover:ring-foreground/(--emph-soft)",
                 )}
                 style={{ backgroundColor: "var(--primary)" }}
               />
@@ -154,8 +154,8 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                   className={cn(
                     "size-5 rounded-full ring-1 ring-inset transition",
                     space.color === i
-                      ? "ring-foreground/80"
-                      : "ring-transparent hover:ring-foreground/40",
+                      ? "ring-foreground/(--emph-bold)"
+                      : "ring-transparent hover:ring-foreground/(--emph-soft)",
                   )}
                   style={{ backgroundColor: c }}
                 />
@@ -164,7 +164,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
               Startup commands
             </span>
             <div className="flex flex-col gap-1">
@@ -172,7 +172,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: stateless rows removed by index; no reorder to desync
                   key={`${c}-${i}`}
-                  className="flex items-center gap-1.5 rounded-md bg-muted/50 px-1.5 py-1"
+                  className="flex items-center gap-1.5 rounded-md bg-muted/(--emph-medium) px-1.5 py-1"
                 >
                   <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
                     {c}
@@ -188,7 +188,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                 </div>
               ))}
               {cmds.length === 0 && (
-                <span className="px-1 text-[10.5px] text-muted-foreground/60">
+                <span className="px-1 text-[10.5px] text-muted-foreground/(--emph-strong)">
                   No startup commands
                 </span>
               )}

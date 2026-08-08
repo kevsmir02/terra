@@ -78,7 +78,7 @@ export function AboutSection() {
     <div className="flex flex-col gap-6">
       <SectionHeader title="About" description="" />
 
-      <div className="flex items-center gap-4 rounded-xl border border-border/60 bg-card/60 p-5">
+      <div className="flex items-center gap-4 rounded-xl border border-border/(--emph-strong) bg-card/(--emph-strong) p-5">
         <img src="/logo.png" alt="" className="size-12" draggable={false} />
         <div className="flex min-w-0 flex-col">
           <span className="text-[15px] font-semibold tracking-tight">
@@ -141,12 +141,12 @@ export function AboutSection() {
           </Button>
         </div>
         {status.kind === "error" && (
-          <p className="font-mono text-[10.5px] break-all text-destructive/80">
+          <p className="font-mono text-[10.5px] break-all text-destructive/(--emph-bold)">
             {status.message}
           </p>
         )}
         {status.kind === "staged" && status.message && (
-          <p className="font-mono text-[10.5px] break-all text-destructive/80">
+          <p className="font-mono text-[10.5px] break-all text-destructive/(--emph-bold)">
             {status.message}
           </p>
         )}

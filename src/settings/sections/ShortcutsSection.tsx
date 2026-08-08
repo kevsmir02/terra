@@ -122,7 +122,7 @@ export function ShortcutsSection() {
               <h3 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                 {group}
               </h3>
-              <div className="flex flex-col divide-y divide-border/40 rounded-lg border border-border/60 bg-card/40 overflow-hidden">
+              <div className="flex flex-col divide-y divide-border/(--emph-soft) rounded-lg border border-border/(--emph-strong) bg-card/(--emph-soft) overflow-hidden">
                 {items.map((s) => (
                   <ShortcutRow
                     key={s.id}
@@ -156,7 +156,7 @@ export function ShortcutsSection() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={onResetAll}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/(--emph-bold)"
             >
               Reset All
             </AlertDialogAction>
@@ -207,7 +207,7 @@ function ShortcutRow({
   );
 
   return (
-    <div className="group flex items-center justify-between px-3 py-2.5 transition-colors hover:bg-muted/30">
+    <div className="group flex items-center justify-between px-3 py-2.5 transition-colors hover:bg-muted/(--emph-subtle)">
       <div className="flex flex-col gap-0.5">
         <span className="text-[12.5px] font-medium">{shortcut.label}</span>
         {conflicts.length > 0 && (
@@ -358,7 +358,7 @@ function Recorder({
 
   if (!pending) {
     return (
-      <div className="flex items-center gap-2 rounded bg-accent/50 px-2 py-1 text-[11px] ring-1 ring-accent">
+      <div className="flex items-center gap-2 rounded bg-accent/(--emph-medium) px-2 py-1 text-[11px] ring-1 ring-accent">
         <span className="animate-pulse font-medium">Recording...</span>
         <span className="text-muted-foreground">(Esc to cancel)</span>
       </div>
@@ -366,7 +366,7 @@ function Recorder({
   }
 
   return (
-    <div className="flex flex-col items-end gap-1 rounded bg-accent/50 px-2 py-1.5 text-[11px] ring-1 ring-accent">
+    <div className="flex flex-col items-end gap-1 rounded bg-accent/(--emph-medium) px-2 py-1.5 text-[11px] ring-1 ring-accent">
       <div className="flex items-center gap-2">
         <KbdGroup>
           {getBindingTokens(pending).map((t, i) => (

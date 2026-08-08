@@ -32,7 +32,7 @@ export function DeviceKeyBar({ keycodes, disabled, onPress }: Props) {
   ];
 
   return (
-    <div className="flex h-9 shrink-0 items-center justify-center gap-0.5 border-t border-border/60 bg-card select-none">
+    <div className="flex h-9 shrink-0 items-center justify-center gap-0.5 border-t border-border/(--emph-strong) bg-card select-none">
       {keys.map((key) => (
         <Button
           key={key.label}

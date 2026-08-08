@@ -18,8 +18,8 @@ type Props = {
  */
 export function DeviceDock({ serial, onStop }: Props) {
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border/60 bg-card">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border/(--emph-strong) bg-card">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/(--emph-strong) px-2">
         <span className="truncate text-[11px] font-medium text-foreground" title={serial}>
           {serial}
         </span>

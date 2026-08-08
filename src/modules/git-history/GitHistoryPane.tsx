@@ -181,7 +181,7 @@ function highlight(text: string, query: string): ReactNode {
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="rounded-sm bg-primary/25 px-0.5 text-foreground">
+      <mark className="rounded-sm bg-primary/(--emph-subtle) px-0.5 text-foreground">
         {text.slice(idx, idx + query.length)}
       </mark>
       {text.slice(idx + query.length)}
@@ -537,7 +537,7 @@ export function GitHistoryPane({
         ) : (
           <>
             <div
-              className="grid shrink-0 items-center gap-3 border-b border-border/40 bg-card/55 pr-3 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70"
+              className="grid shrink-0 items-center gap-3 border-b border-border/(--emph-soft) bg-card/(--emph-medium) pr-3 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/(--emph-strong)"
               style={{
                 height: TABLE_HEADER_HEIGHT,
                 gridTemplateColumns: gridTemplate,
@@ -599,7 +599,7 @@ export function GitHistoryPane({
                 </div>
               ) : null}
               {endReached && !activeSearch ? (
-                <div className="py-3 text-center text-[10.5px] text-muted-foreground/65">
+                <div className="py-3 text-center text-[10.5px] text-muted-foreground/(--emph-strong)">
                   End of history
                 </div>
               ) : null}
@@ -713,7 +713,7 @@ const CommitRow = memo(function CommitRow({
       onClick={(event) => onClick(commit.sha, event)}
       className={cn(
         "group relative grid h-full w-full cursor-pointer items-center gap-3 border-l-2 border-transparent pr-3 text-left transition-colors",
-        active ? "border-l-primary/70 bg-accent/45" : "hover:bg-accent/25",
+        active ? "border-l-primary/70 bg-accent/(--emph-soft)" : "hover:bg-accent/(--emph-subtle)",
       )}
       style={{ gridTemplateColumns: gridTemplate }}
     >
@@ -727,7 +727,7 @@ const CommitRow = memo(function CommitRow({
           />
         ) : null}
       </div>
-      <span className="pl-px font-mono text-[10.5px] tabular-nums text-muted-foreground/80">
+      <span className="pl-px font-mono text-[10.5px] tabular-nums text-muted-foreground/(--emph-bold)">
         {commit.shortSha}
       </span>
       <span
@@ -735,7 +735,7 @@ const CommitRow = memo(function CommitRow({
           "min-w-0 truncate text-[12px] leading-tight",
           active
             ? "font-semibold text-foreground"
-            : "font-medium text-foreground/95",
+            : "font-medium text-foreground/(--emph-bold)",
         )}
       >
         {commit.subject ? (
@@ -746,7 +746,7 @@ const CommitRow = memo(function CommitRow({
       </span>
       <span aria-hidden />
       <span
-        className="ml-2 inline-flex h-[18px] max-w-full min-w-0 items-center gap-1.5 justify-self-start self-center overflow-hidden rounded-md bg-foreground/6 pl-1 pr-1.5 text-[10.5px] font-medium text-foreground/85"
+        className="ml-2 inline-flex h-[18px] max-w-full min-w-0 items-center gap-1.5 justify-self-start self-center overflow-hidden rounded-md bg-foreground/(--emph-faint) pl-1 pr-1.5 text-[10.5px] font-medium text-foreground/(--emph-bold)"
         title={commit.authorEmail || commit.author}
       >
         <span
@@ -761,13 +761,13 @@ const CommitRow = memo(function CommitRow({
           {commit.author ? highlight(commit.author, query) : "Unknown"}
         </span>
       </span>
-      <span className="text-right font-mono text-[10.5px] tabular-nums text-muted-foreground/75">
+      <span className="text-right font-mono text-[10.5px] tabular-nums text-muted-foreground/(--emph-strong)">
         {date}
       </span>
       <span className="flex min-w-0 items-center justify-end gap-1.5 font-mono text-[10px] tabular-nums">
         {commit.filesChanged > 0 ? (
           <span
-            className="inline-flex items-center gap-1 text-muted-foreground/75"
+            className="inline-flex items-center gap-1 text-muted-foreground/(--emph-strong)"
             title={`${commit.filesChanged} ${commit.filesChanged === 1 ? "file" : "files"} changed`}
           >
             <HugeiconsIcon
@@ -782,7 +782,7 @@ const CommitRow = memo(function CommitRow({
         {commit.filesChanged > 0 && totalStat > 0 ? (
           <span
             aria-hidden
-            className="size-[3px] shrink-0 rounded-full bg-muted-foreground/30"
+            className="size-[3px] shrink-0 rounded-full bg-muted-foreground/(--emph-subtle)"
           />
         ) : null}
         {totalStat > 0 ? (
@@ -799,7 +799,7 @@ const CommitRow = memo(function CommitRow({
             ) : null}
           </span>
         ) : commit.filesChanged === 0 ? (
-          <span className="text-muted-foreground/40">—</span>
+          <span className="text-muted-foreground/(--emph-soft)">—</span>
         ) : null}
       </span>
     </button>
@@ -840,9 +840,9 @@ function CommitDetail({
 
   return (
     <div className="flex max-h-[60vh] min-h-0 flex-col">
-      <div className="shrink-0 border-b border-border/45 p-3">
+      <div className="shrink-0 border-b border-border/(--emph-soft) p-3">
         <div className="flex items-start gap-2">
-          <span className="mt-px shrink-0 rounded bg-muted/65 px-1.5 py-0.5 font-mono text-[10.5px] leading-none tabular-nums text-muted-foreground">
+          <span className="mt-px shrink-0 rounded bg-muted/(--emph-strong) px-1.5 py-0.5 font-mono text-[10.5px] leading-none tabular-nums text-muted-foreground">
             {commit.shortSha}
           </span>
           <div className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug text-foreground">
@@ -855,13 +855,13 @@ function CommitDetail({
           <span className="truncate">{commit.author || "Unknown"}</span>
           {commit.authorEmail ? (
             <>
-              <span className="text-muted-foreground/45">·</span>
-              <span className="truncate text-muted-foreground/85">
+              <span className="text-muted-foreground/(--emph-soft)">·</span>
+              <span className="truncate text-muted-foreground/(--emph-bold)">
                 {commit.authorEmail}
               </span>
             </>
           ) : null}
-          <span className="text-muted-foreground/45">·</span>
+          <span className="text-muted-foreground/(--emph-soft)">·</span>
           <span className="shrink-0 tabular-nums">{absolute}</span>
         </div>
 
@@ -954,9 +954,9 @@ function CommitFiles({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85">
+      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/(--emph-bold)">
         <span>Files</span>
-        <span className="rounded-sm bg-muted/55 px-1 py-px text-[9.5px] tabular-nums text-muted-foreground/85 normal-case tracking-normal">
+        <span className="rounded-sm bg-muted/(--emph-medium) px-1 py-px text-[9.5px] tabular-nums text-muted-foreground/(--emph-bold) normal-case tracking-normal">
           {filesEntry.files.length}
         </span>
       </div>
@@ -990,7 +990,7 @@ const FileRow = memo(function FileRow({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent/40"
+      className="group flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent/(--emph-soft)"
     >
       {iconUrl ? (
         <img src={iconUrl} alt="" className="size-3.5 shrink-0" />
@@ -1002,14 +1002,14 @@ const FileRow = memo(function FileRow({
           {fileName}
         </span>
         {dir ? (
-          <span className="min-w-0 flex-1 truncate text-[10px] leading-tight text-muted-foreground/80">
+          <span className="min-w-0 flex-1 truncate text-[10px] leading-tight text-muted-foreground/(--emph-bold)">
             {dir}
           </span>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1 text-[10px] tabular-nums">
         {file.isBinary ? (
-          <span className="text-muted-foreground/70">binary</span>
+          <span className="text-muted-foreground/(--emph-strong)">binary</span>
         ) : (
           <>
             {file.added > 0 ? (

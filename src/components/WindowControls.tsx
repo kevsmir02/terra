@@ -83,7 +83,7 @@ function CtlButton({
       className={cn(
         "grid size-7 place-items-center rounded-md text-muted-foreground transition-colors",
         danger
-          ? "hover:bg-destructive/15 hover:text-destructive"
+          ? "hover:bg-destructive/(--emph-faint) hover:text-destructive"
           : "hover:bg-accent hover:text-foreground",
       )}
     >

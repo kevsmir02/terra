@@ -63,7 +63,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
 
     return (
       <div
-        className="flex h-full w-full flex-col overflow-hidden rounded-md border border-border/60 bg-background"
+        className="flex h-full w-full flex-col overflow-hidden rounded-md border border-border/(--emph-strong) bg-background"
         style={{
           visibility: visible ? "visible" : "hidden",
           pointerEvents: visible ? "auto" : "none",
@@ -76,7 +76,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
           onReload={() => setNonce((n) => n + 1)}
         />
         {showXfoHint ? (
-          <div className="flex h-7 shrink-0 items-center gap-1.5 border-b border-border/60 bg-status-warning/8 px-3 text-[11px] text-status-warning">
+          <div className="flex h-7 shrink-0 items-center gap-1.5 border-b border-border/(--emph-strong) bg-status-warning/8 px-3 text-[11px] text-status-warning">
             <HugeiconsIcon
               icon={Alert02Icon}
               size={12}
@@ -133,7 +133,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
 function SuspendedState({ onReload }: { onReload: () => void }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-card text-muted-foreground">
+      <div className="flex size-10 items-center justify-center rounded-2xl border border-border/(--emph-strong) bg-card text-muted-foreground">
         <HugeiconsIcon icon={Globe02Icon} size={18} strokeWidth={1.5} />
       </div>
       <div className="space-y-1">
@@ -147,7 +147,7 @@ function SuspendedState({ onReload }: { onReload: () => void }) {
       <button
         type="button"
         onClick={onReload}
-        className="rounded-md border border-border/60 bg-card px-3 py-1 text-[11px] hover:bg-accent/50"
+        className="rounded-md border border-border/(--emph-strong) bg-card px-3 py-1 text-[11px] hover:bg-accent/(--emph-medium)"
       >
         Reload
       </button>
@@ -158,7 +158,7 @@ function SuspendedState({ onReload }: { onReload: () => void }) {
 function EmptyState() {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="flex size-12 items-center justify-center rounded-2xl border border-border/60 bg-card text-muted-foreground">
+      <div className="flex size-12 items-center justify-center rounded-2xl border border-border/(--emph-strong) bg-card text-muted-foreground">
         <HugeiconsIcon icon={Globe02Icon} size={20} strokeWidth={1.5} />
       </div>
       <div className="space-y-1.5">

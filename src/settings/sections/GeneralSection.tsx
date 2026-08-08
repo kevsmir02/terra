@@ -155,8 +155,8 @@ export function GeneralSection() {
               className={cn(
                 "group flex h-20 flex-col items-center justify-center gap-1.5 rounded-lg border bg-card transition-all",
                 mode === o.id
-                  ? "border-foreground/60 ring-1 ring-foreground/20"
-                  : "border-border/60 hover:border-border",
+                  ? "border-foreground/(--emph-strong) ring-1 ring-foreground/(--emph-subtle)"
+                  : "border-border/(--emph-strong) hover:border-border",
               )}
             >
               <HugeiconsIcon icon={o.icon} size={18} strokeWidth={1.5} />
@@ -172,7 +172,7 @@ export function GeneralSection() {
 
       <div className="flex flex-col gap-2">
         <Label>Zoom</Label>
-        <div className="flex flex-col gap-3 rounded-lg border border-border/60 p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-border/(--emph-strong) p-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11.5px] text-muted-foreground">
               UI zoom level
@@ -224,7 +224,7 @@ export function GeneralSection() {
                   <TooltipTrigger asChild>
                     <span
                       role="img"
-                      className="cursor-help text-[11px] text-muted-foreground/70 leading-none"
+                      className="cursor-help text-[11px] text-muted-foreground/(--emph-strong) leading-none"
                       aria-label="More info about WebGL renderer"
                     >
                       ⓘ
@@ -524,7 +524,7 @@ function FontFamilyInput({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="h-8 w-48 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
+        className="h-8 w-48 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/(--emph-soft)"
       />
     </SettingRow>
   );

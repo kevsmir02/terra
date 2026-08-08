@@ -110,8 +110,8 @@ export const PreviewAddressBar = forwardRef<PreviewAddressBarHandle, Props>(
     };
 
     return (
-      <div className="shrink-0 border-b border-border/60">
-      <div className="flex h-9 items-center gap-1 bg-card/40 px-1.5">
+      <div className="shrink-0 border-b border-border/(--emph-strong)">
+      <div className="flex h-9 items-center gap-1 bg-card/(--emph-soft) px-1.5">
         <Button
           type="button"
           variant="ghost"
@@ -170,7 +170,7 @@ export const PreviewAddressBar = forwardRef<PreviewAddressBarHandle, Props>(
             placeholder="http://localhost:3000"
             spellCheck={false}
             autoComplete="off"
-            className="h-7 w-full bg-muted/60 px-2 text-xs placeholder:text-muted-foreground/70 focus-visible:ring-0"
+            className="h-7 w-full bg-muted/(--emph-strong) px-2 text-xs placeholder:text-muted-foreground/(--emph-strong) focus-visible:ring-0"
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {

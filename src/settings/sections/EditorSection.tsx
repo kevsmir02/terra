@@ -242,7 +242,7 @@ function FormatterOverrides() {
       {entries.map(([lang, formatter]) => (
         <div
           key={lang}
-          className="flex items-center justify-end gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-1.5"
+          className="flex items-center justify-end gap-2 rounded-md border border-border/(--emph-medium) bg-muted/(--emph-subtle) px-3 py-1.5"
         >
           <Select
             value={lang}
@@ -340,7 +340,7 @@ function AutoSaveDelayInput({
               e.currentTarget.blur();
             }
           }}
-          className="h-8 w-20 rounded-md border border-border bg-background px-2.5 text-right text-[12px] md:text-[12px] tabular-nums outline-none focus:border-foreground/40 focus-visible:ring-0 focus-visible:border-foreground/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="h-8 w-20 rounded-md border border-border bg-background px-2.5 text-right text-[12px] md:text-[12px] tabular-nums outline-none focus:border-foreground/(--emph-soft) focus-visible:ring-0 focus-visible:border-foreground/(--emph-soft) [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
         <span className="text-[11px] text-muted-foreground">ms</span>
       </div>

@@ -345,6 +345,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#b5c98f",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -694,6 +718,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#5a7c3c",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -1038,6 +1086,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#a7c080",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -1384,6 +1456,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#687900",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -1728,6 +1824,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#98971a",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -2074,6 +2194,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#767006",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -2418,6 +2562,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#76946a",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -2764,6 +2932,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#8a9a7b",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -3108,6 +3300,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#8a9a7b",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -3454,6 +3670,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#597238",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -3799,6 +4039,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#a3be8c",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -4143,6 +4407,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#5c7446",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -4521,6 +4809,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#6a9c8a",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -4898,6 +5210,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#2e7d5b",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -5247,6 +5583,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#a7c080",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -5595,6 +5955,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#4f7a2f",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -5973,6 +6357,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#9ac356",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -6350,6 +6758,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#325816",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -6415,6 +6847,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--ui-spacing",
       "0.25rem",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -6479,6 +6935,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--ui-spacing",
       "0.25rem",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
@@ -6829,6 +7309,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#8fc99a",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -7178,6 +7682,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#2e7f45",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -7523,6 +8051,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "--status-ok",
       "#9ece6a",
     ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
+    ],
   ],
 }
 `;
@@ -7867,6 +8419,30 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--status-ok",
       "#9ece6a",
+    ],
+    [
+      "--emph-faint",
+      "0.1",
+    ],
+    [
+      "--emph-subtle",
+      "0.3",
+    ],
+    [
+      "--emph-soft",
+      "0.4",
+    ],
+    [
+      "--emph-medium",
+      "0.5",
+    ],
+    [
+      "--emph-strong",
+      "0.6",
+    ],
+    [
+      "--emph-bold",
+      "0.85",
     ],
   ],
 }
