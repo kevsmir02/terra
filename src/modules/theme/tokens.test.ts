@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { TOKENS } from "./tokens";
 import { STATUS_ROLES, SYNTAX_ROLES } from "./types";
+// @ts-expect-error script is mjs
+import { renderTokenReference } from "../../../scripts/theme-token-reference.mjs";
 
 describe("token registry", () => {
   it("maps each CSS variable exactly once", () => {
@@ -63,9 +65,7 @@ describe("token registry", () => {
     ]);
   });
 
-  it("keeps the THEME.md token reference in sync with the registry", async () => {
-    // @ts-expect-error we need to dynamically import mjs since it might not be typed
-    const { renderTokenReference } = await import("../../../scripts/theme-token-reference.mjs");
+  it("keeps the THEME.md token reference in sync with the registry", () => {
     const doc = readFileSync("THEME.md", "utf8");
     expect(doc).toContain(renderTokenReference(TOKENS));
   });

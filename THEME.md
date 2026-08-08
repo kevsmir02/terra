@@ -62,6 +62,136 @@ across modes, so a user in dark mode gets your light palette.
 Every key is optional. Omitting one leaves the current default, which is always
 the value that renders today.
 
+### `colors` (variant-level)
+
+Maps 1:1 onto the shadcn variable set: `background`, `foreground`, `card`,
+`cardForeground`, `popover`, `popoverForeground`, `primary`, `primaryForeground`,
+`secondary`, `secondaryForeground`, `muted`, `mutedForeground`, `accent`,
+`accentForeground`, `destructive`, `border`, `input`, `ring`, and the eight
+`sidebar*` keys. Plus two that are not colors but live here for historical
+reasons:
+
+- `radius` - a CSS length, e.g. `"0.625rem"`. Drives `rounded-sm` through
+  `rounded-4xl` proportionally. `rounded-full` (36 sites) and `rounded-none`
+  bypass it by design.
+- `borderStyle` - one of `solid`, `dashed`, `dotted`, `double`, `none`. Changes
+  the stroke of borders that already have a width; it never draws one.
+
+Values are passed through to CSS untouched, so any valid colour syntax works
+(`#rrggbb`, `oklch(...)`, `rgba(...)`).
+
+**Surfaces that actually carry the UI:** `background` is the app canvas,
+`card` is the header, statusbar and side-panel container, `popover` is menus and
+dropdowns. Note that **`bg-sidebar` has zero usages** - the eight `sidebar*`
+tokens are currently inert. Set them coherently anyway so the theme stays
+correct if the sidebar primitive is adopted, but do not rely on them for a look.
+
+### `terminal` (variant-level)
+
+Colour keys are `background`, `foreground`, `cursor`, `cursorAccent`,
+`selection`, and `ansi`: exactly 16 strings in the standard order. The three
+optional font keys are covered under [Terminal font](#terminal-font) below.
+
+```
+0-7   black red green yellow blue magenta cyan white
+8-15  the same eight, bright
+```
+
+Rules that `terminalLegibility.test.ts` enforces across every built-in:
+
+- **No slot may equal the background.** Stardew once shipped
+  `brightWhite === background`, which is invisible text, not a colour choice.
+- **Blue must differ from cyan**, in both the normal and bright rows.
+- **`foreground` vs `background` must clear 4.5:1.**
+
+Rules the test only enforces numerically for Stardew, but that you should
+hold anyway:
+
+- Normal slots 1-7 clear **4.5:1** against your background.
+- Bright slots 9-15 clear **3:1**.
+- **Slot 8 (`brightBlack`) clears 3:1.** This is the one everyone gets wrong: it
+  is the comment colour in most tooling, and a "subtle" value lands at 1.6:1 and
+  makes every comment unreadable.
+- Slot 0 (`black`) is exempt. It is legitimately near-background on dark themes.
+
+**Keep the terminal background desaturated.** Well-regarded terminal palettes sit
+at 5-25% HSL saturation (gruvbox-hard `#1d2021` is 6%, kanagawa `#1f1f28` is 15%,
+rose-pine `#191724` is 19%). Above roughly 30% the background stops being a tint
+and becomes a colour, and it visibly pushes its hue into every slot drawn on it.
+Pick your hue from the theme, then pull saturation down.
+
+### Terminal font
+
+A theme may also declare the terminal font. These three are optional and sit
+alongside the colour keys in `terminal`:
+
+| Key | Type | Accepted values |
+|---|---|---|
+| `fontFamily` | string | any non-empty family string |
+| `fontWeight` | string | `normal`, `bold`, or `100`-`900` in hundreds |
+| `fontSize` | number | integer from 8 to 32 |
+
+**A theme font is a default, not an override.** `resolveTerminalFont` compares
+each preference against its shipped default (`terminalFontFamily` is `""`,
+`terminalFontWeight` is `normal`, `terminalFontSize` is
+`TERMINAL_FONT_SIZE_DEFAULT`). A field still sitting at its default takes the
+theme's value; a field the user has changed keeps the user's value and the theme
+loses. This is per field, so a theme can set the family of a user who never
+picked one while still respecting the size they did pick.
+
+This is a deliberate divergence from upstream Terax, where the theme wins
+outright. Switching themes here never discards a font someone chose on purpose.
+
+**Name a family you actually ship.** `fontFamily` is passed to xterm as-is, so a
+face that is neither bundled nor installed on the system silently falls back to
+the next family in the stack. If your theme needs a bundled face, list it in
+`type.fonts` as well so `ThemeProvider` loads it. End the string with a real
+fallback, exactly as with the UI font stacks.
+
+### `shape` (variant-level)
+
+Lengths must match `/^(0|-?\d+(\.\d+)?(px|rem|em))$/` - no `calc()`, no commas,
+because several compose into a shared `box-shadow` and a function call would
+rewrite the declaration.
+
+| Key | Variable | Default | Effect |
+|---|---|---|---|
+| `frameWidth` | `--frame-border-width` | `1px` | window frame border |
+| `frameRadius` | `--frame-radius` | `12px` | window corner radius |
+| `framePadding` | `--frame-padding` | `0px` | inset between frame and chrome |
+| `chromeWidth` | `--chrome-border-width` | `1px` | `.terra-chrome` |
+| `panelWidth` | `--panel-border-width` | `1px` | `.terra-panel` |
+| `slotWidth` | `--slot-border-width` | `1px` | `.terra-slot` |
+| `controlWidth` | `--control-border-width` | `1px` | `.terra-control` |
+| `bevelWidth` | `--bevel-width` | `0px` | ring thickness |
+| `bevelOuter` / `bevelMid` / `bevelInner` | `--bevel-*` | `transparent` | three stacked inset rings |
+| `liftColor` / `liftDepth` | `--lift-*` | `transparent` / `0px` | hard drop shadow |
+| `spacing` | `--ui-spacing` | `0.25rem` | **every** padding, gap, and size utility |
+
+`spacing` is a blunt instrument. It rescales all 200-plus spacing utilities at
+once, which will overflow rows that size on content. Change it only with a way to
+look at the result, and expect to fix overflows.
+
+### `type` (variant-level)
+
+| Key | Variable | Notes |
+|---|---|---|
+| `sans` | `--ui-font-sans` | the UI font |
+| `mono` | `--ui-font-mono` | see the warning below |
+| `display` | `--ui-font-display` | `.terra-chrome-label` only |
+| `chromeTracking` | `--chrome-tracking` | prefer `em` so it scales |
+| `chromeTransform` | `--chrome-transform` | `none`, `uppercase`, `lowercase` |
+| `fonts` | (none) | ids from the bundled registry, lazily loaded |
+
+Always end a family string with a real fallback:
+`"'Pixelify Sans', 'Inter Variable', sans-serif"`.
+
+**Think twice before setting `mono`.** Every `font-mono` site in Terra is an
+8.5px to 12px commit hash, file path, version string, or `kbd` chip. A display
+or pixel face is illegible at those sizes. Stardew deliberately leaves `mono`
+unset and keeps JetBrains Mono.
+
+
 <!-- token-reference:start -->
 
 ### `colors`
