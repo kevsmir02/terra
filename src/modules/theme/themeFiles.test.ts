@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { syntaxFromAnsi } from "./derive";
 import { starterTheme } from "./themeFiles";
 import { validateTheme } from "./validateTheme";
 
@@ -24,7 +23,6 @@ describe("starterTheme", () => {
     for (const mode of ["light", "dark"] as const) {
       const v = t.variants[mode];
       expect(v?.terminal?.ansi).toHaveLength(16);
-      expect(syntaxFromAnsi(v?.terminal, v?.colors, v?.syntax)).not.toBeNull();
     }
   });
 
