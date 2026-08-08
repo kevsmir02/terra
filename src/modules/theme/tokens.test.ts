@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TOKENS } from "./tokens";
 import { STATUS_ROLES, SYNTAX_ROLES } from "./types";
 // @ts-expect-error script is mjs
-import { renderTokenReference } from "../../../scripts/theme-token-reference.mjs";
+import { renderTokenReference } from "@/../scripts/theme-token-reference.mjs";
 
 describe("token registry", () => {
   it("maps each CSS variable exactly once", () => {

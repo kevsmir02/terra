@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { contrast, ensureContrast, fromOklab, isHexColor, parseColor, toOklab } from "./oklab";
 import { COLOR_RE } from "./validateTheme";
 
-// Every notation the engine claims to support, with a value that is white
-// (or near enough) so one table drives both the parse and agreement tests.
 const WHITE_IN_EVERY_NOTATION = [
   "#fff",
   "#ffffff",
@@ -26,7 +24,6 @@ describe("parseColor", () => {
   });
 
   it("round-trips a mid-tone through the oklab notations", () => {
-    // oklch and oklab describe the same colour; polar vs cartesian.
     const viaLch = parseColor("oklch(0.6 0.1 150)");
     const viaLab = parseColor("oklab(0.6 -0.0866 0.05)");
     expect(viaLch).not.toBeNull();
@@ -98,11 +95,6 @@ describe("ensureContrast", () => {
     expect(contrast(out, "#1f1f28")).toBeGreaterThanOrEqual(4.5);
   });
 
-  // The whole reason for moving lightness rather than blending toward the
-  // foreground: blending desaturates into mud, this keeps the hue. Asserted as
-  // hue angle and chroma retention rather than raw a/b, because a darker target
-  // is often outside sRGB and the clamp acts as a gamut projection, which shifts
-  // a and b while leaving hue intact.
   it("preserves hue and most of the chroma", () => {
     const hue = ([, a, b]: [number, number, number]) =>
       (Math.atan2(b, a) * 180) / Math.PI;
@@ -114,18 +106,12 @@ describe("ensureContrast", () => {
   });
 
   it("keeps everforest string vivid rather than grey", () => {
-    // Regression pin on the measured outcome. Blending toward fg produced
-    // #677658; lightness-only produces a still-saturated olive.
     const out = ensureContrast("#8da101", "#fdf6e3", 4.5);
     const [, a, b] = toOklab(out);
     expect(Math.hypot(a, b)).toBeGreaterThan(0.05);
   });
 });
 
-// This is the test that stops the two-tier contrast bug from returning in a new
-// form: a notation validation accepts but the contrast maths cannot convert
-// would silently become a token that works as a `color` and fails as a
-// `textColor`.
 describe("allowlist agreement", () => {
   it("parses everything COLOR_RE accepts, except transparent", () => {
     for (const v of WHITE_IN_EVERY_NOTATION) {
