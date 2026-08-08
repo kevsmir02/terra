@@ -35,7 +35,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#6b8081",
+      "#081a1b",
     ],
     [
       "--secondary",
@@ -91,7 +91,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#6b8081",
+      "#081a1b",
     ],
     [
       "--sidebar-accent",
@@ -384,7 +384,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#737373",
+      "#ffffff",
     ],
     [
       "--secondary",
@@ -440,7 +440,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#737373",
+      "#fbfbfb",
     ],
     [
       "--sidebar-accent",
@@ -668,11 +668,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#5a7d3c",
+      "#5a7c3c",
     ],
     [
       "--status-modified",
-      "#a9762a",
+      "#9b6919",
     ],
     [
       "--status-deleted",
@@ -684,15 +684,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#a9762a",
+      "#9b6919",
     ],
     [
       "--status-conflict",
-      "#2a8589",
+      "#227f83",
     ],
     [
       "--status-ok",
-      "#5a7d3c",
+      "#5a7c3c",
     ],
   ],
 }
@@ -733,7 +733,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#939da4",
+      "#2d353b",
     ],
     [
       "--secondary",
@@ -789,7 +789,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#939da4",
+      "#2d353b",
     ],
     [
       "--sidebar-accent",
@@ -1078,7 +1078,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#777161",
+      "#fdf6e3",
     ],
     [
       "--secondary",
@@ -1094,7 +1094,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--muted-foreground",
-      "#677566",
+      "#829181",
     ],
     [
       "--accent",
@@ -1134,7 +1134,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#777161",
+      "#fdf6e3",
     ],
     [
       "--sidebar-accent",
@@ -1358,31 +1358,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#8da101",
+      "#687900",
     ],
     [
       "--status-modified",
-      "#dfa000",
+      "#a06400",
     ],
     [
       "--status-deleted",
-      "#f85552",
+      "#d53135",
     ],
     [
       "--status-renamed",
-      "#3a94c5",
+      "#1478a8",
     ],
     [
       "--status-warning",
-      "#dfa000",
+      "#a06400",
     ],
     [
       "--status-conflict",
-      "#35a77c",
+      "#008159",
     ],
     [
       "--status-ok",
-      "#8da101",
+      "#687900",
     ],
   ],
 }
@@ -1423,7 +1423,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#8e8e8e",
+      "#282828",
     ],
     [
       "--secondary",
@@ -1479,7 +1479,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#8e8e8e",
+      "#282828",
     ],
     [
       "--sidebar-accent",
@@ -1711,11 +1711,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#cc241d",
+      "#f95546",
     ],
     [
       "--status-renamed",
-      "#458588",
+      "#59999b",
     ],
     [
       "--status-warning",
@@ -1768,7 +1768,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#776e49",
+      "#fbf1c7",
     ],
     [
       "--secondary",
@@ -1784,7 +1784,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--muted-foreground",
-      "#786b61",
+      "#7c6f64",
     ],
     [
       "--accent",
@@ -1824,7 +1824,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#776e49",
+      "#fbf1c7",
     ],
     [
       "--sidebar-accent",
@@ -2048,11 +2048,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#79740e",
+      "#767006",
     ],
     [
       "--status-modified",
-      "#b57614",
+      "#9d6000",
     ],
     [
       "--status-deleted",
@@ -2064,15 +2064,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#b57614",
+      "#9d6000",
     ],
     [
       "--status-conflict",
-      "#427b58",
+      "#407957",
     ],
     [
       "--status-ok",
-      "#79740e",
+      "#767006",
     ],
   ],
 }
@@ -2113,7 +2113,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#858691",
+      "#1f1f28",
     ],
     [
       "--secondary",
@@ -2169,7 +2169,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#858691",
+      "#1f1f28",
     ],
     [
       "--sidebar-accent",
@@ -2401,7 +2401,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#c34043",
+      "#e05b5a",
     ],
     [
       "--status-renamed",
@@ -2458,7 +2458,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#817f7f",
+      "#181616",
     ],
     [
       "--secondary",
@@ -2514,7 +2514,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#817f7f",
+      "#181616",
     ],
     [
       "--sidebar-accent",
@@ -2803,7 +2803,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#817f7f",
+      "#181616",
     ],
     [
       "--secondary",
@@ -2859,7 +2859,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#817f7f",
+      "#181616",
     ],
     [
       "--sidebar-accent",
@@ -3148,7 +3148,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#716b40",
+      "#f2ecbc",
     ],
     [
       "--secondary",
@@ -3164,7 +3164,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--muted-foreground",
-      "#6b6a62",
+      "#8a8980",
     ],
     [
       "--accent",
@@ -3204,7 +3204,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#716b40",
+      "#f2ecbc",
     ],
     [
       "--sidebar-accent",
@@ -3428,15 +3428,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#6f894e",
+      "#597238",
     ],
     [
       "--status-modified",
-      "#77713f",
+      "#726b3a",
     ],
     [
       "--status-deleted",
-      "#c84053",
+      "#bf384c",
     ],
     [
       "--status-renamed",
@@ -3444,15 +3444,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#77713f",
+      "#726b3a",
     ],
     [
       "--status-conflict",
-      "#597b75",
+      "#4f706b",
     ],
     [
       "--status-ok",
-      "#6f894e",
+      "#597238",
     ],
   ],
 }
@@ -3493,7 +3493,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#949caa",
+      "#2e3440",
     ],
     [
       "--secondary",
@@ -3549,7 +3549,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#949caa",
+      "#2e3440",
     ],
     [
       "--sidebar-accent",
@@ -3781,7 +3781,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#bf616a",
+      "#e17f87",
     ],
     [
       "--status-renamed",
@@ -3838,7 +3838,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#6a6d71",
+      "#eceff4",
     ],
     [
       "--secondary",
@@ -3894,7 +3894,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#6a6d71",
+      "#eceff4",
     ],
     [
       "--sidebar-accent",
@@ -4118,31 +4118,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#a3be8c",
+      "#5c7446",
     ],
     [
       "--status-modified",
-      "#ebcb8b",
+      "#866829",
     ],
     [
       "--status-deleted",
-      "#bf616a",
+      "#ac5059",
     ],
     [
       "--status-renamed",
-      "#81a1c1",
+      "#516f8d",
     ],
     [
       "--status-warning",
-      "#ebcb8b",
+      "#866829",
     ],
     [
       "--status-conflict",
-      "#88c0d0",
+      "#3e7483",
     ],
     [
       "--status-ok",
-      "#a3be8c",
+      "#5c7446",
     ],
   ],
 }
@@ -4503,7 +4503,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#c23b2e",
+      "#d24a3b",
     ],
     [
       "--status-renamed",
@@ -4560,7 +4560,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#6f6f6f",
+      "#ffffff",
     ],
     [
       "--secondary",
@@ -4616,7 +4616,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#6f6f6f",
+      "#ffffff",
     ],
     [
       "--sidebar-accent",
@@ -4876,7 +4876,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-modified",
-      "#b8860b",
+      "#976600",
     ],
     [
       "--status-deleted",
@@ -4888,7 +4888,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#b8860b",
+      "#976600",
     ],
     [
       "--status-conflict",
@@ -4937,7 +4937,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#818884",
+      "#1c211e",
     ],
     [
       "--secondary",
@@ -4993,7 +4993,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#818884",
+      "#1c211e",
     ],
     [
       "--sidebar-accent",
@@ -5286,7 +5286,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#707070",
+      "#ffffff",
     ],
     [
       "--secondary",
@@ -5302,7 +5302,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--muted-foreground",
-      "#6a7362",
+      "#6b7563",
     ],
     [
       "--accent",
@@ -5342,7 +5342,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#707070",
+      "#ffffff",
     ],
     [
       "--sidebar-accent",
@@ -5574,7 +5574,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-modified",
-      "#a97f2a",
+      "#936906",
     ],
     [
       "--status-deleted",
@@ -5586,11 +5586,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#a97f2a",
+      "#936906",
     ],
     [
       "--status-conflict",
-      "#2a8580",
+      "#207d79",
     ],
     [
       "--status-ok",
@@ -5635,7 +5635,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#9b7969",
+      "#2b1104",
     ],
     [
       "--secondary",
@@ -5691,7 +5691,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#9b7969",
+      "#2b1104",
     ],
     [
       "--sidebar-accent",
@@ -6012,7 +6012,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#726852",
+      "#fdf2d8",
     ],
     [
       "--secondary",
@@ -6068,7 +6068,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#726852",
+      "#fdf2d8",
     ],
     [
       "--sidebar-accent",
@@ -6519,7 +6519,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#7b8285",
+      "#14191c",
     ],
     [
       "--secondary",
@@ -6575,7 +6575,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#7b8285",
+      "#14191c",
     ],
     [
       "--sidebar-accent",
@@ -6868,7 +6868,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#707070",
+      "#ffffff",
     ],
     [
       "--secondary",
@@ -6924,7 +6924,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#707070",
+      "#ffffff",
     ],
     [
       "--sidebar-accent",
@@ -7152,11 +7152,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#3a8a4f",
+      "#2e7f45",
     ],
     [
       "--status-modified",
-      "#a9802a",
+      "#926904",
     ],
     [
       "--status-deleted",
@@ -7168,15 +7168,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#a9802a",
+      "#926904",
     ],
     [
       "--status-conflict",
-      "#2f7d76",
+      "#2e7c76",
     ],
     [
       "--status-ok",
-      "#3a8a4f",
+      "#2e7f45",
     ],
   ],
 }
@@ -7217,7 +7217,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#818290",
+      "#1a1b26",
     ],
     [
       "--secondary",
@@ -7273,7 +7273,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#818290",
+      "#1a1b26",
     ],
     [
       "--sidebar-accent",
@@ -7562,7 +7562,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--primary-foreground",
-      "#818290",
+      "#1a1b26",
     ],
     [
       "--secondary",
@@ -7618,7 +7618,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-primary-foreground",
-      "#818290",
+      "#1a1b26",
     ],
     [
       "--sidebar-accent",

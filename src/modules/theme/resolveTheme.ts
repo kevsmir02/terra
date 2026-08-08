@@ -1,4 +1,3 @@
-import { ensureContrast } from "./oklab";
 import { resolveVariant } from "./resolveVariant";
 import { TOKENS } from "./tokens";
 import type { ThemeVar } from "./applyTheme";
@@ -43,16 +42,7 @@ export function resolveTheme(theme: Theme, mode: ThemeMode): ThemeVar[] | null {
     if (!def) return;
     for (const d of def.deps ?? []) resolveOne(d);
     const authored = readAuthored(variant, key);
-    let val = authored ?? def.derive?.({ ...values, ansi } as never) ?? def.fallback;
-
-    if (val && (def.kind === "textColor" || def.group === "syntax")) {
-      const bg = values["colors.background"];
-      if (bg) {
-        const floor = ["syntax.comment", "syntax.gutterFg", "syntax.tagBracket"].includes(key) ? 3 : 4.5;
-        val = ensureContrast(val, bg, floor);
-      }
-    }
-    values[key] = val;
+    values[key] = authored ?? def.derive?.({ ...values, ansi } as never) ?? def.fallback;
   };
 
   for (const t of TOKENS) resolveOne(t.key);
