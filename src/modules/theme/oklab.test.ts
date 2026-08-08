@@ -1,5 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { contrast, ensureContrast, fromOklab, isHexColor, toOklab } from "./oklab";
+import { contrast, ensureContrast, fromOklab, isHexColor, parseColor, toOklab } from "./oklab";
+import { COLOR_RE } from "./validateTheme";
+
+// Every notation the engine claims to support, with a value that is white
+// (or near enough) so one table drives both the parse and agreement tests.
+const WHITE_IN_EVERY_NOTATION = [
+  "#fff",
+  "#ffffff",
+  "#ffffffcc",
+  "rgb(255, 255, 255)",
+  "rgba(255,255,255,0.5)",
+  "hsl(0, 0%, 100%)",
+  "hsla(0, 0%, 100%, 0.5)",
+  "oklch(1 0 0)",
+  "oklab(1 0 0)",
+];
+
+describe("parseColor", () => {
+  it("parses every supported notation", () => {
+    for (const v of WHITE_IN_EVERY_NOTATION) {
+      const rgb = parseColor(v);
+      expect(rgb, `failed to parse ${v}`).not.toBeNull();
+      for (const channel of rgb ?? []) expect(channel).toBeGreaterThan(250);
+    }
+  });
+
+  it("round-trips a mid-tone through the oklab notations", () => {
+    // oklch and oklab describe the same colour; polar vs cartesian.
+    const viaLch = parseColor("oklch(0.6 0.1 150)");
+    const viaLab = parseColor("oklab(0.6 -0.0866 0.05)");
+    expect(viaLch).not.toBeNull();
+    expect(viaLab).not.toBeNull();
+    for (let i = 0; i < 3; i++) {
+      expect(Math.abs((viaLch ?? [])[i] - (viaLab ?? [])[i])).toBeLessThan(4);
+    }
+  });
+
+  it("returns null for notations it cannot reason about", () => {
+    expect(parseColor("lab(50% 40 59)")).toBeNull();
+    expect(parseColor("lch(50% 70 40)")).toBeNull();
+    expect(parseColor("transparent")).toBeNull();
+    expect(parseColor("")).toBeNull();
+  });
+});
 
 describe("isHexColor", () => {
   it("accepts 3 and 6 digit hex and rejects everything else", () => {
@@ -22,6 +65,12 @@ describe("contrast", () => {
       contrast("#fdf6e3", "#8da101"),
       10,
     );
+  });
+
+  it("is notation independent", () => {
+    expect(contrast("rgb(255,255,255)", "#000000")).toBeCloseTo(21, 1);
+    expect(contrast("#ffffff", "rgb(0,0,0)")).toBeCloseTo(21, 1);
+    expect(contrast("oklch(1 0 0)", "#000000")).toBeCloseTo(21, 0);
   });
 });
 
@@ -70,5 +119,23 @@ describe("ensureContrast", () => {
     const out = ensureContrast("#8da101", "#fdf6e3", 4.5);
     const [, a, b] = toOklab(out);
     expect(Math.hypot(a, b)).toBeGreaterThan(0.05);
+  });
+});
+
+// This is the test that stops the two-tier contrast bug from returning in a new
+// form: a notation validation accepts but the contrast maths cannot convert
+// would silently become a token that works as a `color` and fails as a
+// `textColor`.
+describe("allowlist agreement", () => {
+  it("parses everything COLOR_RE accepts, except transparent", () => {
+    for (const v of WHITE_IN_EVERY_NOTATION) {
+      expect(COLOR_RE.test(v), `COLOR_RE rejected ${v}`).toBe(true);
+      expect(parseColor(v), `parseColor rejected ${v}`).not.toBeNull();
+    }
+  });
+
+  it("no longer advertises the CIE Lab notations", () => {
+    expect(COLOR_RE.test("lab(50% 40 59)")).toBe(false);
+    expect(COLOR_RE.test("lch(50% 70 40)")).toBe(false);
   });
 });

@@ -52,8 +52,8 @@ const LENGTH_RE = /^(0|-?\d+(\.\d+)?(px|rem|em))$/;
 
 // Shape colours compose into a shared box-shadow, so the value is matched
 // rather than passed through: one bad token takes out every ring and the lift.
-const COLOR_RE =
-  /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch)\([^;{}()]*\))$/;
+export const COLOR_RE =
+  /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab)\([^;{}()]*\))$/;
 
 const TYPE_STRING_KEYS = ["sans", "mono", "display", "chromeTracking"] as const;
 
