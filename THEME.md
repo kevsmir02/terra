@@ -199,6 +199,136 @@ the value that renders today.
 | `emphasis.bold` | `--emph-bold` | `0.85` | Bold emphasis. |
 
 <!-- token-reference:end -->
+
+## Fonts
+
+A theme may name any installed family in `sans`/`mono`/`display`, but that
+depends on the user's machine. To guarantee a face, use the bundled registry:
+
+1. `pnpm add @fontsource/<face>`
+2. Add the id to `FONT_IDS` and a loader to `LOADERS` in
+   `src/modules/theme/fonts.ts`
+3. List it in `type.fonts`; `ThemeProvider` imports it only when your theme is
+   active, so an unused face costs nothing in the eager bundle
+4. If the face is referenced only from a CSS `url()`, add the package to
+   `ignoreDependencies` in `knip.json` (see `@fontsource-variable/inter` for
+   precedent)
+
+### Font metrics matter more than font size
+
+Display faces have wildly non-standard metrics, and this is the single most
+common reason a theme "looks wrong":
+
+| Face | x-height | cap-height |
+|---|---|---|
+| Inter (the baseline) | 0.546em | 0.727em |
+| Pixelify Sans | 0.450em | 0.700em |
+| VT323 | 0.400em | 0.560em |
+| Press Start 2P | 0.750em | **1.000em** |
+
+Press Start 2P at 12px has 12px capitals against Inter's 8.7px, so it renders
+38% larger while VT323 renders smaller. A theme using both gets a display font
+that shouts and a body font that whispers.
+
+**Correct the font, not the font size.** Terra has ~250 `text-[11px]`-style
+literals against ~125 `text-xs`/`text-sm` sites, so a font-size scale token would
+only reach a third of the UI and leave it visibly mixed. Instead declare the
+face by hand with `size-adjust` (see `src/styles/pixelify-sans.css`), which is a
+font metric and applies everywhere at once. Webviews without `size-adjust`
+render at 100%, which degrades to the unscaled appearance rather than a broken
+one.
+
+To measure a face, parse its `.woff` (the `head` and `OS/2` tables give
+`unitsPerEm`, `sxHeight`, `sCapHeight`) rather than guessing.
+
+## Surface classes
+
+Six classes in `globals.css` compose the shape tokens. Components opt in by
+adding the class; themes never reference them.
+
+| Class | Applied to | Composition |
+|---|---|---|
+| `.terra-frame` | app root (`App.tsx`) | frame width, bevel rings, lift, `--frame-padding` |
+| `.terra-chrome` | header, statusbar, explorer header | chrome width |
+| `.terra-panel` | explorer | panel width, bevel rings |
+| `.terra-slot` | **nothing yet** | slot width, single inner bevel |
+| `.terra-control` | **nothing yet** | control width |
+| `.terra-chrome-label` | explorer header | display font, tracking, transform |
+
+Three things to know:
+
+1. **The classes live in `@layer components`, below utilities.** A component's
+   own Tailwind classes still win, so adding `.terra-panel` can never override a
+   deliberate `border-b-0`.
+2. **`--surface-border-width` is registered `inherits: false`** via `@property`.
+   Without that registration a surface class hands its width to every descendant,
+   and `.terra-chrome` on the header would thicken every button inside it. If you
+   add a surface class, keep the registration.
+3. **`.terra-slot`, `.terra-control`, and the lift shadow have no consumers.**
+   Setting `slotWidth`, `controlWidth`, `liftColor` or `liftDepth` currently
+   renders nowhere. The lift is an outset shadow on `.terra-frame`, which
+   `#root`'s `overflow: hidden` clips. Adopting `.terra-control` means editing
+   `components/ui/button.tsx`, which `TERRA.md` marks as shadcn-managed.
+
+### The bevel is three stacked rings
+
+```css
+inset 0 0 0 calc(var(--bevel-width) * 1) var(--bevel-outer)
+inset 0 0 0 calc(var(--bevel-width) * 2) var(--bevel-mid)
+inset 0 0 0 calc(var(--bevel-width) * 3) var(--bevel-inner)
+```
+
+So `bevelWidth: "4px"` with three opaque colours paints **12px** of solid ring
+inside the element, which is almost always more than intended. For a single
+highlight ring, set `bevelMid` and `bevelInner` to `"transparent"`.
+
+### `syntax` and `status` (variant-level, optional)
+
+Both are **derived from your `terminal.ansi` palette**, so a theme that
+declares 16 ANSI colours gets a matching editor and matching git colours for
+free. Declare either block only to override a role.
+
+Syntax roles and their source slot:
+
+| Role | Slot | Role | Slot |
+|---|---|---|---|
+| `comment` | 8 | `type` | 14 |
+| `keyword` | 5 | `operator` | foreground |
+| `string` | 2 | `tag` | 1 |
+| `number` | 3 | `tagBracket` | 8 |
+| `constant` | 13 | `attr` | 11 |
+| `func` | 4 | `attrValue` | 2 |
+| `variable` | foreground | `heading` | 4 |
+| `property` | 6 | `link` | 6 |
+| `gutterFg` | 8 | `invalid` | 9 |
+
+Status roles: `added` (2), `modified` (3), `deleted` (1), `renamed` (4),
+`warning` (3), `conflict` (6), `ok` (2). Errors use `destructive`.
+
+**Every derived value is lightness-normalized.** ANSI is tuned against the
+terminal background, but the editor renders over `colors.background`, so each
+value is raised in OKLab until it clears 4.5:1 there, or 3:1 for the three dim
+roles (`comment`, `gutterFg`, `tagBracket`). Only lightness moves: hue and
+chroma are preserved, so the colour stays yours. Status roles are normalized
+against `card` as well.
+
+This means a low-contrast ANSI palette produces legible syntax automatically,
+and it also means the value you see may not be the exact hex you wrote. To pin
+an exact value, set it in `syntax` and pick one that already clears the floor.
+
+### Editor pairing and precedence
+
+`editorTheme` still names a CodeMirror preset, but derivation outranks it:
+
+```
+syntax block  ->  derived from ansi  ->  editorTheme pairing  ->  fallback
+```
+
+So a theme with an ANSI palette gets derived syntax even if it names a preset.
+`editorTheme` is the escape hatch for a theme that genuinely wants, say,
+github-dark, and it is what themes with no ANSI palette fall back to. An
+explicit editor-theme preference in Settings always wins over all of this.
+
 ## Design guidance
 
 Value contrast between panels is the obvious way to separate surfaces, and often
