@@ -41,7 +41,7 @@ import type { Diagnostic } from "@/modules/theme/diagnostics";
 import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { UnlistenFn } from "@tauri-apps/api/event";
+
 import { useMemo, useRef, useState, useEffect } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
@@ -64,13 +64,12 @@ export function ThemesSection() {
   const bgInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    let unsub: UnlistenFn | undefined;
     void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
-    void onCustomThemesChange(() => {
+    const promise = onCustomThemesChange(() => {
       void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
-    }).then(fn => unsub = fn);
+    });
     return () => {
-      if (unsub) unsub();
+      void promise.then((unsub) => unsub());
     };
   }, []);
 
@@ -312,8 +311,9 @@ export function ThemesSection() {
           <div className="flex flex-col gap-2 pt-2">
             <Label>Rejected Stored Themes</Label>
             <div className="flex flex-col gap-2">
-              {rejectedThemes.map((rt) => (
-                <div key={rt.id} className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
+              {rejectedThemes.map((rt, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: multiple rejected themes might have the same 'unknown' id
+                <div key={`${rt.id}-${idx}`} className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
                   <div className="flex flex-col">
                     <span className="font-semibold">{rt.id}</span>
                     <span>{rt.diagnostics[0]?.message}</span>
