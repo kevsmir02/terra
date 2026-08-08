@@ -141,6 +141,7 @@ export function ThemesSection() {
         description="Theme, background image, and customization."
       />
 
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: drop target for files; the adjacent file picker is the keyboard path */}
       <div
         role="presentation"
         className="flex flex-col gap-2"
@@ -242,6 +243,9 @@ export function ThemesSection() {
                 </div>
                 {isCustom ? (
                   <span className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    {/* biome-ignore lint/a11y/useSemanticElements: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
+                    {/* biome-ignore lint/a11y/useFocusableInteractive: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
+                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
                     <span
                       role="button"
                       aria-label={`Edit ${t.name}`}
@@ -257,6 +261,9 @@ export function ThemesSection() {
                         strokeWidth={1.75}
                       />
                     </span>
+                    {/* biome-ignore lint/a11y/useSemanticElements: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
+                    {/* biome-ignore lint/a11y/useFocusableInteractive: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
+                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
                     <span
                       role="button"
                       aria-label={`Remove ${t.name}`}
@@ -317,6 +324,7 @@ export function ThemesSection() {
         </div>
       </div>
 
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: drop target for files; the adjacent file picker is the keyboard path */}
       <div
         role="presentation"
         className="flex flex-col gap-2"

@@ -76,6 +76,10 @@ pub fn git_available() -> bool {
 
 pub struct FsFixture {
     pub root: PathBuf,
+    /// The fs commands are gated on this, so the fixture root is authorized
+    /// exactly as a real workspace root would be.
+    pub registry: WorkspaceRegistry,
+    pub workspace: WorkspaceEnv,
     _tmp: TempDir,
 }
 
@@ -83,7 +87,14 @@ impl FsFixture {
     pub fn new() -> Self {
         let tmp = TempDir::new().expect("tempdir");
         let root = std::fs::canonicalize(tmp.path()).expect("canonicalize");
-        Self { root, _tmp: tmp }
+        let registry = WorkspaceRegistry::default();
+        registry.authorize(&root).expect("authorize");
+        Self {
+            root,
+            registry,
+            workspace: WorkspaceEnv::Local,
+            _tmp: tmp,
+        }
     }
 
     pub fn root_str(&self) -> String {
@@ -100,5 +111,11 @@ impl FsFixture {
 
     pub fn mkdir(&self, rel: &str) {
         std::fs::create_dir_all(self.root.join(rel)).expect("mkdir");
+    }
+
+    /// An authorized-but-nonexistent path, for asserting on the "not a
+    /// directory" branch without tripping the workspace gate first.
+    pub fn root_str_join(&self, rel: &str) -> String {
+        to_canon(self.root.join(rel))
     }
 }

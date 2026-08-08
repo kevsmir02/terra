@@ -226,7 +226,8 @@ function ShortcutRow({
           />
         ) : (
           <>
-            <div
+            <button
+              type="button"
               onClick={onStartRecording}
               className="flex min-w-[100px] cursor-pointer items-center justify-end gap-1"
             >
@@ -234,6 +235,7 @@ function ShortcutRow({
                 <KbdGroup>
                   {getBindingTokens(bindings[0]).map((t, i) => (
                     <Kbd
+                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed-order tokens of one binding, re-rendered whole
                       key={i}
                       className="group-hover:bg-accent group-hover:text-accent-foreground transition-colors"
                     >
@@ -246,7 +248,7 @@ function ShortcutRow({
                   Unassigned
                 </span>
               )}
-            </div>
+            </button>
 
             <div className="flex items-center gap-1">
               {isModified && (
@@ -368,7 +370,12 @@ function Recorder({
       <div className="flex items-center gap-2">
         <KbdGroup>
           {getBindingTokens(pending).map((t, i) => (
-            <Kbd key={i}>{t}</Kbd>
+            <Kbd
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed-order tokens of one binding, re-rendered whole
+              key={i}
+            >
+              {t}
+            </Kbd>
           ))}
         </KbdGroup>
         <Button

@@ -77,7 +77,7 @@ export function useSpaceStartup({
         // Resolve the tab by id lazily; it may not be in tabsRef yet on the
         // first synchronous read after setTabs.
         const tab = tabsRef.current.find((t) => t.id === tabId);
-        if (!tab || tab.kind !== "terminal") {
+        if (tab?.kind !== "terminal") {
           if (attempt < 1) setTimeout(() => trySubmit(attempt + 1), 80);
           return;
         }

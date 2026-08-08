@@ -207,6 +207,27 @@ pub fn is_safe_avd_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' '))
 }
 
+/// Real serials are either `emulator-5554` or a `host:port` transport such as
+/// `192.168.1.42:5555`. Anything else is refused at the IPC boundary so a
+/// caller cannot point `adb -s` at an arbitrary network endpoint, and a leading
+/// `-` cannot be read as a flag.
+pub fn is_safe_serial(serial: &str) -> bool {
+    !serial.is_empty()
+        && serial.len() <= 256
+        && !serial.starts_with('-')
+        && serial
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'))
+}
+
+pub fn ensure_safe_serial(serial: &str) -> Result<(), String> {
+    if is_safe_serial(serial) {
+        Ok(())
+    } else {
+        Err(format!("unsafe device serial: {serial}"))
+    }
+}
+
 pub fn list_avd_names(emulator: &Path) -> Result<Vec<String>, String> {
     let mut cmd = Command::new(emulator);
     cmd.arg("-list-avds");
@@ -512,6 +533,33 @@ pub fn list_devices(adb: &std::path::Path) -> Result<Vec<DeviceEntry>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safe_serial_accepts_real_transport_shapes() {
+        assert!(is_safe_serial("emulator-5554"));
+        assert!(is_safe_serial("192.168.1.42:5555"));
+        assert!(is_safe_serial("1a2b3c4d"));
+        assert!(is_safe_serial("R58M12ABCDE"));
+    }
+
+    #[test]
+    fn safe_serial_rejects_flags_and_separators() {
+        assert!(!is_safe_serial(""));
+        assert!(!is_safe_serial("-e"));
+        assert!(!is_safe_serial("--help"));
+        assert!(!is_safe_serial("host 1"));
+        assert!(!is_safe_serial("a/b"));
+        assert!(!is_safe_serial("a;b"));
+        assert!(!is_safe_serial("$(id)"));
+        assert!(!is_safe_serial(&"a".repeat(257)));
+    }
+
+    #[test]
+    fn ensure_safe_serial_surfaces_the_offending_value() {
+        assert!(ensure_safe_serial("emulator-5554").is_ok());
+        let err = ensure_safe_serial("-e").unwrap_err();
+        assert!(err.contains("-e"), "error should name the value: {err}");
+    }
 
     const SAMPLE: &str = "List of devices attached\n\
 emulator-5554   device product:SDK_gphone64_x86_64 model:Pixel_SDK phone:emulator-5554\n\

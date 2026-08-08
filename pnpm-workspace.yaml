@@ -1,5 +1,10 @@
 minimumReleaseAge: 4320
 minimumReleaseAgeStrict: true
+# Transitive-only pins closing advisories reachable from the markdown renderer
+# (streamdown -> mermaid -> dompurify). Drop once streamdown ships them itself.
+overrides:
+  mermaid: ">=11.16.1"
+  dompurify: ">=3.4.9"
 allowBuilds:
   esbuild: true
   msgpackr-extract: false

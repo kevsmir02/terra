@@ -3,6 +3,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { native } from "@/lib/native";
 import { cn } from "@/lib/utils";
 import { SPACE_COLORS } from "../lib/spaceColor";
 import type { SpaceMeta } from "../lib/store";
@@ -45,8 +46,14 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
   };
   const commitRoot = (v: string) => {
     const next = v.trim() || null;
-    if (next !== space.root) setRoot(space.id, next);
-    else setRootField(space.root ?? "");
+    if (next === space.root) {
+      setRootField(space.root ?? "");
+      return;
+    }
+    // Typing a root is the user gesture that authorizes it; the fs commands are
+    // gated on the registry, so without this a root outside home reads as empty.
+    if (next) void native.workspaceAuthorize(next).catch(() => {});
+    setRoot(space.id, next);
   };
   const addCommand = () => {
     const v = draft.trim();
@@ -163,6 +170,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
             <div className="flex flex-col gap-1">
               {cmds.map((c, i) => (
                 <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: stateless rows removed by index; no reorder to desync
                   key={`${c}-${i}`}
                   className="flex items-center gap-1.5 rounded-md bg-muted/50 px-1.5 py-1"
                 >

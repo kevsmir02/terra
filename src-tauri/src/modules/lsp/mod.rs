@@ -11,6 +11,7 @@ use tauri::ipc::{Channel, Response};
 
 use crate::modules::workspace::{authorize_spawn_cwd, WorkspaceEnv, WorkspaceRegistry};
 use session::LspSession;
+use crate::modules::sync::RwLockExt;
 
 pub struct LspState {
     sessions: RwLock<HashMap<u32, Arc<LspSession>>>,
@@ -28,12 +29,12 @@ impl Default for LspState {
 
 impl LspState {
     pub(super) fn take(&self, id: u32) -> Option<Arc<LspSession>> {
-        self.sessions.write().unwrap().remove(&id)
+        self.sessions.write_or_recover().remove(&id)
     }
 
     pub fn kill_all(&self) {
         let drained: Vec<Arc<LspSession>> =
-            self.sessions.write().unwrap().drain().map(|(_, s)| s).collect();
+            self.sessions.write_or_recover().drain().map(|(_, s)| s).collect();
         for session in drained {
             session.kill();
         }
@@ -90,7 +91,7 @@ pub async fn lsp_spawn(
     .await
     .map_err(|e| e.to_string())??;
 
-    state.sessions.write().unwrap().insert(id, session);
+    state.sessions.write_or_recover().insert(id, session);
     // The server can die before this insert; the waiter's reap then ran with
     // the id absent. Re-check so a dead session isn't stranded in the map.
     let exited = state

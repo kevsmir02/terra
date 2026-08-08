@@ -447,7 +447,7 @@ export function GitHistoryPane({
         filesInflightRef.current.delete(sha);
       }
     },
-    [repoRoot],
+    [repoRoot, bumpFiles],
   );
 
   const handleRowClick = useCallback(
@@ -476,6 +476,7 @@ export function GitHistoryPane({
 
   const closePopover = useCallback(() => setOpenAnchor(null), []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: filesTick republishes the mutable filesCacheRef, which is not reactive
   const openFilesEntry = useMemo(() => {
     if (!openAnchor) return null;
     return filesCacheRef.current.get(openAnchor.sha) ?? null;
@@ -826,7 +827,9 @@ function CommitDetail({
   onRetryFiles,
 }: CommitDetailProps) {
   const absolute = absoluteTime(commit.timestampSecs);
-  const webUrl = remoteWeb ? commitWebUrl(remoteWeb, commit.sha) : null;
+  const web = remoteWeb
+    ? { url: commitWebUrl(remoteWeb, commit.sha), label: hostLabel(remoteWeb) }
+    : null;
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -875,19 +878,19 @@ function CommitDetail({
             <HugeiconsIcon icon={Copy01Icon} size={11} strokeWidth={1.9} />
             {copied ? "Copied" : "Copy SHA"}
           </Button>
-          {webUrl ? (
+          {web ? (
             <Button
               size="xs"
               variant="ghost"
               className="h-6 cursor-pointer gap-1.5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-              onClick={() => void openUrl(webUrl).catch(console.error)}
+              onClick={() => void openUrl(web.url).catch(console.error)}
             >
               <HugeiconsIcon
                 icon={LinkSquare02Icon}
                 size={11}
                 strokeWidth={1.9}
               />
-              {hostLabel(remoteWeb!)}
+              {web.label}
             </Button>
           ) : null}
         </div>

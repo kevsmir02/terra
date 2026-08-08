@@ -117,6 +117,7 @@ export const TerminalPane = memo(
       [copyOnSelect, session],
     );
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: session.applyTheme reads the theme itself; these fire it on change
     useEffect(() => {
       // Defer one frame so CSS-variable token resolution sees the new class.
       const id = requestAnimationFrame(() => session.applyTheme());

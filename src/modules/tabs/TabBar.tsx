@@ -135,6 +135,7 @@ export function TabBar({
     setPill(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: the active-pill geometry must be re-measured when tabs change
   useLayoutEffect(() => {
     measurePill();
   }, [measurePill, activeId, tabs]);
@@ -362,6 +363,7 @@ export function TabBar({
                       >
                         <DropdownMenuTrigger asChild>
                           {/* span, not button: a button nested in the TabsTrigger button is invalid DOM and breaks WebKit focus. */}
+                          {/* biome-ignore lint/a11y/useSemanticElements: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
                           <span
                             role="button"
                             tabIndex={-1}
@@ -458,12 +460,16 @@ export function TabBar({
                     </span>
                     {t.kind === "editor" && t.dirty ? (
                       <span
+                        role="img"
                         aria-label="Unsaved changes"
                         className="size-1.5 shrink-0 rounded-full bg-foreground/70"
                       />
                     ) : null}
                   </span>
                   {tabs.length > 1 && (
+                    // biome-ignore lint/a11y/useSemanticElements: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation
+                    // biome-ignore lint/a11y/useFocusableInteractive: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation
                     <span
                       role="button"
                       aria-label="Close tab"

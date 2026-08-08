@@ -34,6 +34,7 @@ export function PaneTreeView(props: Props) {
     const focused = node.id === activeLeafId;
     const b = getBundle(node.id);
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: focus tracking for a pane wrapper, not a control
       <div
         onMouseDownCapture={() => {
           if (!focused) onFocusLeaf(node.id);

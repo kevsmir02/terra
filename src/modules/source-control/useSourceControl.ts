@@ -177,6 +177,7 @@ export function useSourceControl(
     enabledRef.current = enabled;
   }, [enabled]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: a workspace switch must reset panel state
   useEffect(() => {
     requestIdRef.current++;
     inflightRef.current = null;
@@ -205,6 +206,7 @@ export function useSourceControl(
     [],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: a workspace switch must rebuild the refresh closure
   const doRefresh = useCallback(
     async (remoteMode: SourceControlRefreshMode): Promise<void> => {
       if (!enabledRef.current) return;
@@ -413,6 +415,7 @@ export function useSourceControl(
     [refresh],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: a workspace switch must reset panel state
   useEffect(() => {
     if (!enabled) {
       requestIdRef.current++;

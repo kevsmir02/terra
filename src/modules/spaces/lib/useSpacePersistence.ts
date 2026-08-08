@@ -105,6 +105,7 @@ export function useSpacePersistence({
     };
   }, [tabs, activeId, activeSpaceId, activeSidebarPct, enabled, flush]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: re-arms the flush listeners so a sidebar resize is persisted
   useEffect(() => {
     if (!enabled) return;
     const onHidden = () => {

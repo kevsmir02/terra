@@ -46,7 +46,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
     >
       {items.map((item) => {
         const isActive = item.id === activeView;
-        const showBadge = !!item.badge && item.badge > 0;
+        const badge = item.badge && item.badge > 0 ? item.badge : null;
         return (
           <button
             key={item.id}
@@ -70,9 +70,9 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
               className="shrink-0 transition-[stroke-width] duration-[var(--dur-base)]"
             />
             <span className="truncate">{item.label}</span>
-            {showBadge ? (
+            {badge !== null ? (
               <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/60 bg-card px-1 text-[9px] font-semibold leading-none tabular-nums text-muted-foreground/95">
-                {item.badge! > 99 ? "99+" : item.badge}
+                {badge > 99 ? "99+" : badge}
               </span>
             ) : null}
           </button>

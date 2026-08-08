@@ -314,7 +314,9 @@ export function useDocument({ path, onDirtyChange }: Options) {
     [clearAutoSaveTimer, saveNow],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: switching files must clear the previous file's pending autosave
   useEffect(() => clearAutoSaveTimer, [path, clearAutoSaveTimer]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: switching files must clear the previous file's missing-file timer
   useEffect(() => clearMissingTimer, [path, clearMissingTimer]);
 
   return {

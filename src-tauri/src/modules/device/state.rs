@@ -6,6 +6,7 @@ use std::sync::{Mutex, RwLock};
 use tauri::Manager;
 
 use super::session::DeviceSession;
+use crate::modules::sync::{MutexExt, RwLockExt};
 
 /// An emulator this process started. Tracked so Terra can stop what it started
 /// and clean up on exit — and, just as importantly, so it can tell those apart
@@ -38,23 +39,23 @@ impl Default for DeviceState {
 impl DeviceState {
     #[allow(dead_code)]
     pub(super) fn take(&self, id: u32) -> Option<DeviceSession> {
-        self.sessions.write().unwrap().remove(&id)
+        self.sessions.write_or_recover().remove(&id)
     }
 
     pub fn kill_all(&self) {
         let drained: Vec<DeviceSession> =
-            self.sessions.write().unwrap().drain().map(|(_, s)| s).collect();
+            self.sessions.write_or_recover().drain().map(|(_, s)| s).collect();
         for mut s in drained {
             s.shutdown();
         }
     }
 
     pub fn is_managed(&self, serial: &str) -> bool {
-        self.launched.lock().unwrap().contains_key(serial)
+        self.launched.lock_or_recover().contains_key(serial)
     }
 
     pub fn managed_serials(&self) -> Vec<String> {
-        self.launched.lock().unwrap().keys().cloned().collect()
+        self.launched.lock_or_recover().keys().cloned().collect()
     }
 
     pub fn track_launched(&self, serial: String, name: String, child: std::process::Child) {
@@ -65,7 +66,7 @@ impl DeviceState {
     }
 
     pub fn take_launched(&self, serial: &str) -> Option<LaunchedAvd> {
-        self.launched.lock().unwrap().remove(serial)
+        self.launched.lock_or_recover().remove(serial)
     }
 
     /// Shut down only the emulators this process started. Tries the console's
@@ -73,7 +74,7 @@ impl DeviceState {
     /// falling back to killing the process if that fails or the binary is gone.
     pub fn kill_launched_avds(&self) {
         let drained: Vec<(String, LaunchedAvd)> =
-            self.launched.lock().unwrap().drain().collect();
+            self.launched.lock_or_recover().drain().collect();
         if drained.is_empty() {
             return;
         }
@@ -94,7 +95,7 @@ impl DeviceState {
     /// Resolve the bundled scrcpy-server JAR absolute path on first use, then
     /// cache. Returns a clone of the cached path on subsequent calls.
     pub fn jar_path(&self, app: &tauri::AppHandle) -> Result<PathBuf, String> {
-        if let Some(p) = self.jar_path.lock().unwrap().clone() {
+        if let Some(p) = self.jar_path.lock_or_recover().clone() {
             return Ok(p);
         }
         let fname = format!(
@@ -105,7 +106,7 @@ impl DeviceState {
             .path()
             .resolve(&fname, tauri::path::BaseDirectory::Resource)
             .map_err(|e| format!("resolving bundled scrcpy-server JAR: {e}"))?;
-        *self.jar_path.lock().unwrap() = Some(resolved.clone());
+        *self.jar_path.lock_or_recover() = Some(resolved.clone());
         Ok(resolved)
     }
 }

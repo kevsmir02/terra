@@ -5,7 +5,10 @@ use std::time::UNIX_EPOCH;
 use ignore::WalkBuilder;
 use serde::Serialize;
 
-use crate::modules::workspace::{resolve_path, WorkspaceEnv};
+use tauri::State;
+
+use super::authorized_read;
+use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -68,9 +71,19 @@ pub fn fs_read_dir(
     show_hidden: bool,
     git_decorations: Option<bool>,
     workspace: Option<WorkspaceEnv>,
+    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<Vec<DirEntry>, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let root = resolve_path(&path, &workspace);
+    read_dir(&registry, &path, show_hidden, git_decorations, &WorkspaceEnv::from_option(workspace))
+}
+
+pub fn read_dir(
+    registry: &WorkspaceRegistry,
+    path: &str,
+    show_hidden: bool,
+    git_decorations: Option<bool>,
+    workspace: &WorkspaceEnv,
+) -> Result<Vec<DirEntry>, String> {
+    let root = authorized_read(registry, path, workspace)?;
     let read = std::fs::read_dir(&root).map_err(|e| {
         log::debug!("fs_read_dir({}) failed: {e}", root.display());
         e.to_string()
@@ -154,9 +167,18 @@ pub fn list_subdirs(
     path: String,
     show_hidden: bool,
     workspace: Option<WorkspaceEnv>,
+    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<Vec<String>, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let root = resolve_path(&path, &workspace);
+    subdirs(&registry, &path, show_hidden, &WorkspaceEnv::from_option(workspace))
+}
+
+pub fn subdirs(
+    registry: &WorkspaceRegistry,
+    path: &str,
+    show_hidden: bool,
+    workspace: &WorkspaceEnv,
+) -> Result<Vec<String>, String> {
+    let root = authorized_read(registry, path, workspace)?;
     let read = std::fs::read_dir(&root).map_err(|e| {
         log::debug!("list_subdirs({}) read_dir failed: {e}", root.display());
         e.to_string()

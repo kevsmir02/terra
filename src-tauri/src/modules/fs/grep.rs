@@ -10,7 +10,9 @@ use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
 
 use super::to_canon;
-use crate::modules::workspace::{resolve_path, WorkspaceEnv};
+use super::authorized_read;
+use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::sync::MutexExt;
 
 const FILE_SIZE_CAP: u64 = 5 * 1024 * 1024;
 const DEFAULT_MAX_RESULTS: usize = 200;
@@ -139,7 +141,7 @@ fn search_tree(
                 path,
                 UTF8(|line_num, text| {
                     let line_text = text.trim_end_matches('\n').to_string();
-                    let mut guard = hits.lock().unwrap();
+                    let mut guard = hits.lock_or_recover();
                     if guard.len() >= cap {
                         truncated.store(true, Ordering::Relaxed);
                         return Ok(false);
@@ -177,12 +179,24 @@ pub fn fs_grep(
     case_insensitive: Option<bool>,
     max_results: Option<usize>,
     workspace: Option<WorkspaceEnv>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+) -> Result<GrepResponse, String> {
+    grep(&registry, &pattern, &root, glob, case_insensitive, max_results, &WorkspaceEnv::from_option(workspace))
+}
+
+pub fn grep(
+    registry: &WorkspaceRegistry,
+    pattern: &str,
+    root: &str,
+    glob: Option<Vec<String>>,
+    case_insensitive: Option<bool>,
+    max_results: Option<usize>,
+    workspace: &WorkspaceEnv,
 ) -> Result<GrepResponse, String> {
     if pattern.is_empty() {
         return Err("empty pattern".into());
     }
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let root_path = resolve_path(&root, &workspace);
+    let root_path = authorized_read(registry, root, workspace)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
@@ -193,15 +207,15 @@ pub fn fs_grep(
     let matcher = RegexMatcherBuilder::new()
         .case_insensitive(case_insensitive.unwrap_or(false))
         .line_terminator(Some(b'\n'))
-        .build(&pattern)
+        .build(pattern)
         .map_err(|e| format!("bad regex: {e}"))?;
 
     let globs = build_globset(glob.as_deref().unwrap_or(&[]))?;
 
     Ok(search_tree(
         &root_path,
-        &root,
-        &workspace,
+        root,
+        workspace,
         &matcher,
         &globs,
         cap,
@@ -218,6 +232,7 @@ pub fn fs_grep_interactive(
     root: String,
     max_results: Option<usize>,
     workspace: Option<WorkspaceEnv>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<GrepResponse, String> {
     if pattern.trim().is_empty() {
         return Err("empty pattern".into());
@@ -225,7 +240,7 @@ pub fn fs_grep_interactive(
     let my_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
 
     let workspace = WorkspaceEnv::from_option(workspace);
-    let root_path = resolve_path(&root, &workspace);
+    let root_path = authorized_read(&registry, &root, &workspace)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
@@ -269,18 +284,28 @@ pub fn fs_glob(
     root: String,
     max_results: Option<usize>,
     workspace: Option<WorkspaceEnv>,
+    registry: tauri::State<'_, WorkspaceRegistry>,
+) -> Result<GlobResponse, String> {
+    glob_files(&registry, &pattern, &root, max_results, &WorkspaceEnv::from_option(workspace))
+}
+
+pub fn glob_files(
+    registry: &WorkspaceRegistry,
+    pattern: &str,
+    root: &str,
+    max_results: Option<usize>,
+    workspace: &WorkspaceEnv,
 ) -> Result<GlobResponse, String> {
     if pattern.is_empty() {
         return Err("empty pattern".into());
     }
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let root_path = resolve_path(&root, &workspace);
+    let root_path = authorized_read(registry, root, workspace)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
     let cap = max_results.unwrap_or(500).clamp(1, HARD_MAX_RESULTS);
 
-    let glob = Glob::new(&pattern).map_err(|e| format!("bad glob: {e}"))?;
+    let glob = Glob::new(pattern).map_err(|e| format!("bad glob: {e}"))?;
     let mut gb = GlobSetBuilder::new();
     gb.add(glob);
     let set = gb.build().map_err(|e| format!("globset build: {e}"))?;
@@ -314,7 +339,7 @@ pub fn fs_glob(
             continue;
         }
         hits.push(GlobHit {
-            path: display_path(path, &root_path, &root, &workspace),
+            path: display_path(path, &root_path, root, workspace),
             rel,
         });
     }

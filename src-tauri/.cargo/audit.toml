@@ -1,0 +1,15 @@
+[advisories]
+# Advisories accepted with rationale. Anything not listed here fails CI.
+# Re-check on every Tauri bump: these should disappear upstream, not linger.
+ignore = [
+    # quick-xml DoS (quadratic attribute scan / unbounded namespace alloc).
+    # Reaches us only via `plist` (Tauri parsing its own bundle metadata) and
+    # `wayland-scanner` (build-time proc-macro). Terra never feeds either one
+    # attacker-controlled XML, and both are pinned by upstream, not by us.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
+
+# gtk-rs 0.18 bindings are flagged unmaintained; they are what Tauri v2 links
+# against on Linux, so they leave when Tauri moves. Warnings, not errors.
+informational_warnings = ["unmaintained", "unsound", "notice"]

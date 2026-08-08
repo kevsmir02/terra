@@ -13,6 +13,7 @@ use super::da_filter::DaFilter;
 use super::shell_init;
 use super::url_detect::{DevServerSignal, UrlDetector};
 use crate::modules::workspace::WorkspaceEnv;
+use crate::modules::sync::MutexExt;
 
 const AGENT_EVENT: &str = "terra:agent-signal";
 const DEV_SERVER_EVENT: &str = "terra:dev-server";
@@ -74,7 +75,7 @@ static CONPTY_LIFECYCLE_LOCK: Mutex<()> = Mutex::new(());
 
 pub(super) fn drop_session(session: Arc<Session>) {
     #[cfg(windows)]
-    let _guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
+    let _guard = CONPTY_LIFECYCLE_LOCK.lock_or_recover();
     drop(session);
 }
 
@@ -114,7 +115,7 @@ pub fn spawn(
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
     #[cfg(windows)]
-    let _spawn_guard = CONPTY_LIFECYCLE_LOCK.lock().unwrap();
+    let _spawn_guard = CONPTY_LIFECYCLE_LOCK.lock_or_recover();
 
     let pty_system = native_pty_system();
     let size = PtySize {
@@ -214,7 +215,7 @@ pub fn spawn(
                             continue;
                         }
                         let (lock, cv) = &*pending_r;
-                        let mut g = lock.lock().unwrap();
+                        let mut g = lock.lock_or_recover();
                         if g.len() + filtered.len() > MAX_PENDING {
                             dropped_bytes += g.len() as u64;
                             g.clear();
@@ -248,7 +249,7 @@ pub fn spawn(
             let (lock, cv) = &*pending_f;
             loop {
                 {
-                    let mut g = lock.lock().unwrap();
+                    let mut g = lock.lock_or_recover();
                     while g.is_empty() {
                         if done_f.load(Ordering::Acquire) {
                             return;
@@ -259,7 +260,7 @@ pub fn spawn(
                 }
                 // Coalesce a short window so a burst flushes as one chunk.
                 thread::sleep(FLUSH_COALESCE);
-                let chunk = std::mem::take(&mut *lock.lock().unwrap());
+                let chunk = std::mem::take(&mut *lock.lock_or_recover());
                 if chunk.is_empty() {
                     continue;
                 }
@@ -301,7 +302,7 @@ pub fn spawn(
                 log::error!("pty reader thread panicked: {e:?}");
             }
             let (lock, cv) = &*pending_e;
-            let tail = std::mem::take(&mut *lock.lock().unwrap());
+            let tail = std::mem::take(&mut *lock.lock_or_recover());
             if !tail.is_empty() {
                 if let Err(e) = on_data_exit.send(Response::new(tail)) {
                     log::debug!("pty final-data send failed (channel closed): {e}");

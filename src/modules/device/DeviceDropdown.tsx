@@ -31,6 +31,7 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
     stop,
   } = useAvds(() => refreshDevices());
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only device probe; refreshDevices is re-created each render and would re-fetch forever
   useEffect(() => refreshDevices(), []);
 
   const refresh = () => {

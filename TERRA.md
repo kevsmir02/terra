@@ -6,8 +6,13 @@ Terra loads `TERRA.md` from the workspace root as agent memory (similar to AGENT
 
 **Terra**: open-source terminal IDE. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client.
 
-- Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`
-- Rust checks: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (local fallback: `cargo test --locked`)
+- Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm knip`, `pnpm audit --prod`
+- Rust checks: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (local fallback: `cargo test --locked`), `cd src-tauri && cargo audit`
+
+`pnpm lint` runs with `--error-on-warnings`: biome warnings fail the build, so a
+deliberate exception needs a `// biome-ignore <rule>: <reason>` naming the reason,
+not a growing warning count. Accepted Rust advisories live in
+`src-tauri/.cargo/audit.toml` with their rationale; anything unlisted fails.
 
 ## Quality bar
 
@@ -39,12 +44,39 @@ A change to a core subsystem (terminal/shell spawn, workspace auth, git, fs, IPC
 **Rust (`src-tauri/`)** owns all OS access. The webview never touches the FS, processes, or shells directly - everything goes through `invoke()` calls to commands registered in `src-tauri/src/lib.rs`:
 
 - `pty::pty_*` - long-lived interactive PTY sessions (xterm ↔ portable-pty), managed by `PtyState` (`RwLock<HashMap<id, Session>>`). Output streams via a Tauri `Channel<PtyEvent>`.
-- `fs::tree::*` (`fs_read_dir`, `list_subdirs`), `fs::file::*` (`fs_read_file`, `fs_write_file`, `fs_stat`, `fs_canonicalize`), `fs::mutate::*` (`fs_create_file`, `fs_create_dir`, `fs_rename`, `fs_delete`): file explorer + editor IO.
-- `fs::search::*` (`fs_search`, `fs_list_files`), `fs::grep::*` (`fs_grep`, `fs_glob`): fuzzy file finder + content search (powered by `ignore` + `grep-*` crates).
-- `git::commands::*`: full source-control surface (`git_status`, `git_diff`, `git_diff_content`, `git_stage`, `git_unstage`, `git_discard`, `git_commit`, `git_fetch`, `git_pull_ff_only`, `git_push`, `git_log`, `git_show_commit`, `git_commit_files`, `git_commit_file_diff`, `git_panel_snapshot`, `git_resolve_repo`, `git_remote_url`). All gated through the workspace authorization registry.
-- `workspace::*`: `workspace_authorize` / `workspace_current_dir` (the spawn/git cwd authorization registry) plus the WSL bridge (`wsl_list_distros`, `wsl_default_distro`, `wsl_home`).
+- `fs::tree::*` (`fs_read_dir`, `list_subdirs`), `fs::file::*` (`fs_read_file`, `fs_write_file`, `fs_stat`, `fs_canonicalize`, `fs_allow_asset`), `fs::mutate::*` (`fs_create_file`, `fs_create_dir`, `fs_rename`, `fs_delete`, `fs_copy`), `fs::watch::*` (`fs_watch_add`, `fs_watch_remove`): file explorer + editor IO.
+- `fs::search::*` (`fs_search`, `fs_list_files`), `fs::grep::*` (`fs_grep`, `fs_grep_interactive`, `fs_glob`): fuzzy file finder + content search (powered by `ignore` + `grep-*` crates).
+- `git::commands::*`: full source-control surface (`git_status`, `git_diff`, `git_diff_content`, `git_stage`, `git_unstage`, `git_discard`, `git_commit`, `git_fetch`, `git_pull_ff_only`, `git_push`, `git_log`, `git_show_commit`, `git_commit_files`, `git_commit_file_diff`, `git_panel_snapshot`, `git_resolve_repo`, `git_remote_url`, `git_list_branches`, `git_checkout_branch`). All gated through the workspace authorization registry.
+- `workspace::*`: `workspace_authorize` / `workspace_current_dir` (the authorization registry) plus the WSL bridge (`wsl_list_distros`, `wsl_default_distro`, `wsl_home`).
+- `shell::shell_run_command`: one-shot command execution for internal tooling (formatters, `git` helpers). Runs through the login shell with a clamped timeout and a 256 KB output cap; cwd goes through `authorize_spawn_cwd`, and the **canonical** path it returns is what the child spawns into.
+- `history::*` (`history_suggest`, `history_commands`, `history_record`, `history_list`): shell-history-backed command suggestions.
+- `device::commands::*` (`device_list`, `device_list_avds`, `device_launch_avd`, `device_stop_avd`, `device_list_system_images`, `device_create_avd`, `device_open`, `device_close`, `device_send_touch`, `device_send_key`, `device_send_scroll`, `device_input_tap`, `device_input_swipe`, `device_input_key`, `device_screen_size`): Android device/emulator mirroring. See **Device module** below.
+- `updater::*` (`updater_package_kind`, `updater_download`, `updater_install`): package-aware update flow around `tauri-plugin-updater`.
+- `agent::*` (`agent_enable_hooks`, `agent_hooks_status`), `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
 - `lsp::*` (`lsp_detect`, `lsp_host_pid`, `lsp_resolve_root`, `lsp_spawn`, `lsp_send`, `lsp_kill`): language server process host. Dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the workspace registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). All sessions killed on `RunEvent::Exit`.
 - `open_settings_window`: separate webview window for Settings (optional `tab` arg deep-links a section).
+- `migrate::migrate_legacy_app_dirs`: not a command. Runs before the builder, because the store and webview open their identifier-scoped trees during plugin init.
+
+### Workspace authorization
+
+`WorkspaceRegistry` (`modules/workspace.rs`) is the single answer to "may the webview touch this path". Everything that reaches the disk or spawns a process goes through it - **fs, git, PTY/shell spawn, LSP spawn, and the asset protocol**.
+
+Roots are added only by a user gesture: app launch (cwd + every CLI file argument), `$HOME` at bootstrap, a terminal `cd` (OSC 7 re-authorizes), a space root typed in Settings, and a real OS drag-drop (registered from the `DragDrop` window event in `lib.rs`, *not* from the paths JS hands back). Registering the dropped path itself rather than its parent keeps the grant as narrow as the gesture.
+
+Four gates in `fs/mod.rs`, and picking the wrong one is a real bug:
+
+| Gate | Use for | Behaviour |
+| --- | --- | --- |
+| `authorized_read` | reads, directory walks | canonicalizes via the registry's TTL cache |
+| `authorized_write` | writes to an existing path | canonicalizes fresh (a stale cache entry is the symlink-swap window) |
+| `authorized_entry` | delete, rename source, `fs_stat` | authorizes the **parent**; never resolves the final component, so a symlink is acted on as itself |
+| `authorized_new` | create, rename/copy target | authorizes the nearest existing ancestor, re-joins the missing tail |
+
+Canonicalizing first is what makes the check mean anything: `..` collapses and symlinks resolve, so the root is compared against the real target rather than the spelling. `is_authorized` uses `Path::starts_with`, which is component-wise - never swap it for a string prefix.
+
+Commands stay thin shells over a core taking `&WorkspaceRegistry`, so the gate is unit-testable without a Tauri runtime (`fs::mutate::create_file`, `fs::grep::grep`, ...). The invariants are locked in `fs::authorization_tests`.
+
+The asset protocol (`asset://`, used for image/video/audio/PDF previews) has an **empty static scope**. `fs_allow_asset` grants one already-authorized file at a time via `asset_protocol_scope().allow_file()`. A blanket `"**"` scope would hand the webview arbitrary file reads over a channel this registry never sees.
 
 ### PTY shell integration
 
@@ -58,6 +90,16 @@ PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/
 ConPTY on Windows requires `SPAWN_LOCK` (Mutex) around `openpty + spawn_command` in `session.rs`. Concurrent spawns leave one of the resulting PTYs with a stalled output pipe. Don't remove the lock without verifying first-tab stability under fast tab spam.
 
 Each ConPTY child is also assigned to a per-session **Job Object** with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`pty/job.rs`). When the Job HANDLE drops - clean shutdown, panic, or even SIGKILL'd Terra process - the kernel kills every descendant of the shell (e.g. `npm run dev` spawned from inside pwsh). Without this Windows orphans the entire process subtree because `TerminateProcess` only kills the immediate child. macOS/Linux rely on `Drop for Session → killer.kill()`; on dev-`Ctrl-C` of `cargo run` destructors don't fire and orphans are possible there too - acceptable for now since dev only.
+
+### Device module (`src-tauri/src/modules/device/`)
+
+Android device and emulator mirroring, driven by the platform-tools on PATH. `adb.rs` resolves `adb` / `emulator` / `avdmanager` and parses their output; `server.rs` pushes and starts the bundled `scrcpy-server-*.jar` (shipped via `bundle.resources`); `session.rs` owns a live mirror session (adb forward + video socket) and `remux.rs` repackages the raw H.264 stream into fMP4 for MSE playback in the webview; `control.rs` encodes touch/key/scroll control messages; `state.rs` holds sessions and Terra-launched AVDs, all killed on `RunEvent::Exit` (AVDs the user started elsewhere are left alone).
+
+Every process is spawned argv-style, never through a shell. Two values arrive from IPC and are validated before they reach `adb`: AVD names via `is_safe_avd_name`, and serials via `ensure_safe_serial` (`emulator-5554` and `host:port` shapes only, no leading `-`). Coordinates are `u32`, so they cannot carry an argument. Adding a command that takes a serial means calling `ensure_safe_serial` on it.
+
+### Concurrency
+
+`modules/sync.rs` provides `lock_or_recover` / `read_or_recover` / `write_or_recover`. Use them for all long-lived shared state (`PtyState`, `WorkspaceRegistry`, `DeviceState`, `LspState`, ...) instead of `.lock().unwrap()`. A panic while a lock is held poisons it for the rest of the process, which would turn one bad frame into a permanently dead subsystem; every value behind these locks is plain data, so recovering the guard is strictly better than propagating the panic to every later caller.
 
 ### Frontend (`src/`)
 
@@ -124,10 +166,11 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 ### Bundle config
 
 - `bundle.targets: "all"` plus per-platform sections in `tauri.conf.json`:
-  - **macOS**: `minimumSystemVersion: 10.15`.
+  - **macOS**: `minimumSystemVersion: 13.0`, entitlements at `src-tauri/entitlements.plist`.
   - **Linux**: deb depends `libwebkit2gtk-4.1-0`, `libgtk-3-0`; rpm `webkit2gtk4.1`, `gtk3`; AppImage bundles its media framework.
-  - **Windows**: NSIS installer in `currentUser` mode (no admin required), WebView2 via `embedBootstrapper` (offline install).
-- Auto-updater configured with a public minisign key; release artifacts at `https://github.com/crynta/terra-ai/releases/latest/download/latest.json`.
+  - **Windows**: NSIS installer in `currentUser` mode (no admin required), WebView2 via `downloadBootstrapper`.
+- Auto-updater configured with a public minisign key; release artifacts at `https://github.com/kevsmir02/terra/releases/latest/download/latest.json`.
+- `bundle.resources` ships `resources/scrcpy-server-*.jar` for the device module.
 
 ### Known gotchas
 

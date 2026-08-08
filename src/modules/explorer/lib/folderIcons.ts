@@ -563,19 +563,13 @@ const folderIcons: FolderIcons = {
   },
 };
 
-const { folderNames } = Object.entries(folderIcons).reduce(
-  ({ folderNames }, [name, icon]) => ({
-    folderNames: {
-      ...folderNames,
-      ...icon.folderNames?.reduce(
-        (a, c) => ({ ...a, [c]: `folder_${name}` }),
-        {},
-      ),
-    },
-  }),
-  {
-    folderNames: {},
-  },
-);
+// See fileIcons.ts: one-shot module init, mutation keeps it linear.
+const folderNames: Record<string, string> = {};
+
+for (const [name, icon] of Object.entries(folderIcons)) {
+  for (const folder of icon.folderNames ?? []) {
+    folderNames[folder] = `folder_${name}`;
+  }
+}
 
 export { folderIcons, folderNames };

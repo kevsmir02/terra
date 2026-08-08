@@ -4,14 +4,15 @@ use tauri::ipc::Channel;
 use tauri::{Emitter, Manager, State};
 
 use super::adb::{
-    boot_completed, create_avd, emu_kill, free_emulator_port, host_has_display, launch_avd,
-    list_avd_names, list_devices, list_system_images, log_tail, resolve_adb_path,
+    boot_completed, create_avd, emu_kill, ensure_safe_serial, free_emulator_port, host_has_display,
+    launch_avd, list_avd_names, list_devices, list_system_images, log_tail, resolve_adb_path,
     resolve_avdmanager_path, resolve_emulator_path, running_avds, AvdEntry, DeviceEntry,
     SystemImage, GPU_FALLBACK,
 };
 use super::control::{ControlMessage, KeyAction, TouchAction};
 use super::session::{DeviceFrame, DeviceSession};
 use super::state::DeviceState;
+use crate::modules::sync::{MutexExt, RwLockExt};
 
 /// A cold boot on a slow machine genuinely can take this long; a quick-boot
 /// from snapshot is usually a few seconds.
@@ -176,7 +177,7 @@ fn await_boot(
         // A dead child means the emulator bailed out; nothing will ever boot.
         let exited = {
             let state = app.state::<DeviceState>();
-            let mut guard = state.launched.lock().unwrap();
+            let mut guard = state.launched.lock_or_recover();
             match guard.get_mut(&serial) {
                 Some(avd) => avd.child.try_wait().ok().flatten().is_some(),
                 // Stopped from under us (device_stop_avd, or app exit).
@@ -263,6 +264,7 @@ fn await_boot(
 /// user's to manage, and killing it would be hostile.
 #[tauri::command]
 pub async fn device_stop_avd(state: State<'_, DeviceState>, serial: String) -> Result<(), String> {
+    ensure_safe_serial(&serial)?;
     let Some(mut avd) = state.take_launched(&serial) else {
         return Err(format!("{serial} was not launched by Terra"));
     };
@@ -297,12 +299,13 @@ pub async fn device_open(
     serial: String,
     on_frame: Channel<DeviceFrame>,
 ) -> Result<u32, String> {
+    ensure_safe_serial(&serial)?;
     let adb = resolve_adb_path()?;
     let jar = state.jar_path(&app)?;
     let port = ephemeral_port()?;
     let id = state.next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let session = DeviceSession::spawn(id, adb, jar, serial.clone(), port, on_frame)?;
-    state.sessions.write().unwrap().insert(id, session);
+    state.sessions.write_or_recover().insert(id, session);
     Ok(id)
 }
 
@@ -509,7 +512,7 @@ mod tests {
             stopping: Arc::new(AtomicBool::new(false)),
             control_tx: tx,
         };
-        state.sessions.write().unwrap().insert(1, session);
+        state.sessions.write_or_recover().insert(1, session);
 
         let res = device_send_touch_impl(&state, 1, 0, 0, 100, 200, 1080, 1920).await;
         assert!(res.is_ok());
@@ -537,7 +540,7 @@ mod tests {
             stopping: Arc::new(AtomicBool::new(false)),
             control_tx: tx,
         };
-        state.sessions.write().unwrap().insert(1, session);
+        state.sessions.write_or_recover().insert(1, session);
 
         let res = device_send_key_impl(&state, 1, 0, 66, 0).await;
         assert!(res.is_ok());
@@ -563,7 +566,7 @@ mod tests {
             stopping: Arc::new(AtomicBool::new(false)),
             control_tx: tx,
         };
-        state.sessions.write().unwrap().insert(1, session);
+        state.sessions.write_or_recover().insert(1, session);
 
         let res = device_send_scroll_impl(&state, 1, 100, 200, 1080, 1920, 0, -3).await;
         assert!(res.is_ok());
@@ -595,7 +598,7 @@ mod tests {
             stopping: Arc::new(AtomicBool::new(false)),
             control_tx: tx,
         };
-        state.sessions.write().unwrap().insert(1, session);
+        state.sessions.write_or_recover().insert(1, session);
 
         let res = device_send_scroll_impl(&state, 1, 100, 200, 1080, 1920, 0, -3).await;
         assert!(res.is_ok());
@@ -617,7 +620,7 @@ mod tests {
             stopping: Arc::new(AtomicBool::new(false)),
             control_tx: tx,
         };
-        state.sessions.write().unwrap().insert(1, session);
+        state.sessions.write_or_recover().insert(1, session);
 
         // Up action when tx is closed does not call adb shell, so returns Ok(())
         let res_up = device_send_touch_impl(&state, 1, 1, 0, 100, 200, 1080, 1920).await;
@@ -645,7 +648,7 @@ mod tests {
             stopping: Arc::new(AtomicBool::new(false)),
             control_tx: tx,
         };
-        state.sessions.write().unwrap().insert(1, session);
+        state.sessions.write_or_recover().insert(1, session);
 
         // Key action triggers fallback (run_adb_shell), which attempts adb execution
         let res = device_send_key_impl(&state, 1, 0, 66, 0).await;
@@ -660,6 +663,7 @@ pub async fn device_input_tap(serial: String, x: u32, y: u32) -> Result<(), Stri
 
 #[tauri::command]
 pub async fn device_screen_size(serial: String) -> Result<(u32, u32), String> {
+    ensure_safe_serial(&serial)?;
     let adb = resolve_adb_path()?;
     let output = tauri::async_runtime::spawn_blocking(move || {
         std::process::Command::new(&adb)
@@ -704,6 +708,7 @@ pub async fn device_input_key(serial: String, keyevent: u32) -> Result<(), Strin
 }
 
 async fn run_adb_shell(serial: &str, args: &[&str]) -> Result<(), String> {
+    ensure_safe_serial(serial)?;
     let adb = resolve_adb_path()?;
     let serial = serial.to_string();
     let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();

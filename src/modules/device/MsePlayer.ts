@@ -95,11 +95,11 @@ export class MsePlayer {
           const ranges = this.sourceBuffer.buffered;
           const r = ranges.length ? `${ranges.start(0).toFixed(3)}..${ranges.end(0).toFixed(3)}` : "(empty)";
           console.info(
-            "[device] MSE appended #" + this.appendCount,
-            "len=" + next.byteLength,
-            "buffered=" + r,
-            "currentTime=" + this.video.currentTime.toFixed(3),
-            "readyState=" + this.video.readyState,
+            `[device] MSE appended #${this.appendCount}`,
+            `len=${next.byteLength}`,
+            `buffered=${r}`,
+            `currentTime=${this.video.currentTime.toFixed(3)}`,
+            `readyState=${this.video.readyState}`,
           );
         } catch {}
       }
@@ -108,9 +108,13 @@ export class MsePlayer {
         void this.video.play().catch(() => {});
       }
     } catch (e) {
-      console.error("[device] MSE: appendBuffer FAILED:", e,
-        "(buffered.checkLength=" + this.sourceBuffer.buffered.length,
-        "updating=" + this.sourceBuffer.updating, ")");
+      console.error(
+        "[device] MSE: appendBuffer FAILED:",
+        e,
+        `(buffered.checkLength=${this.sourceBuffer.buffered.length}`,
+        `updating=${this.sourceBuffer.updating}`,
+        ")",
+      );
     }
   }
 
