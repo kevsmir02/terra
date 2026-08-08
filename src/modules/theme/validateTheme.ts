@@ -19,12 +19,8 @@ export type ValidationResult =
   | { ok: true; theme: Theme; diagnostics: Diagnostic[] }
   | { ok: false; diagnostics: Diagnostic[] };
 
-// Lengths compose into a shared box-shadow, so they are matched rather than
-// passed through: a comma or a function call would rewrite the declaration.
 const LENGTH_RE = /^(0|-?\d+(\.\d+)?(px|rem|em))$/;
 
-// Shape colours compose into a shared box-shadow, so the value is matched
-// rather than passed through: one bad token takes out every ring and the lift.
 export const COLOR_RE =
   /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab)\([^;{}()]*\))$/;
 
@@ -89,7 +85,6 @@ function validateTokenValue(
       diagnostics.push({ severity: "error", path, message: `${path} must be one of: ${def.keywords.join(", ")}` });
       return false;
     }
-    // Hardcoded fallback if keywords is missing in tokens.ts
     if (!def.keywords) {
       if (def.key === "colors.borderStyle" && !(BORDER_STYLES as readonly string[]).includes(v)) {
         diagnostics.push({ severity: "error", path, message: `${path} must be one of: ${BORDER_STYLES.join(", ")}` });
@@ -122,7 +117,6 @@ function parseTokens(raw: unknown, path: string, group: string, diagnostics: Dia
   for (const k of Object.keys(raw)) {
     const def = groupTokens.find(t => t.key === `${group}.${k}`);
     if (!def) {
-      // Unknown keys push a warning and are skipped
       diagnostics.push({ severity: "warning", path: `${path}.${k}`, message: `${path}.${k} is not a recognized ${group} key` });
       continue;
     }
@@ -141,13 +135,6 @@ function parseTerminal(raw: unknown, path: string, diagnostics: Diagnostic[]): T
     return {};
   }
   
-  // Note: terminal keys that are tokens (background, foreground, cursor, cursorAccent, selection, ansi...) 
-  // are NOT handled by groupTokens here in the original code, but they belong to the "terminal" group!
-  // Wait, the original code had parseTerminal specifically for non-token or token fields.
-  // The instruction says: "replace COLOR_KEYS, SHAPE_LENGTH_KEYS, SHAPE_COLOR_KEYS and TYPE_STRING_KEYS with a lookup built from TOKENS grouped by group."
-  // It does NOT mention replacing parseTerminal! 
-  // Let me look at the instruction again: "In validateTheme.ts, replace COLOR_KEYS, SHAPE_LENGTH_KEYS, SHAPE_COLOR_KEYS and TYPE_STRING_KEYS with a lookup built from TOKENS grouped by group. Drive each value check off kind:"
-  // Terminal has font settings and ansi array. If I only replace colors, shape, type strings, I should keep parseTerminal as is but use diagnostics.
   const out: TerminalPalette = {};
   
   if (raw.background !== undefined) {
@@ -226,7 +213,6 @@ function parseTypography(raw: unknown, path: string, diagnostics: Diagnostic[]):
   }
   const out: ThemeTypography = {};
   
-  // First process fonts array if present
   if (raw.fonts !== undefined) {
     if (!Array.isArray(raw.fonts) || !raw.fonts.every(isFontId)) {
       diagnostics.push({ severity: "error", path: `${path}.fonts`, message: `${path}.fonts must be an array of bundled font ids` });
@@ -235,7 +221,6 @@ function parseTypography(raw: unknown, path: string, diagnostics: Diagnostic[]):
     }
   }
   
-  // Create a copy without 'fonts' to pass to parseTokens
   const rawTokens = { ...raw };
   delete rawTokens.fonts;
   
