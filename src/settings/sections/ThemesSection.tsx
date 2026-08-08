@@ -83,7 +83,7 @@ export function ThemesSection() {
         const parsed = JSON.parse(text);
         const result = validateTheme(parsed);
         if (!result.ok) {
-          setImportError(`${file.name}: ${result.error}`);
+          setImportError(`${file.name}: ${result.diagnostics.map(d => d.message).join(", ")}`);
           return;
         }
         await saveCustomTheme(result.theme);

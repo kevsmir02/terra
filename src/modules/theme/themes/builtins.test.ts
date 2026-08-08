@@ -8,8 +8,8 @@ describe("built-in themes", () => {
   it.each(builtins.map((t) => [t.id, t] as const))(
     "%s round-trips through validateTheme",
     (_id, theme) => {
-      const result = validateTheme(JSON.parse(JSON.stringify(theme)));
-      expect(result.ok ? null : result.error).toBeNull();
+      const result = validateTheme(theme);
+      expect(result.ok ? null : result.diagnostics).toBeNull();
     },
   );
 
