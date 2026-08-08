@@ -1,6 +1,7 @@
 import { resolveVariant } from "./resolveVariant";
 import { TOKENS } from "./tokens";
 import type { ThemeVar } from "./applyTheme";
+import type { DerivedValues } from "./tokens";
 import type { Theme, ThemeMode, ThemeVariant } from "./types";
 
 const ANSI_KEYS = [
@@ -42,7 +43,8 @@ export function resolveTheme(theme: Theme, mode: ThemeMode): ThemeVar[] | null {
     if (!def) return;
     for (const d of def.deps ?? []) resolveOne(d);
     const authored = readAuthored(variant, key);
-    values[key] = authored ?? def.derive?.({ ...values, ansi } as never) ?? def.fallback;
+    const derivedValues: DerivedValues = Object.assign({}, values, { ansi });
+    values[key] = authored ?? def.derive?.(derivedValues) ?? def.fallback;
   };
 
   for (const t of TOKENS) resolveOne(t.key);
