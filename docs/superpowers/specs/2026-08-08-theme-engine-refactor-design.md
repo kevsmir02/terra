@@ -180,12 +180,51 @@ hex theme gets 4.5:1 (3:1 for the dim roles `comment`, `gutterFg`,
 Requiring hex everywhere would reject the project's own `starterTheme()`, which
 uses `rgba(255,255,255,0.08)` for borders. The fix is to split the kind:
 
-- **`kind: "color"`** accepts any CSS colour and gets no contrast maths. Correct
-  for borders, selections and rings, where translucency is the point and
-  "contrast" is not meaningful.
+- **`kind: "color"`** accepts any supported CSS colour and gets no contrast
+  maths. Correct for borders, selections and rings, where translucency is the
+  point and "contrast" is not meaningful.
 - **`kind: "textColor"`** is for values that must be readable (syntax roles,
-  status tokens, the `*-foreground` family) and requires a notation parseable
-  into oklab (hex or `rgb()`), enforcing the floors universally.
+  status tokens, the `*-foreground` family) and requires a notation the engine
+  can convert, enforcing the floors universally.
+
+### The two allowlists must agree
+
+`validateTheme.ts:56` already has a `COLOR_RE` that accepts `transparent`, hex
+3/6/8, and `rgb|rgba|hsl|hsla|oklch|oklab|lab|lch`. Any notation that `COLOR_RE`
+accepts but the contrast maths cannot convert becomes a token that validates as
+a `color` and fails as a `textColor`, which is an inconsistency an author would
+have to memorize:
+
+```jsonc
+"border":     "oklch(0.30 0.02 250)",  // accepted
+"foreground": "oklch(0.90 0.02 250)",  // rejected
+```
+
+So the supported set is defined once and both sides are held to it:
+
+**Supported:** hex 3/6/8, `rgb()`, `rgba()`, `hsl()`, `hsla()`, `oklch()`,
+`oklab()`.
+
+`oklch` and `oklab` are not concessions, they are the natural notation here. The
+engine's whole derivation model is oklab, so `oklch(L C H)` converts with
+`a = C·cos(H)`, `b = C·sin(H)` and `oklab(L a b)` is the identity. Hex is the
+notation that costs more, needing sRGB to linear to oklab with rounding at each
+step. Perceptually uniform lightness is also exactly what an author is tuning
+when hand-building a palette, and it is what Tailwind 4's own default palette
+uses.
+
+**Dropped from `COLOR_RE`:** `lab()` and `lch()`. These are CIE Lab, not Oklab,
+and need the Lab to XYZ to Oklab chain: real work and real error surface for
+notations nothing in the project uses. Advertising acceptance the engine cannot
+back is precisely how the two-tier contrast bug arose, so the regex narrows
+rather than half-supporting them.
+
+A test asserts the two allowlists agree, so this class of drift cannot return.
+
+Resolving arbitrary CSS colours through the browser's CSSOM was considered and
+rejected: it works in a webview but is impure and jsdom does not compute
+colours, which would break the pure-function testing model the refactor rests
+on. The conversions stay in TypeScript.
 
 Contrast enforcement therefore stops being conditional on notation. A theme
 either gets the guarantee or gets a validation error naming the token. It never

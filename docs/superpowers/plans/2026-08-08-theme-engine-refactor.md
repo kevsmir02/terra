@@ -62,21 +62,28 @@ Vitest, Biome.
 
 ---
 
-### Task 1: Colour parsing so contrast works beyond hex
+### Task 1: One colour allowlist, shared by parsing and validation
 
 Today `ensureContrast` engages only when both colours are hex, so a theme
 written in `rgb()` silently gets no legibility floor. This task removes that
-restriction at the bottom of the stack.
+restriction at the bottom of the stack, and pins the supported notation set in
+one place so parsing and validation cannot disagree.
+
+**Supported after this task:** hex 3/6/8, `rgb()`, `rgba()`, `hsl()`, `hsla()`,
+`oklch()`, `oklab()`. `lab()` and `lch()` are dropped from `COLOR_RE`, because
+they are CIE Lab and would need the Lab to XYZ to Oklab chain for no current
+caller. See the spec section "The two allowlists must agree".
 
 **Files:**
-- Modify: `src/modules/theme/oklab.ts`
+- Modify: `src/modules/theme/oklab.ts`, `src/modules/theme/validateTheme.ts`
 - Test: `src/modules/theme/oklab.test.ts`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces: `parseColor(v: string): [number, number, number] | null` returning
-  8-bit RGB. `toOklab`, `contrast` and `ensureContrast` keep their existing
-  signatures but accept any parseable notation.
+  8-bit RGB, and `COLOR_RE` exported from `validateTheme.ts` so the agreement
+  test can reach it. `toOklab`, `contrast` and `ensureContrast` keep their
+  existing signatures but accept any supported notation.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -84,18 +91,45 @@ Add to `src/modules/theme/oklab.test.ts`:
 
 ```ts
 import { contrast, parseColor } from "./oklab";
+import { COLOR_RE } from "./validateTheme";
+
+// Every notation the engine claims to support, with a value that is white
+// (or near enough) so one table drives both the parse and agreement tests.
+const WHITE_IN_EVERY_NOTATION = [
+  "#fff",
+  "#ffffff",
+  "#ffffffcc",
+  "rgb(255, 255, 255)",
+  "rgba(255,255,255,0.5)",
+  "hsl(0, 0%, 100%)",
+  "hsla(0, 0%, 100%, 0.5)",
+  "oklch(1 0 0)",
+  "oklab(1 0 0)",
+];
 
 describe("parseColor", () => {
-  it("parses the notations a theme may realistically use", () => {
-    expect(parseColor("#fff")).toEqual([255, 255, 255]);
-    expect(parseColor("#ffffff")).toEqual([255, 255, 255]);
-    expect(parseColor("#ffffffcc")).toEqual([255, 255, 255]);
-    expect(parseColor("rgb(255, 255, 255)")).toEqual([255, 255, 255]);
-    expect(parseColor("rgba(255,255,255,0.5)")).toEqual([255, 255, 255]);
+  it("parses every supported notation", () => {
+    for (const v of WHITE_IN_EVERY_NOTATION) {
+      const rgb = parseColor(v);
+      expect(rgb, `failed to parse ${v}`).not.toBeNull();
+      for (const channel of rgb ?? []) expect(channel).toBeGreaterThan(250);
+    }
+  });
+
+  it("round-trips a mid-tone through the oklab notations", () => {
+    // oklch and oklab describe the same colour; polar vs cartesian.
+    const viaLch = parseColor("oklch(0.6 0.1 150)");
+    const viaLab = parseColor("oklab(0.6 -0.0866 0.05)");
+    expect(viaLch).not.toBeNull();
+    expect(viaLab).not.toBeNull();
+    for (let i = 0; i < 3; i++) {
+      expect(Math.abs((viaLch ?? [])[i] - (viaLab ?? [])[i])).toBeLessThan(4);
+    }
   });
 
   it("returns null for notations it cannot reason about", () => {
-    expect(parseColor("oklch(0.7 0.1 200)")).toBeNull();
+    expect(parseColor("lab(50% 40 59)")).toBeNull();
+    expect(parseColor("lch(50% 70 40)")).toBeNull();
     expect(parseColor("transparent")).toBeNull();
     expect(parseColor("")).toBeNull();
   });
@@ -105,6 +139,25 @@ describe("contrast", () => {
   it("is notation independent", () => {
     expect(contrast("rgb(255,255,255)", "#000000")).toBeCloseTo(21, 1);
     expect(contrast("#ffffff", "rgb(0,0,0)")).toBeCloseTo(21, 1);
+    expect(contrast("oklch(1 0 0)", "#000000")).toBeCloseTo(21, 0);
+  });
+});
+
+// This is the test that stops the two-tier contrast bug from returning in a new
+// form: a notation validation accepts but the contrast maths cannot convert
+// would silently become a token that works as a `color` and fails as a
+// `textColor`.
+describe("allowlist agreement", () => {
+  it("parses everything COLOR_RE accepts, except transparent", () => {
+    for (const v of WHITE_IN_EVERY_NOTATION) {
+      expect(COLOR_RE.test(v), `COLOR_RE rejected ${v}`).toBe(true);
+      expect(parseColor(v), `parseColor rejected ${v}`).not.toBeNull();
+    }
+  });
+
+  it("no longer advertises the CIE Lab notations", () => {
+    expect(COLOR_RE.test("lab(50% 40 59)")).toBe(false);
+    expect(COLOR_RE.test("lch(50% 70 40)")).toBe(false);
   });
 });
 ```
@@ -116,19 +169,53 @@ Expected: FAIL, `parseColor` is not exported.
 
 - [ ] **Step 3: Implement `parseColor` and route the existing functions through it**
 
-In `src/modules/theme/oklab.ts`, add above `toOklab`:
+First factor the sRGB step out of `fromOklab` in `src/modules/theme/oklab.ts`.
+It already converts oklab to 8-bit RGB before formatting hex; extract that as
+`oklabToRgb(L, A, B): [number, number, number]` and have `fromOklab` call it.
+The oklch and oklab notations need exactly that conversion, and duplicating it
+is how the two drift apart.
+
+Then add above `toOklab`:
 
 ```ts
-const RGB_FN = /^rgba?\(\s*([\d.]+)\s*[, ]\s*([\d.]+)\s*[, ]\s*([\d.]+)/;
+const NUM = String.raw`(-?[\d.]+)%?`;
+const FN = (name: string) =>
+  new RegExp(String.raw`^${name}\(\s*${NUM}[\s,]+${NUM}[\s,]+${NUM}`);
+
+const RGB_FN = FN("rgba?");
+const HSL_FN = FN("hsla?");
+const OKLCH_FN = FN("oklch");
+const OKLAB_FN = FN("oklab");
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const sat = s / 100;
+  const lig = l / 100;
+  const c = (1 - Math.abs(2 * lig - 1)) * sat;
+  const hp = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  const [r, g, b] =
+    hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x]
+    : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x];
+  const m = lig - c / 2;
+  return [
+    Math.round((r + m) * 255),
+    Math.round((g + m) * 255),
+    Math.round((b + m) * 255),
+  ];
+}
 
 /**
- * 8-bit RGB for the notations contrast maths can reason about. Alpha is
- * dropped: a translucent colour has no fixed contrast, so callers that care
- * use `kind: "color"` and skip the maths entirely.
+ * 8-bit RGB for every notation the engine supports. Alpha is dropped: a
+ * translucent colour has no fixed contrast, so callers that care use
+ * `kind: "color"` and skip the maths entirely.
+ *
+ * oklch and oklab convert straight through the engine's own colour space.
+ * Hex is the expensive one, needing sRGB to linear to oklab.
  */
 export function parseColor(v: string | undefined): [number, number, number] | null {
   if (!v) return null;
   const s = v.trim();
+
   if (s.startsWith("#")) {
     const h = s.slice(1);
     const full =
@@ -140,17 +227,63 @@ export function parseColor(v: string | undefined): [number, number, number] | nu
       Number.parseInt(full.slice(4, 6), 16),
     ];
   }
-  const m = RGB_FN.exec(s);
-  if (!m) return null;
-  const c = [Number(m[1]), Number(m[2]), Number(m[3])];
-  if (c.some((n) => !Number.isFinite(n) || n < 0 || n > 255)) return null;
-  return [c[0], c[1], c[2]];
+
+  const read = (re: RegExp): [number, number, number] | null => {
+    const m = re.exec(s);
+    if (!m) return null;
+    const n = [Number(m[1]), Number(m[2]), Number(m[3])];
+    return n.some((x) => !Number.isFinite(x)) ? null : [n[0], n[1], n[2]];
+  };
+
+  const rgb = read(RGB_FN);
+  if (rgb) {
+    return rgb.some((n) => n < 0 || n > 255) ? null : rgb;
+  }
+
+  const hsl = read(HSL_FN);
+  if (hsl) return hslToRgb(hsl[0], hsl[1], hsl[2]);
+
+  // oklch is oklab in polar form: a = C*cos(H), b = C*sin(H).
+  const lch = read(OKLCH_FN);
+  if (lch) {
+    const [L, C, H] = lch;
+    const rad = (H * Math.PI) / 180;
+    return oklabToRgb(L, C * Math.cos(rad), C * Math.sin(rad));
+  }
+
+  const lab = read(OKLAB_FN);
+  if (lab) return oklabToRgb(lab[0], lab[1], lab[2]);
+
+  return null;
 }
 ```
+
+`RGB_FN` must be tried before `HSL_FN` and the oklab pair, and `OKLCH_FN` before
+`OKLAB_FN`, because `FN("oklab")` would otherwise not match `oklch(...)` but the
+reverse ordering makes the intent harder to read.
+
+Note `NUM` tolerates a trailing `%`, which `hsl()` requires for saturation and
+lightness and `oklch()`/`oklab()` allow for lightness. A percentage lightness in
+the oklab notations is `0-100` rather than `0-1`, so normalise it: if the source
+matched a `%` on the first component, divide `L` by 100 before converting.
 
 Then change `toOklab` to take `string` and start with
 `const rgb = parseColor(hex); if (!rgb) return [0, 0, 0];`, replacing its
 hex-only slicing. Leave `isHexColor` exported; Task 5 removes its last callers.
+
+- [ ] **Step 3b: Narrow `COLOR_RE` and export it**
+
+In `src/modules/theme/validateTheme.ts:56`, drop the CIE Lab notations from the
+alternation and export the constant so the agreement test can reach it:
+
+```ts
+export const COLOR_RE =
+  /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab)\([^;{}()]*\))$/;
+```
+
+Only `lab` and `lch` are removed. Nothing in the repo uses them; if any builtin
+theme did, the shape-colour validation would already be the thing that catches
+it, and the next step will surface it.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -603,10 +736,11 @@ In `validateTheme.ts`, replace `COLOR_KEYS`, `SHAPE_LENGTH_KEYS`,
 `SHAPE_COLOR_KEYS` and `TYPE_STRING_KEYS` with a lookup built from `TOKENS`
 grouped by `group`. Drive each value check off `kind`:
 
-- `"color"` - reuse the existing `COLOR_RE` at `validateTheme.ts:56`, which
-  already accepts `transparent`, hex 3/6/8 and the CSS colour functions.
+- `"color"` - reuse `COLOR_RE`, narrowed and exported in Task 1. It accepts
+  `transparent`, hex 3/6/8, `rgb`, `rgba`, `hsl`, `hsla`, `oklch` and `oklab`.
 - `"textColor"` - must satisfy `COLOR_RE` **and** `parseColor` must return
-  non-null, since contrast maths has to be able to reason about it.
+  non-null. After Task 1 the only value in that gap is `transparent`, which is
+  correctly rejected for text, and Task 1's agreement test keeps it that way.
 - `"length"` - the existing `LENGTH_RE`.
 - `"keyword"` - membership in `def.keywords`.
 - `"alpha"` - a number in `[0, 1]`.
