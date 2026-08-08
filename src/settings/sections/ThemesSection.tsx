@@ -30,15 +30,19 @@ import {
 import {
   deleteCustomTheme,
   saveCustomTheme,
+  listCustomThemesWithDiagnostics,
+  onCustomThemesChange,
 } from "@/modules/theme/customThemes";
 import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
 import { listBuiltinThemes } from "@/modules/theme/themes";
 import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import { validateTheme } from "@/modules/theme/validateTheme";
+import type { Diagnostic } from "@/modules/theme/diagnostics";
 import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useMemo, useRef, useState } from "react";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
@@ -53,10 +57,22 @@ export function ThemesSection() {
     [customThemes],
   );
 
-  const [importError, setImportError] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<{ type: "error" | "warning"; text: string } | null>(null);
   const [bgError, setBgError] = useState<string | null>(null);
+  const [rejectedThemes, setRejectedThemes] = useState<{ id: string; diagnostics: Diagnostic[] }[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let unsub: UnlistenFn | undefined;
+    void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
+    void onCustomThemesChange(() => {
+      void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
+    }).then(fn => unsub = fn);
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
 
   const onCreateTheme = () => {
     void emitThemeEdit({ action: "create" });
@@ -75,7 +91,7 @@ export function ThemesSection() {
   const backgroundBlur = usePreferencesStore((s) => s.backgroundBlur);
 
   const handleThemeFiles = async (files: FileList | null) => {
-    setImportError(null);
+    setImportMessage(null);
     if (!files || files.length === 0) return;
     for (const file of Array.from(files)) {
       try {
@@ -83,15 +99,19 @@ export function ThemesSection() {
         const parsed = JSON.parse(text);
         const result = validateTheme(parsed);
         if (!result.ok) {
-          setImportError(`${file.name}: ${result.diagnostics.map(d => d.message).join(", ")}`);
+          setImportMessage({ type: "error", text: `${file.name}: ${result.diagnostics.map(d => d.message).join(", ")}` });
           return;
         }
         await saveCustomTheme(result.theme);
         setThemeId(result.theme.id);
+        if (result.diagnostics.length > 0) {
+          setImportMessage({ type: "warning", text: `${file.name} imported with warnings: ${result.diagnostics.map(d => d.message).join(", ")}` });
+        }
       } catch (e) {
-        setImportError(
-          `${file.name}: ${e instanceof Error ? e.message : "failed to read"}`,
-        );
+        setImportMessage({
+          type: "error",
+          text: `${file.name}: ${e instanceof Error ? e.message : "failed to read"}`,
+        });
         return;
       }
     }
@@ -186,9 +206,16 @@ export function ThemesSection() {
             }}
           />
         </div>
-        {importError ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive">
-            {importError}
+        {importMessage ? (
+          <div
+            className={cn(
+              "rounded-md border px-2.5 py-1.5 text-[11.5px]",
+              importMessage.type === "error"
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-orange-500/40 bg-orange-500/10 text-orange-500",
+            )}
+          >
+            {importMessage.text}
           </div>
         ) : null}
         <div className="grid grid-cols-2 gap-2">
@@ -281,6 +308,24 @@ export function ThemesSection() {
             );
           })}
         </div>
+        {rejectedThemes.length > 0 ? (
+          <div className="flex flex-col gap-2 pt-2">
+            <Label>Rejected Stored Themes</Label>
+            <div className="flex flex-col gap-2">
+              {rejectedThemes.map((rt) => (
+                <div key={rt.id} className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
+                  <div className="flex flex-col">
+                    <span className="font-semibold">{rt.id}</span>
+                    <span>{rt.diagnostics[0]?.message}</span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 hover:bg-destructive/20 text-destructive" onClick={() => void onRemoveCustomTheme(rt.id)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2">
