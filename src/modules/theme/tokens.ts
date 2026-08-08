@@ -26,7 +26,6 @@ export type TokenDef = {
 };
 
 export const TOKENS: readonly TokenDef[] = [
-  // colors
   { key: "colors.background", cssVar: "--background", group: "colors", kind: "color", doc: "App canvas." },
   { key: "colors.foreground", cssVar: "--foreground", group: "colors", kind: "textColor", doc: "Primary text on the canvas." },
   { key: "colors.card", cssVar: "--card", group: "colors", kind: "color", deps: ["colors.background"], derive: (d) => d["colors.background"], doc: "Raised surface. Falls back to the canvas." },
@@ -56,7 +55,6 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "colors.radius", cssVar: "--radius", group: "colors", kind: "length", doc: "Border radius." },
   { key: "colors.borderStyle", cssVar: "--border-style", group: "colors", kind: "keyword", doc: "Border style." },
 
-  // shape
   { key: "shape.frameWidth", cssVar: "--frame-border-width", group: "shape", kind: "length", fallback: "1px", doc: "Frame border width." },
   { key: "shape.frameRadius", cssVar: "--frame-radius", group: "shape", kind: "length", fallback: "12px", doc: "Frame border radius." },
   { key: "shape.framePadding", cssVar: "--frame-padding", group: "shape", kind: "length", fallback: "0px", doc: "Frame padding." },
@@ -72,21 +70,18 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "shape.liftDepth", cssVar: "--lift-depth", group: "shape", kind: "length", fallback: "0px", doc: "Lift depth." },
   { key: "shape.spacing", cssVar: "--ui-spacing", group: "shape", kind: "length", fallback: "0.25rem", doc: "UI spacing." },
 
-  // type
   { key: "type.sans", cssVar: "--ui-font-sans", group: "type", kind: "keyword", doc: "Sans serif font." },
   { key: "type.mono", cssVar: "--ui-font-mono", group: "type", kind: "keyword", doc: "Monospace font." },
   { key: "type.display", cssVar: "--ui-font-display", group: "type", kind: "keyword", doc: "Display font." },
   { key: "type.chromeTracking", cssVar: "--chrome-tracking", group: "type", kind: "length", doc: "Chrome letter spacing." },
   { key: "type.chromeTransform", cssVar: "--chrome-transform", group: "type", kind: "keyword", doc: "Chrome text transform." },
 
-  // terminal
   { key: "terminal.background", cssVar: "--terminal-background", group: "terminal", kind: "color", doc: "Terminal background." },
   { key: "terminal.foreground", cssVar: "--terminal-foreground", group: "terminal", kind: "textColor", doc: "Terminal foreground." },
   { key: "terminal.cursor", cssVar: "--terminal-cursor", group: "terminal", kind: "color", doc: "Terminal cursor." },
   { key: "terminal.cursorAccent", cssVar: "--terminal-cursor-accent", group: "terminal", kind: "color", doc: "Terminal cursor accent." },
   { key: "terminal.selection", cssVar: "--terminal-selection", group: "terminal", kind: "color", doc: "Terminal selection." },
 
-  // terminal ansi vars
   { key: "terminal.ansiBlack", cssVar: "--terminal-ansi-black", group: "terminal", kind: "color", doc: "ANSI Black." },
   { key: "terminal.ansiRed", cssVar: "--terminal-ansi-red", group: "terminal", kind: "color", doc: "ANSI Red." },
   { key: "terminal.ansiGreen", cssVar: "--terminal-ansi-green", group: "terminal", kind: "color", doc: "ANSI Green." },
@@ -104,7 +99,6 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "terminal.ansiBrightCyan", cssVar: "--terminal-ansi-bright-cyan", group: "terminal", kind: "color", doc: "ANSI Bright Cyan." },
   { key: "terminal.ansiBrightWhite", cssVar: "--terminal-ansi-bright-white", group: "terminal", kind: "color", doc: "ANSI Bright White." },
 
-  // syntax
   { key: "syntax.comment", cssVar: "--syntax-comment", group: "syntax", kind: "color", derive: (d) => d.ansi?.[8], doc: "Comment color." },
   { key: "syntax.keyword", cssVar: "--syntax-keyword", group: "syntax", kind: "color", derive: (d) => d.ansi?.[5], doc: "Keyword color." },
   { key: "syntax.string", cssVar: "--syntax-string", group: "syntax", kind: "color", derive: (d) => d.ansi?.[2], doc: "String color." },
@@ -124,7 +118,6 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "syntax.link", cssVar: "--syntax-link", group: "syntax", kind: "color", derive: (d) => d.ansi?.[6], doc: "Link color." },
   { key: "syntax.invalid", cssVar: "--syntax-invalid", group: "syntax", kind: "color", derive: (d) => d.ansi?.[9], doc: "Invalid token color." },
 
-  // status
   { key: "status.added", cssVar: "--status-added", group: "status", kind: "color", derive: (d) => d.ansi?.[2], doc: "Added status color." },
   { key: "status.modified", cssVar: "--status-modified", group: "status", kind: "color", derive: (d) => d.ansi?.[3], doc: "Modified status color." },
   { key: "status.deleted", cssVar: "--status-deleted", group: "status", kind: "color", derive: (d) => d.ansi?.[1], doc: "Deleted status color." },
