@@ -12,18 +12,39 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type JSX, useEffect, useState } from "react";
-import { AboutSection } from "./sections/AboutSection";
-import { EditorSection } from "./sections/EditorSection";
+import {
+  type ComponentType,
+  lazy,
+  Suspense,
+  useEffect,
+  useState,
+} from "react";
 import { GeneralSection } from "./sections/GeneralSection";
-import { ShortcutsSection } from "./sections/ShortcutsSection";
-import { ThemesSection } from "./sections/ThemesSection";
+
+// Only one section is ever on screen, so the other four stay out of the startup
+// graph: Editor alone drags in the LSP presets, language definitions and the
+// formatter registry. General is the default tab and stays eager, so opening
+// Settings still paints its content in the first frame.
+const EditorSection = lazy(() =>
+  import("./sections/EditorSection").then((m) => ({ default: m.EditorSection })),
+);
+const ThemesSection = lazy(() =>
+  import("./sections/ThemesSection").then((m) => ({ default: m.ThemesSection })),
+);
+const ShortcutsSection = lazy(() =>
+  import("./sections/ShortcutsSection").then((m) => ({
+    default: m.ShortcutsSection,
+  })),
+);
+const AboutSection = lazy(() =>
+  import("./sections/AboutSection").then((m) => ({ default: m.AboutSection })),
+);
 
 const TABS: {
   id: SettingsTab;
   label: string;
   icon: typeof Settings01Icon;
-  component: () => JSX.Element;
+  component: ComponentType;
 }[] = [
   {
     id: "general",
@@ -136,7 +157,9 @@ export function SettingsApp() {
 
       <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-6 pb-7 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="mx-auto w-full max-w-160">
-          {ActiveSection && <ActiveSection />}
+          <Suspense fallback={null}>
+            {ActiveSection && <ActiveSection />}
+          </Suspense>
         </div>
       </main>
     </div>

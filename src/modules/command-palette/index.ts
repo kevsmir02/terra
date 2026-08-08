@@ -1,4 +1,4 @@
-export { CommandPalette } from "./CommandPalette";
+export { CommandPalette } from "./CommandPaletteLazy";
 export {
   createCommandItems,
   type CommandPaletteActionContext,

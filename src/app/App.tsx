@@ -312,12 +312,16 @@ export default function App() {
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  // Latches on first open so the palette chunk is fetched then, not at startup.
+  // It stays mounted afterwards, keeping the dialog's exit animation.
+  const [paletteMounted, setPaletteMounted] = useState(false);
   const [paletteInitialMode, setPaletteInitialMode] = useState<
     "commands" | "content"
   >("commands");
   const openCommandPalette = useCallback(
     (mode: "commands" | "content" = "commands") => {
       setPaletteInitialMode(mode);
+      setPaletteMounted(true);
       setCommandPaletteOpen(true);
     },
     [],
@@ -471,7 +475,7 @@ export default function App() {
       const tabId = newTab(path);
       setTimeout(() => {
         const tab = tabsRef.current.find((x) => x.id === tabId);
-        if (!tab || tab.kind !== "terminal") return;
+        if (tab?.kind !== "terminal") return;
         const t = terminalRefs.current.get(tab.activeLeafId);
         if (!t) return;
         t.write(`cd ${quoteShellArg(path)}\r`);
@@ -592,7 +596,7 @@ export default function App() {
   const splitActivePaneInActiveTab = useCallback(
     (dir: "row" | "col") => {
       const t = tabsRef.current.find((x) => x.id === activeId);
-      if (!t || t.kind !== "terminal") return;
+      if (t?.kind !== "terminal") return;
       splitActivePane(activeId, dir);
     },
     [activeId, splitActivePane],
@@ -840,7 +844,7 @@ export default function App() {
       const tab = all.find(
         (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
       );
-      if (!tab || tab.kind !== "terminal") return;
+      if (tab?.kind !== "terminal") return;
       // Last pane of the last tab: quit instead of respawning a shell.
       if (leafIds(tab.paneTree).length === 1 && all.length === 1) {
         void getCurrentWindow().close();
@@ -1227,15 +1231,17 @@ export default function App() {
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />
           )}
 
-          <CommandPalette
-            open={commandPaletteOpen}
-            onOpenChange={setCommandPaletteOpen}
-            initialMode={paletteInitialMode}
-            commandItems={commandPaletteItems}
-            workspaceRoot={explorerRoot}
-            onOpenContentHit={openContentHit}
-            insertCommand={insertHistoryCommand}
-          />
+          {paletteMounted && (
+            <CommandPalette
+              open={commandPaletteOpen}
+              onOpenChange={setCommandPaletteOpen}
+              initialMode={paletteInitialMode}
+              commandItems={commandPaletteItems}
+              workspaceRoot={explorerRoot}
+              onOpenContentHit={openContentHit}
+              insertCommand={insertHistoryCommand}
+            />
+          )}
 
           <NewEditorDialog
             open={newEditorOpen}
