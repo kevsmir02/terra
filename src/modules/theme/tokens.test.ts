@@ -49,4 +49,16 @@ describe("token registry", () => {
   it("documents every token", () => {
     for (const t of TOKENS) expect(t.doc.length).toBeGreaterThan(0);
   });
+
+  it("declares the emphasis ladder with its modal defaults", () => {
+    const ladder = TOKENS.filter((t) => t.group === "emphasis");
+    expect(ladder.map((t) => [t.cssVar, t.fallback])).toEqual([
+      ["--emph-faint", "0.1"],
+      ["--emph-subtle", "0.3"],
+      ["--emph-soft", "0.4"],
+      ["--emph-medium", "0.5"],
+      ["--emph-strong", "0.6"],
+      ["--emph-bold", "0.85"],
+    ]);
+  });
 });

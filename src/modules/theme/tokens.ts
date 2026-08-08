@@ -126,4 +126,11 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "status.warning", cssVar: "--status-warning", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[3]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Warning status color." },
   { key: "status.conflict", cssVar: "--status-conflict", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[6]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Conflict status color." },
   { key: "status.ok", cssVar: "--status-ok", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[2]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "OK status color." },
+
+  { key: "emphasis.faint", cssVar: "--emph-faint", group: "emphasis", kind: "alpha", fallback: "0.1", doc: "Faint emphasis." },
+  { key: "emphasis.subtle", cssVar: "--emph-subtle", group: "emphasis", kind: "alpha", fallback: "0.3", doc: "Subtle emphasis." },
+  { key: "emphasis.soft", cssVar: "--emph-soft", group: "emphasis", kind: "alpha", fallback: "0.4", doc: "Soft emphasis." },
+  { key: "emphasis.medium", cssVar: "--emph-medium", group: "emphasis", kind: "alpha", fallback: "0.5", doc: "Medium emphasis." },
+  { key: "emphasis.strong", cssVar: "--emph-strong", group: "emphasis", kind: "alpha", fallback: "0.6", doc: "Strong emphasis." },
+  { key: "emphasis.bold", cssVar: "--emph-bold", group: "emphasis", kind: "alpha", fallback: "0.85", doc: "Bold emphasis." },
 ];
