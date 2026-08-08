@@ -6,7 +6,10 @@ use serde::Serialize;
 use tauri::Emitter;
 use tempfile::NamedTempFile;
 
-use crate::modules::workspace::{resolve_path, WorkspaceEnv};
+use tauri::{Manager, State};
+
+use super::{authorized_entry, authorized_new, authorized_read};
+use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 
 const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 /// Ceiling for explicit "open anyway"; mirrored as FORCE_READ_LIMIT in useDocument.ts.
@@ -59,9 +62,11 @@ pub async fn fs_read_file(
     path: String,
     workspace: Option<WorkspaceEnv>,
     force: Option<bool>,
+    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<ReadResult, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    read_file_sync(&resolve_path(&path, &workspace), force.unwrap_or(false))
+    let p = authorized_read(&registry, &path, &workspace)?;
+    read_file_sync(&p, force.unwrap_or(false))
 }
 
 fn read_file_sync(p: &Path, force: bool) -> Result<ReadResult, String> {
@@ -131,9 +136,12 @@ pub async fn fs_write_file(
     workspace: Option<WorkspaceEnv>,
     source: Option<String>,
     app: tauri::AppHandle,
+    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<u64, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let target = resolve_path(&path, &workspace);
+    // `authorized_new` covers both cases a save hits: an existing file, and a
+    // first save into an already-authorized directory.
+    let target = authorized_new(&registry, &path, &workspace)?;
     let original_permissions = fs::metadata(&target).ok().map(|m| m.permissions());
     write_atomic(&target, content.as_bytes()).map_err(|e| {
         log::warn!("fs_write_file({}) failed: {e}", target.display());
@@ -157,21 +165,48 @@ pub async fn fs_write_file(
     Ok(mtime)
 }
 
+/// Grants `asset://` access to one already-authorized file, for the media and
+/// PDF previews. The static scope is empty on purpose: a blanket `**` would let
+/// the webview read any file on disk over a channel the workspace gate never
+/// sees. Granting per file keeps the protocol as narrow as what the user opened.
+#[tauri::command]
+pub async fn fs_allow_asset(
+    path: String,
+    workspace: Option<WorkspaceEnv>,
+    app: tauri::AppHandle,
+    registry: State<'_, WorkspaceRegistry>,
+) -> Result<String, String> {
+    let workspace = WorkspaceEnv::from_option(workspace);
+    let canonical = authorized_read(&registry, &path, &workspace)?;
+    if !canonical.is_file() {
+        return Err(format!("not a file: {}", canonical.display()));
+    }
+    app.asset_protocol_scope()
+        .allow_file(&canonical)
+        .map_err(|e| e.to_string())?;
+    Ok(super::to_canon(&canonical))
+}
+
 #[tauri::command]
 pub async fn fs_canonicalize(
     path: String,
     workspace: Option<WorkspaceEnv>,
+    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = resolve_path(&path, &workspace);
-    let canon = std::fs::canonicalize(&p).map_err(|e| e.to_string())?;
+    let canon = authorized_read(&registry, &path, &workspace)?;
     Ok(super::to_canon(&canon))
 }
 
 #[tauri::command]
-pub async fn fs_stat(path: String, workspace: Option<WorkspaceEnv>) -> Result<FileStat, String> {
+pub async fn fs_stat(
+    path: String,
+    workspace: Option<WorkspaceEnv>,
+    registry: State<'_, WorkspaceRegistry>,
+) -> Result<FileStat, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    let p = resolve_path(&path, &workspace);
+    // Not `authorized_read`: reporting `Symlink` requires the entry itself.
+    let p = authorized_entry(&registry, &path, &workspace)?;
     let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
     // fs::metadata follows symlinks, so the link check needs symlink_metadata.
     let kind = if std::fs::symlink_metadata(&p)

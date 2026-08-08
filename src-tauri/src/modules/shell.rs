@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -40,8 +41,12 @@ pub async fn shell_run_command(
         return Err("empty command".into());
     }
     let workspace = WorkspaceEnv::from_option(workspace);
-    authorize_spawn_cwd(&registry, cwd.as_deref(), &workspace)?;
-    let cwd_path = cwd
+    // Spawn into the canonical path the check accepted, not the raw string:
+    // re-resolving the string at spawn time re-follows symlinks and could land
+    // somewhere the authorization never saw. The WSL arm still needs the
+    // guest-space string, since `wsl --cd` cannot take a host path.
+    let canonical_cwd = authorize_spawn_cwd(&registry, cwd.as_deref(), &workspace)?;
+    let guest_cwd = cwd
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -53,19 +58,26 @@ pub async fn shell_run_command(
     );
     let (tx, rx) = mpsc::channel::<Result<CommandOutput, String>>();
     thread::spawn(move || {
-        let _ = tx.send(run_blocking(trimmed, cwd_path, workspace, dur));
+        let _ = tx.send(run_blocking(
+            trimmed,
+            guest_cwd,
+            canonical_cwd,
+            workspace,
+            dur,
+        ));
     });
     rx.recv().map_err(|e| e.to_string())?
 }
 
 fn run_blocking(
     command: String,
-    cwd: Option<String>,
+    guest_cwd: Option<String>,
+    canonical_cwd: Option<PathBuf>,
     workspace: WorkspaceEnv,
     dur: Duration,
 ) -> Result<CommandOutput, String> {
-    let mut cmd = build_oneshot_command(&command, &workspace, cwd.as_deref())?;
-    if let (WorkspaceEnv::Local, Some(dir)) = (&workspace, cwd) {
+    let mut cmd = build_oneshot_command(&command, &workspace, guest_cwd.as_deref())?;
+    if let (WorkspaceEnv::Local, Some(dir)) = (&workspace, canonical_cwd) {
         cmd.current_dir(dir);
     }
     cmd.stdin(Stdio::null())

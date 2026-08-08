@@ -135,6 +135,12 @@ export const native = {
       path,
       workspace: currentWorkspaceEnv(),
     }),
+  /** Grants `asset://` access to one file and returns its canonical path. */
+  allowAsset: (path: string) =>
+    invoke<string>("fs_allow_asset", {
+      path,
+      workspace: currentWorkspaceEnv(),
+    }),
   readFile: (path: string) =>
     invoke<ReadResult>("fs_read_file", {
       path,

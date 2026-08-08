@@ -7,6 +7,7 @@ use parse::{
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::modules::sync::MutexExt;
 
 struct Index {
     entries: Vec<HistEntry>,
@@ -116,7 +117,7 @@ fn is_executable(entry: &std::fs::DirEntry) -> bool {
 }
 
 fn ensure(state: &HistoryState) -> std::sync::MutexGuard<'_, Option<Index>> {
-    let mut guard = state.inner.lock().unwrap();
+    let mut guard = state.inner.lock_or_recover();
     if guard.is_none() {
         *guard = Some(Index {
             entries: build_index(read_histories()),

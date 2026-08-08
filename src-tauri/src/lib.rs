@@ -3,10 +3,11 @@ pub mod modules;
 use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 #[cfg(target_os = "macos")]
-use tauri::{PhysicalPosition, WindowEvent};
+use tauri::PhysicalPosition;
 use tauri_plugin_window_state::StateFlags;
+use modules::sync::MutexExt;
 
 /// Drained on first read so HMR / re-mounts can't replay the launch dir.
 #[derive(Default)]
@@ -18,12 +19,12 @@ struct LaunchFiles(Mutex<Vec<String>>);
 
 #[tauri::command]
 fn get_launch_dir(state: State<'_, LaunchDir>) -> Option<String> {
-    state.0.lock().expect("LaunchDir mutex poisoned").take()
+    state.0.lock_or_recover().take()
 }
 
 #[tauri::command]
 fn get_launch_files(state: State<'_, LaunchFiles>) -> Vec<String> {
-    std::mem::take(&mut *state.0.lock().expect("LaunchFiles mutex poisoned"))
+    std::mem::take(&mut *state.0.lock_or_recover())
 }
 
 enum LaunchEntry {
@@ -58,6 +59,20 @@ fn resolve_launch_target(entries: Vec<LaunchEntry>) -> LaunchTarget {
         }
     }
     LaunchTarget { dir, files }
+}
+
+/// Paths the OS hands us (CLI argv, macOS "Open With", a real drag-drop) are
+/// user gestures, so each becomes an authorized root. Registering the path
+/// itself rather than its parent keeps the grant as narrow as the gesture: a
+/// dropped file authorizes that file, a dropped folder authorizes its subtree.
+fn authorize_os_paths<I, P>(registry: &workspace::WorkspaceRegistry, paths: I)
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<std::path::Path>,
+{
+    for path in paths {
+        let _ = registry.authorize(path);
+    }
 }
 
 fn parse_launch_target() -> LaunchTarget {
@@ -204,13 +219,24 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
-        .setup(|_app| {
-            // macOS skips parent() for the settings window, so tie its lifecycle
-            // to the main window here instead. Other platforms keep parent().
-            #[cfg(target_os = "macos")]
-            if let Some(main) = _app.get_webview_window("main") {
-                let handle = _app.handle().clone();
+        .setup(|app| {
+            if let Some(main) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
                 main.on_window_event(move |event| {
+                    // Dropped paths round-trip through JS before returning as
+                    // fs_copy sources, so authorize them here, at the point the
+                    // OS reports a real gesture. Without this the gate could not
+                    // tell a genuine drop from one the renderer invented.
+                    if let WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) = event {
+                        if let Some(registry) =
+                            handle.try_state::<workspace::WorkspaceRegistry>()
+                        {
+                            authorize_os_paths(&registry, paths);
+                        }
+                    }
+                    // macOS skips parent() for the settings window, so tie its
+                    // lifecycle to the main window here instead.
+                    #[cfg(target_os = "macos")]
                     if matches!(
                         event,
                         WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
@@ -235,6 +261,9 @@ pub fn run() {
             if let Some(ref launch_dir) = cli_dir {
                 let _ = registry.authorize(launch_dir);
             }
+            // `dir` is only the first file's parent; later args can live
+            // elsewhere, so authorize each opened file in its own right.
+            authorize_os_paths(&registry, &launch.files);
             registry
         })
         .manage(LaunchDir(Mutex::new(cli_dir)))
@@ -255,6 +284,7 @@ pub fn run() {
             fs::file::fs_write_file,
             fs::file::fs_stat,
             fs::file::fs_canonicalize,
+            fs::file::fs_allow_asset,
             fs::mutate::fs_create_file,
             fs::mutate::fs_create_dir,
             fs::mutate::fs_rename,
@@ -360,16 +390,19 @@ pub fn run() {
                     if target.files.is_empty() {
                         return;
                     }
+                    if let Some(registry) = app.try_state::<workspace::WorkspaceRegistry>() {
+                        authorize_os_paths(&registry, &target.files);
+                    }
                     if let Some(dir) = &target.dir {
                         if let Some(registry) = app.try_state::<workspace::WorkspaceRegistry>() {
                             let _ = registry.authorize(dir);
                         }
                         if let Some(state) = app.try_state::<LaunchDir>() {
-                            *state.0.lock().expect("LaunchDir mutex poisoned") = Some(dir.clone());
+                            *state.0.lock_or_recover() = Some(dir.clone());
                         }
                     }
                     if let Some(state) = app.try_state::<LaunchFiles>() {
-                        *state.0.lock().expect("LaunchFiles mutex poisoned") = target.files.clone();
+                        *state.0.lock_or_recover() = target.files.clone();
                     }
                     let _ = app.emit("terra:open-file", target.files);
                 }
