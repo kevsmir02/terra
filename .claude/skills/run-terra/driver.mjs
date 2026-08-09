@@ -131,10 +131,15 @@ async function capture(out, waitMax = 25) {
   }
 }
 
-async function withTheme(id, mode, fn) {
+async function withTheme(id, mode, fn, keepBackground = false) {
   const before = readSettings();
   try {
-    writeSettings({ ...before, themeId: id, theme: mode });
+    const next = { ...before, themeId: id, theme: mode };
+    // A user background image renders under every theme, so a capture taken
+    // with one active is showing their wallpaper as much as the palette. Off by
+    // default; pass --keep-background to screenshot the real configuration.
+    if (!keepBackground) next.backgroundKind = "none";
+    writeSettings(next);
     return await fn();
   } finally {
     writeSettings(before);
@@ -173,7 +178,8 @@ async function main() {
     for (const id of list) {
       const out =
         cmd === "shot-all" ? join(outdir, `${id}-${mode}.png`) : arg("out", "/tmp/terra.png");
-      const colours = await withTheme(id, mode, () => capture(out));
+      const keepBg = rest.includes("--keep-background");
+      const colours = await withTheme(id, mode, () => capture(out), keepBg);
       const verdict = colours >= 300 ? "ok" : "NOT PAINTED - blank or mid-paint";
       console.log(`${id.padEnd(16)} ${String(mode).padEnd(7)} ${out}  (${colours} colours, ${verdict})`);
     }
