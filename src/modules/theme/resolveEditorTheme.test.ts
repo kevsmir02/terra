@@ -88,17 +88,24 @@ describe("resolveEditorTheme", () => {
     });
   });
 
-  it("resolves terra-default to its atomone pairing", () => {
+  // terra-default authors its own ansi palette, so derivation outranks the
+  // atomone pairing it still declares as a fallback. Before it did, the default
+  // theme was the one case where the editor came from an unrelated preset.
+  it("derives terra-default from its own ansi palette", () => {
     expect(resolveEditorTheme("auto", "terra-default", [], "dark")).toEqual({
-      kind: "preset",
-      id: "atomone",
+      kind: "derived",
+      mode: "dark",
+    });
+    expect(resolveEditorTheme("auto", "terra-default", [], "light")).toEqual({
+      kind: "derived",
+      mode: "light",
     });
   });
 
-  it("uses the default theme pairing for an unknown app theme", () => {
+  it("uses the default theme resolution for an unknown app theme", () => {
     expect(resolveEditorTheme("auto", "does-not-exist", [], "dark")).toEqual({
-      kind: "preset",
-      id: "atomone",
+      kind: "derived",
+      mode: "dark",
     });
   });
 

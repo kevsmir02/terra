@@ -101,18 +101,27 @@ Rules that `terminalLegibility.test.ts` enforces across every built-in:
 
 - **No slot may equal the background.** Stardew once shipped
   `brightWhite === background`, which is invisible text, not a colour choice.
+  Canonical Gruvbox light does the same thing in slot 0.
 - **Blue must differ from cyan**, in both the normal and bright rows.
 - **`foreground` vs `background` must clear 4.5:1.**
-
-Rules the test only enforces numerically for Stardew, but that you should
-hold anyway:
-
 - Normal slots 1-7 clear **4.5:1** against your background.
 - Bright slots 9-15 clear **3:1**.
 - **Slot 8 (`brightBlack`) clears 3:1.** This is the one everyone gets wrong: it
   is the comment colour in most tooling, and a "subtle" value lands at 1.6:1 and
   makes every comment unreadable.
-- Slot 0 (`black`) is exempt. It is legitimately near-background on dark themes.
+- Slot 0 (`black`) is exempt from the ratio, but not from the equality rule. It
+  is legitimately near-background on dark themes.
+
+**Omitting `terminal.background` does not opt you out.** The test falls back to
+`colors.background` and `colors.foreground`, matching what the engine does via
+`--terminal-background: var(--background)`. It used to skip any variant that
+left those keys undeclared, which is how three built-ins shipped unmeasured.
+The corollary is that an undeclared terminal background inherits the canvas, so
+a saturated canvas becomes a saturated terminal background: declare one.
+
+When a value has to move to clear a floor, move it with `ensureContrast` from
+`oklab.ts` rather than by eye. It walks OKLab lightness only, so hue and chroma
+survive and a canonical palette stays recognizable.
 
 **Keep the terminal background desaturated.** Well-regarded terminal palettes sit
 at 5-25% HSL saturation (gruvbox-hard `#1d2021` is 6%, kanagawa `#1f1f28` is 15%,

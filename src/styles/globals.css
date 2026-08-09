@@ -76,7 +76,7 @@
 @utility border-r { border-right-width: var(--surface-border-width, 1px); }
 
 :root {
-    --background: oklch(1 0 0);
+    --background: oklch(0.978 0.002 228.8);
     --foreground: oklch(0.148 0.004 228.8);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.148 0.004 228.8);
@@ -87,7 +87,7 @@
     --secondary: oklch(0.963 0.002 197.1);
     --secondary-foreground: oklch(0.218 0.008 223.9);
     --muted: oklch(0.963 0.002 197.1);
-    --muted-foreground: oklch(0.56 0.021 213.5);
+    --muted-foreground: oklch(0.544 0.021 213.5);
     --accent: oklch(0.963 0.002 197.1);
     --accent-foreground: oklch(0.218 0.008 223.9);
     --destructive: oklch(0.577 0.245 27.325);
@@ -193,22 +193,44 @@
   --terminal-cursor: var(--foreground);
   --terminal-cursor-accent: var(--background);
   --terminal-selection: var(--accent);
-  --terminal-ansi-black: #18181b;
-  --terminal-ansi-red: #ef4444;
-  --terminal-ansi-green: #22c55e;
-  --terminal-ansi-yellow: #eab308;
-  --terminal-ansi-blue: #3b82f6;
-  --terminal-ansi-magenta: #a855f7;
-  --terminal-ansi-cyan: #06b6d4;
-  --terminal-ansi-white: #e4e4e7;
-  --terminal-ansi-bright-black: #52525b;
-  --terminal-ansi-bright-red: #f87171;
-  --terminal-ansi-bright-green: #4ade80;
-  --terminal-ansi-bright-yellow: #facc15;
-  --terminal-ansi-bright-blue: #60a5fa;
-  --terminal-ansi-bright-magenta: #c084fc;
-  --terminal-ansi-bright-cyan: #22d3ee;
-  --terminal-ansi-bright-white: #fafafa;
+  --terminal-ansi-black: #dfe3e6;
+  --terminal-ansi-red: #c0392f;
+  --terminal-ansi-green: #1f7a52;
+  --terminal-ansi-yellow: #8a6100;
+  --terminal-ansi-blue: #1f66b0;
+  --terminal-ansi-magenta: #7d47b5;
+  --terminal-ansi-cyan: #10707a;
+  --terminal-ansi-white: #4a5259;
+  --terminal-ansi-bright-black: #6e7880;
+  --terminal-ansi-bright-red: #9e2b24;
+  --terminal-ansi-bright-green: #17603f;
+  --terminal-ansi-bright-yellow: #6d4c00;
+  --terminal-ansi-bright-blue: #17508a;
+  --terminal-ansi-bright-magenta: #62368f;
+  --terminal-ansi-bright-cyan: #0c5960;
+  --terminal-ansi-bright-white: #171a1d;
+}
+
+/* Mirrors terra-default's dark variant. These are the pre-hydration paint and
+   the fallback for a theme that sets no palette; the theme engine overwrites
+   them on <html> as soon as ThemeProvider runs. Keep both in step. */
+.dark {
+  --terminal-ansi-black: #1b2124;
+  --terminal-ansi-red: #e05561;
+  --terminal-ansi-green: #62b47e;
+  --terminal-ansi-yellow: #d3a04a;
+  --terminal-ansi-blue: #5aa2e0;
+  --terminal-ansi-magenta: #b48ee0;
+  --terminal-ansi-cyan: #4fb3bf;
+  --terminal-ansi-white: #c8ced3;
+  --terminal-ansi-bright-black: #6b757d;
+  --terminal-ansi-bright-red: #ef7078;
+  --terminal-ansi-bright-green: #7ecb96;
+  --terminal-ansi-bright-yellow: #e6b866;
+  --terminal-ansi-bright-blue: #77b8ee;
+  --terminal-ansi-bright-magenta: #c8a6ef;
+  --terminal-ansi-bright-cyan: #6ecad6;
+  --terminal-ansi-bright-white: #eef2f4;
 }
 
 :root {

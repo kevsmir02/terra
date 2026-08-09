@@ -14,7 +14,7 @@ import {
   setThemeId as persistThemeId,
   type ThemePref,
 } from "@/modules/settings/store";
-import { applyTheme, clearTheme } from "./applyTheme";
+import { applyTheme } from "./applyTheme";
 import {
   listCustomThemes,
   onCustomThemesChange,
@@ -141,17 +141,13 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
     [effectiveId, customThemes],
   );
   useEffect(() => {
-    if (effectiveId === DEFAULT_THEME_ID) {
-      clearTheme();
-      return;
-    }
     const fonts =
       activeTheme.variants[resolvedMode]?.type?.fonts ??
       activeTheme.variants.dark?.type?.fonts ??
       activeTheme.variants.light?.type?.fonts;
     if (fonts?.length) void loadFonts(fonts);
     applyTheme(activeTheme, resolvedMode);
-  }, [effectiveId, activeTheme, resolvedMode]);
+  }, [activeTheme, resolvedMode]);
 
   const setMode = useCallback((next: ThemePref) => {
     setModeState(next);

@@ -869,11 +869,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--border",
-      "rgba(235,219,178,0.10)",
+      "#504945",
     ],
     [
       "--input",
-      "rgba(235,219,178,0.14)",
+      "#665c54",
     ],
     [
       "--ring",
@@ -905,19 +905,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-border",
-      "rgba(235,219,178,0.10)",
+      "#504945",
     ],
     [
       "--sidebar-ring",
       "#fabd2f",
     ],
     [
+      "--radius",
+      "0.25rem",
+    ],
+    [
+      "--border-style",
+      "solid",
+    ],
+    [
       "--frame-border-width",
-      "1px",
+      "2px",
     ],
     [
       "--frame-radius",
-      "12px",
+      "8px",
     ],
     [
       "--frame-padding",
@@ -941,11 +949,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "0px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "transparent",
+      "#3c3836",
     ],
     [
       "--bevel-mid",
@@ -968,12 +976,20 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "0.25rem",
     ],
     [
+      "--terminal-background",
+      "#1d2021",
+    ],
+    [
+      "--terminal-foreground",
+      "#ebdbb2",
+    ],
+    [
       "--terminal-cursor",
       "#ebdbb2",
     ],
     [
       "--terminal-cursor-accent",
-      "#282828",
+      "#1d2021",
     ],
     [
       "--terminal-selection",
@@ -985,7 +1001,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-red",
-      "#cc241d",
+      "#fb4934",
     ],
     [
       "--terminal-ansi-green",
@@ -997,11 +1013,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-blue",
-      "#458588",
+      "#529294",
     ],
     [
       "--terminal-ansi-magenta",
-      "#b16286",
+      "#bf6f93",
     ],
     [
       "--terminal-ansi-cyan",
@@ -1017,7 +1033,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-red",
-      "#fb4934",
+      "#ff5f48",
     ],
     [
       "--terminal-ansi-bright-green",
@@ -1065,7 +1081,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-func",
-      "#59999b",
+      "#58999a",
     ],
     [
       "--syntax-variable",
@@ -1089,7 +1105,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-tag",
-      "#f95546",
+      "#ff4f39",
     ],
     [
       "--syntax-tag-bracket",
@@ -1105,7 +1121,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-heading",
-      "#59999b",
+      "#58999a",
     ],
     [
       "--syntax-link",
@@ -1113,7 +1129,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-invalid",
-      "#ff4f39",
+      "#ff5f48",
     ],
     [
       "--status-added",
@@ -1125,7 +1141,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#ff6453",
+      "#ff654d",
     ],
     [
       "--status-renamed",
@@ -1145,27 +1161,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "10%",
+      "15%",
     ],
     [
       "--emph-subtle",
-      "30%",
-    ],
-    [
-      "--emph-soft",
       "40%",
     ],
     [
-      "--emph-medium",
+      "--emph-soft",
       "50%",
     ],
     [
+      "--emph-medium",
+      "62%",
+    ],
+    [
       "--emph-strong",
-      "60%",
+      "75%",
     ],
     [
       "--emph-bold",
-      "85%",
+      "95%",
     ],
   ],
 }
@@ -1222,7 +1238,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--muted-foreground",
-      "#7c6f64",
+      "#776a60",
     ],
     [
       "--accent",
@@ -1238,11 +1254,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--border",
-      "rgba(60,56,54,0.12)",
+      "#bdae93",
     ],
     [
       "--input",
-      "rgba(60,56,54,0.16)",
+      "#a89984",
     ],
     [
       "--ring",
@@ -1274,19 +1290,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-border",
-      "rgba(60,56,54,0.12)",
+      "#bdae93",
     ],
     [
       "--sidebar-ring",
       "#b57614",
     ],
     [
+      "--radius",
+      "0.25rem",
+    ],
+    [
+      "--border-style",
+      "solid",
+    ],
+    [
       "--frame-border-width",
-      "1px",
+      "2px",
     ],
     [
       "--frame-radius",
-      "12px",
+      "8px",
     ],
     [
       "--frame-padding",
@@ -1310,11 +1334,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "0px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "transparent",
+      "#f9f5d7",
     ],
     [
       "--bevel-mid",
@@ -1337,12 +1361,20 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "0.25rem",
     ],
     [
+      "--terminal-background",
+      "#f9f5d7",
+    ],
+    [
+      "--terminal-foreground",
+      "#3c3836",
+    ],
+    [
       "--terminal-cursor",
       "#3c3836",
     ],
     [
       "--terminal-cursor-accent",
-      "#fbf1c7",
+      "#f9f5d7",
     ],
     [
       "--terminal-selection",
@@ -1350,7 +1382,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-black",
-      "#fbf1c7",
+      "#282828",
     ],
     [
       "--terminal-ansi-red",
@@ -1358,11 +1390,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-green",
-      "#79740e",
+      "#767108",
     ],
     [
       "--terminal-ansi-yellow",
-      "#b57614",
+      "#9e6000",
     ],
     [
       "--terminal-ansi-blue",
@@ -1374,11 +1406,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-cyan",
-      "#427b58",
+      "#407957",
     ],
     [
       "--terminal-ansi-white",
-      "#7c6f64",
+      "#796c62",
     ],
     [
       "--terminal-ansi-bright-black",
@@ -1390,11 +1422,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-green",
-      "#98971a",
+      "#918f08",
     ],
     [
       "--terminal-ansi-bright-yellow",
-      "#d79921",
+      "#bb7f00",
     ],
     [
       "--terminal-ansi-bright-blue",
@@ -1406,7 +1438,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-cyan",
-      "#689d6a",
+      "#639765",
     ],
     [
       "--terminal-ansi-bright-white",
@@ -1422,7 +1454,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-string",
-      "#767006",
+      "#767007",
     ],
     [
       "--syntax-number",
@@ -1450,7 +1482,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-type",
-      "#467949",
+      "#477949",
     ],
     [
       "--syntax-operator",
@@ -1470,7 +1502,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-attr-value",
-      "#767006",
+      "#767007",
     ],
     [
       "--syntax-heading",
@@ -1486,7 +1518,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#767006",
+      "#767007",
     ],
     [
       "--status-modified",
@@ -1510,31 +1542,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-ok",
-      "#767006",
+      "#767007",
     ],
     [
       "--emph-faint",
-      "10%",
+      "15%",
     ],
     [
       "--emph-subtle",
-      "30%",
-    ],
-    [
-      "--emph-soft",
       "40%",
     ],
     [
-      "--emph-medium",
+      "--emph-soft",
       "50%",
     ],
     [
+      "--emph-medium",
+      "62%",
+    ],
+    [
       "--emph-strong",
-      "60%",
+      "75%",
     ],
     [
       "--emph-bold",
-      "85%",
+      "95%",
     ],
   ],
 }
@@ -1607,11 +1639,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--border",
-      "rgba(220,215,186,0.08)",
+      "#38384a",
     ],
     [
       "--input",
-      "rgba(220,215,186,0.12)",
+      "#4a4a5e",
     ],
     [
       "--ring",
@@ -1643,11 +1675,19 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-border",
-      "rgba(220,215,186,0.08)",
+      "#38384a",
     ],
     [
       "--sidebar-ring",
       "#7e9cd8",
+    ],
+    [
+      "--radius",
+      "0.5rem",
+    ],
+    [
+      "--border-style",
+      "solid",
     ],
     [
       "--frame-border-width",
@@ -1679,11 +1719,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "0px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "transparent",
+      "#2a2a37",
     ],
     [
       "--bevel-mid",
@@ -1706,6 +1746,14 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "0.25rem",
     ],
     [
+      "--terminal-background",
+      "#1f1f28",
+    ],
+    [
+      "--terminal-foreground",
+      "#dcd7ba",
+    ],
+    [
       "--terminal-cursor",
       "#c8c093",
     ],
@@ -1723,7 +1771,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-red",
-      "#c34043",
+      "#e25c5c",
     ],
     [
       "--terminal-ansi-green",
@@ -1755,7 +1803,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-red",
-      "#e82424",
+      "#ff5d62",
     ],
     [
       "--terminal-ansi-bright-green",
@@ -1827,7 +1875,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-tag",
-      "#e05b5a",
+      "#e25c5c",
     ],
     [
       "--syntax-tag-bracket",
@@ -1851,7 +1899,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-invalid",
-      "#fb3c36",
+      "#ff5d62",
     ],
     [
       "--status-added",
@@ -1863,7 +1911,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#e05b5a",
+      "#e25c5c",
     ],
     [
       "--status-renamed",
@@ -1883,27 +1931,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "10%",
+      "12%",
     ],
     [
       "--emph-subtle",
-      "30%",
+      "35%",
     ],
     [
       "--emph-soft",
-      "40%",
+      "45%",
     ],
     [
       "--emph-medium",
-      "50%",
+      "55%",
     ],
     [
       "--emph-strong",
-      "60%",
+      "68%",
     ],
     [
       "--emph-bold",
-      "85%",
+      "90%",
     ],
   ],
 }
@@ -1976,11 +2024,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--border",
-      "rgba(197,201,197,0.08)",
+      "#3a3937",
     ],
     [
       "--input",
-      "rgba(197,201,197,0.12)",
+      "#4d4b48",
     ],
     [
       "--ring",
@@ -2012,11 +2060,19 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-border",
-      "rgba(197,201,197,0.08)",
+      "#3a3937",
     ],
     [
       "--sidebar-ring",
       "#8ba4b0",
+    ],
+    [
+      "--radius",
+      "0.5rem",
+    ],
+    [
+      "--border-style",
+      "solid",
     ],
     [
       "--frame-border-width",
@@ -2048,11 +2104,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "0px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "transparent",
+      "#282727",
     ],
     [
       "--bevel-mid",
@@ -2073,6 +2129,14 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--ui-spacing",
       "0.25rem",
+    ],
+    [
+      "--terminal-background",
+      "#181616",
+    ],
+    [
+      "--terminal-foreground",
+      "#c5c9c5",
     ],
     [
       "--terminal-cursor",
@@ -2252,27 +2316,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "10%",
+      "12%",
     ],
     [
       "--emph-subtle",
-      "30%",
+      "35%",
     ],
     [
       "--emph-soft",
-      "40%",
+      "45%",
     ],
     [
       "--emph-medium",
-      "50%",
+      "55%",
     ],
     [
       "--emph-strong",
-      "60%",
+      "68%",
     ],
     [
       "--emph-bold",
-      "85%",
+      "90%",
     ],
   ],
 }
@@ -2285,107 +2349,115 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
   "vars": [
     [
       "--background",
-      "#181616",
+      "#e6e2da",
     ],
     [
       "--foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--card",
-      "#0d0c0c",
+      "#ddd8ce",
     ],
     [
       "--card-foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--popover",
-      "#0d0c0c",
+      "#efece5",
     ],
     [
       "--popover-foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--primary",
-      "#8ba4b0",
+      "#4a6570",
     ],
     [
       "--primary-foreground",
-      "#181616",
+      "#efece5",
     ],
     [
       "--secondary",
-      "#282727",
+      "#ddd8ce",
     ],
     [
       "--secondary-foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--muted",
-      "#282727",
+      "#ddd8ce",
     ],
     [
       "--muted-foreground",
-      "#a6a69c",
+      "#5f5c53",
     ],
     [
       "--accent",
-      "#393836",
+      "#d2ccc0",
     ],
     [
       "--accent-foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--destructive",
-      "#c4746e",
+      "#9d4f49",
     ],
     [
       "--border",
-      "rgba(197,201,197,0.08)",
+      "#b4ada0",
     ],
     [
       "--input",
-      "rgba(197,201,197,0.12)",
+      "#a29a8c",
     ],
     [
       "--ring",
-      "#8ba4b0",
+      "#4a6570",
     ],
     [
       "--sidebar",
-      "#0d0c0c",
+      "#ddd8ce",
     ],
     [
       "--sidebar-foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--sidebar-primary",
-      "#8ba4b0",
+      "#4a6570",
     ],
     [
       "--sidebar-primary-foreground",
-      "#181616",
+      "#efece5",
     ],
     [
       "--sidebar-accent",
-      "#282727",
+      "#d2ccc0",
     ],
     [
       "--sidebar-accent-foreground",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--sidebar-border",
-      "rgba(197,201,197,0.08)",
+      "#b4ada0",
     ],
     [
       "--sidebar-ring",
-      "#8ba4b0",
+      "#4a6570",
+    ],
+    [
+      "--radius",
+      "0.5rem",
+    ],
+    [
+      "--border-style",
+      "solid",
     ],
     [
       "--frame-border-width",
@@ -2417,11 +2489,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "0px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "transparent",
+      "#efece5",
     ],
     [
       "--bevel-mid",
@@ -2444,204 +2516,212 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "0.25rem",
     ],
     [
+      "--terminal-background",
+      "#ebe8e1",
+    ],
+    [
+      "--terminal-foreground",
+      "#383630",
+    ],
+    [
       "--terminal-cursor",
-      "#c5c9c5",
+      "#4a6570",
     ],
     [
       "--terminal-cursor-accent",
-      "#181616",
+      "#ebe8e1",
     ],
     [
       "--terminal-selection",
-      "rgba(45,79,103,0.45)",
+      "rgba(74,101,112,0.22)",
     ],
     [
       "--terminal-ansi-black",
-      "#0d0c0c",
+      "#2b2926",
     ],
     [
       "--terminal-ansi-red",
-      "#c4746e",
+      "#9d4f49",
     ],
     [
       "--terminal-ansi-green",
-      "#8a9a7b",
+      "#5a6b4b",
     ],
     [
       "--terminal-ansi-yellow",
-      "#c4b28a",
+      "#78643f",
     ],
     [
       "--terminal-ansi-blue",
-      "#8ba4b0",
+      "#4a6570",
     ],
     [
       "--terminal-ansi-magenta",
-      "#a292a3",
+      "#6b5f6c",
     ],
     [
       "--terminal-ansi-cyan",
-      "#8ea4a2",
+      "#4e6663",
     ],
     [
       "--terminal-ansi-white",
-      "#c8c093",
+      "#55524a",
     ],
     [
       "--terminal-ansi-bright-black",
-      "#a6a69c",
+      "#7d7a71",
     ],
     [
       "--terminal-ansi-bright-red",
-      "#e46876",
+      "#b06a63",
     ],
     [
       "--terminal-ansi-bright-green",
-      "#87a987",
+      "#6f8060",
     ],
     [
       "--terminal-ansi-bright-yellow",
-      "#e6c384",
+      "#957f57",
     ],
     [
       "--terminal-ansi-bright-blue",
-      "#7fb4ca",
+      "#5e7c88",
     ],
     [
       "--terminal-ansi-bright-magenta",
-      "#938aa9",
+      "#837585",
     ],
     [
       "--terminal-ansi-bright-cyan",
-      "#7aa89f",
+      "#63807c",
     ],
     [
       "--terminal-ansi-bright-white",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--syntax-comment",
-      "#a6a69c",
+      "#7d7a71",
     ],
     [
       "--syntax-keyword",
-      "#a292a3",
+      "#6b5f6c",
     ],
     [
       "--syntax-string",
-      "#8a9a7b",
+      "#5a6a4b",
     ],
     [
       "--syntax-number",
-      "#c4b28a",
+      "#76623e",
     ],
     [
       "--syntax-constant",
-      "#938aa9",
+      "#6e6170",
     ],
     [
       "--syntax-func",
-      "#8ba4b0",
+      "#4a6570",
     ],
     [
       "--syntax-variable",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--syntax-property",
-      "#8ea4a2",
+      "#4e6663",
     ],
     [
       "--syntax-gutter-fg",
-      "#a6a69c",
+      "#7d7a71",
     ],
     [
       "--syntax-type",
-      "#7aa89f",
+      "#4e6a67",
     ],
     [
       "--syntax-operator",
-      "#c5c9c5",
+      "#383630",
     ],
     [
       "--syntax-tag",
-      "#c4746e",
+      "#9c4e49",
     ],
     [
       "--syntax-tag-bracket",
-      "#a6a69c",
+      "#7d7a71",
     ],
     [
       "--syntax-attr",
-      "#e6c384",
+      "#78623b",
     ],
     [
       "--syntax-attr-value",
-      "#8a9a7b",
+      "#5a6a4b",
     ],
     [
       "--syntax-heading",
-      "#8ba4b0",
+      "#4a6570",
     ],
     [
       "--syntax-link",
-      "#8ea4a2",
+      "#4e6663",
     ],
     [
       "--syntax-invalid",
-      "#e46876",
+      "#96524c",
     ],
     [
       "--status-added",
-      "#8a9a7b",
+      "#546445",
     ],
     [
       "--status-modified",
-      "#c4b28a",
+      "#705c39",
     ],
     [
       "--status-deleted",
-      "#c4746e",
+      "#954843",
     ],
     [
       "--status-renamed",
-      "#8ba4b0",
+      "#48636e",
     ],
     [
       "--status-warning",
-      "#c4b28a",
+      "#705c39",
     ],
     [
       "--status-conflict",
-      "#8ea4a2",
+      "#4c6361",
     ],
     [
       "--status-ok",
-      "#8a9a7b",
+      "#546445",
     ],
     [
       "--emph-faint",
-      "10%",
+      "12%",
     ],
     [
       "--emph-subtle",
-      "30%",
+      "35%",
     ],
     [
       "--emph-soft",
-      "40%",
+      "45%",
     ],
     [
       "--emph-medium",
-      "50%",
+      "55%",
     ],
     [
       "--emph-strong",
-      "60%",
+      "68%",
     ],
     [
       "--emph-bold",
-      "85%",
+      "90%",
     ],
   ],
 }
@@ -2698,7 +2778,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--muted-foreground",
-      "#8a8980",
+      "#616058",
     ],
     [
       "--accent",
@@ -2714,11 +2794,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--border",
-      "rgba(84,84,100,0.14)",
+      "#c5bd90",
     ],
     [
       "--input",
-      "rgba(84,84,100,0.2)",
+      "#b3aa7d",
     ],
     [
       "--ring",
@@ -2750,11 +2830,19 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--sidebar-border",
-      "rgba(84,84,100,0.14)",
+      "#c5bd90",
     ],
     [
       "--sidebar-ring",
       "#4d699b",
+    ],
+    [
+      "--radius",
+      "0.5rem",
+    ],
+    [
+      "--border-style",
+      "solid",
     ],
     [
       "--frame-border-width",
@@ -2786,11 +2874,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "0px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "transparent",
+      "#e7e1b6",
     ],
     [
       "--bevel-mid",
@@ -2813,16 +2901,24 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
       "0.25rem",
     ],
     [
+      "--terminal-background",
+      "#eceadf",
+    ],
+    [
+      "--terminal-foreground",
+      "#545464",
+    ],
+    [
       "--terminal-cursor",
       "#43436c",
     ],
     [
       "--terminal-cursor-accent",
-      "#f2ecbc",
+      "#eceadf",
     ],
     [
       "--terminal-selection",
-      "rgba(220,213,172,0.7)",
+      "rgba(200,190,140,0.55)",
     ],
     [
       "--terminal-ansi-black",
@@ -2830,27 +2926,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-red",
-      "#c84053",
+      "#bd354a",
     ],
     [
       "--terminal-ansi-green",
-      "#6f894e",
+      "#577036",
     ],
     [
       "--terminal-ansi-yellow",
-      "#77713f",
+      "#706938",
     ],
     [
       "--terminal-ansi-blue",
-      "#4d699b",
+      "#4d689a",
     ],
     [
       "--terminal-ansi-magenta",
-      "#b35b79",
+      "#a24c6a",
     ],
     [
       "--terminal-ansi-cyan",
-      "#597b75",
+      "#4d6e69",
     ],
     [
       "--terminal-ansi-white",
@@ -2858,7 +2954,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-black",
-      "#8a8980",
+      "#85847c",
     ],
     [
       "--terminal-ansi-bright-red",
@@ -2866,7 +2962,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-green",
-      "#6e915f",
+      "#6b8d5c",
     ],
     [
       "--terminal-ansi-bright-yellow",
@@ -2874,7 +2970,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-blue",
-      "#6693bf",
+      "#5b87b3",
     ],
     [
       "--terminal-ansi-bright-magenta",
@@ -2890,19 +2986,19 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-comment",
-      "#88877f",
+      "#85847c",
     ],
     [
       "--syntax-keyword",
-      "#a44e6c",
+      "#a24c6a",
     ],
     [
       "--syntax-string",
-      "#597238",
+      "#577036",
     ],
     [
       "--syntax-number",
-      "#726b3a",
+      "#706938",
     ],
     [
       "--syntax-constant",
@@ -2910,7 +3006,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-func",
-      "#4d699b",
+      "#4d689a",
     ],
     [
       "--syntax-variable",
@@ -2918,11 +3014,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-property",
-      "#4f706b",
+      "#4d6e69",
     ],
     [
       "--syntax-gutter-fg",
-      "#88877f",
+      "#85847c",
     ],
     [
       "--syntax-type",
@@ -2934,11 +3030,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-tag",
-      "#bf384c",
+      "#bd354a",
     ],
     [
       "--syntax-tag-bracket",
-      "#88877f",
+      "#85847c",
     ],
     [
       "--syntax-attr",
@@ -2946,15 +3042,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-attr-value",
-      "#597238",
+      "#577036",
     ],
     [
       "--syntax-heading",
-      "#4d699b",
+      "#4d689a",
     ],
     [
       "--syntax-link",
-      "#4f706b",
+      "#4d6e69",
     ],
     [
       "--syntax-invalid",
@@ -2970,11 +3066,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#b42d44",
+      "#b42c43",
     ],
     [
       "--status-renamed",
-      "#466193",
+      "#476193",
     ],
     [
       "--status-warning",
@@ -2990,27 +3086,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "10%",
+      "12%",
     ],
     [
       "--emph-subtle",
-      "30%",
+      "35%",
     ],
     [
       "--emph-soft",
-      "40%",
+      "45%",
     ],
     [
       "--emph-medium",
-      "50%",
+      "55%",
     ],
     [
       "--emph-strong",
-      "60%",
+      "68%",
     ],
     [
       "--emph-bold",
-      "85%",
+      "90%",
     ],
   ],
 }
@@ -3231,7 +3327,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-red",
-      "#d63b2e",
+      "#dd4335",
     ],
     [
       "--terminal-ansi-green",
@@ -3263,7 +3359,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-red",
-      "#e84c3d",
+      "#f05344",
     ],
     [
       "--terminal-ansi-bright-green",
@@ -3335,7 +3431,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-tag",
-      "#db4133",
+      "#dd4335",
     ],
     [
       "--syntax-tag-bracket",
@@ -3359,7 +3455,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-invalid",
-      "#e84c3d",
+      "#f05344",
     ],
     [
       "--status-added",
@@ -3640,7 +3736,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-yellow",
-      "#b8860b",
+      "#976700",
     ],
     [
       "--terminal-ansi-blue",
@@ -3648,7 +3744,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-magenta",
-      "#805ad5",
+      "#7f58d3",
     ],
     [
       "--terminal-ansi-cyan",
@@ -3672,7 +3768,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-yellow",
-      "#966d09",
+      "#825a00",
     ],
     [
       "--terminal-ansi-bright-blue",
@@ -3696,7 +3792,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-keyword",
-      "#805ad5",
+      "#7f58d3",
     ],
     [
       "--syntax-string",
@@ -3704,7 +3800,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-number",
-      "#996800",
+      "#976700",
     ],
     [
       "--syntax-constant",
@@ -3744,7 +3840,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-attr",
-      "#936b03",
+      "#825a00",
     ],
     [
       "--syntax-attr-value",
@@ -3768,7 +3864,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-modified",
-      "#996800",
+      "#976700",
     ],
     [
       "--status-deleted",
@@ -3780,7 +3876,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-warning",
-      "#996800",
+      "#976700",
     ],
     [
       "--status-conflict",
@@ -4626,6 +4722,118 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
   "mode": "dark",
   "vars": [
     [
+      "--background",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--card",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--card-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--popover",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--popover-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--primary",
+      "oklch(0.925 0.005 214.3)",
+    ],
+    [
+      "--primary-foreground",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--secondary",
+      "oklch(0.275 0.011 216.9)",
+    ],
+    [
+      "--secondary-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--muted",
+      "oklch(0.275 0.011 216.9)",
+    ],
+    [
+      "--muted-foreground",
+      "oklch(0.723 0.014 214.4)",
+    ],
+    [
+      "--accent",
+      "oklch(0.275 0.011 216.9)",
+    ],
+    [
+      "--accent-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--destructive",
+      "oklch(0.704 0.191 22.216)",
+    ],
+    [
+      "--border",
+      "oklch(1 0 0 / 10%)",
+    ],
+    [
+      "--input",
+      "oklch(1 0 0 / 15%)",
+    ],
+    [
+      "--ring",
+      "oklch(0.56 0.021 213.5)",
+    ],
+    [
+      "--sidebar",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--sidebar-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--sidebar-primary",
+      "oklch(0.488 0.243 264.376)",
+    ],
+    [
+      "--sidebar-primary-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--sidebar-accent",
+      "oklch(0.275 0.011 216.9)",
+    ],
+    [
+      "--sidebar-accent-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--sidebar-border",
+      "oklch(1 0 0 / 10%)",
+    ],
+    [
+      "--sidebar-ring",
+      "oklch(0.56 0.021 213.5)",
+    ],
+    [
+      "--radius",
+      "0.625rem",
+    ],
+    [
+      "--border-style",
+      "solid",
+    ],
+    [
       "--frame-border-width",
       "1px",
     ],
@@ -4680,6 +4888,190 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--ui-spacing",
       "0.25rem",
+    ],
+    [
+      "--terminal-background",
+      "#090b0c",
+    ],
+    [
+      "--terminal-foreground",
+      "#f9fbfb",
+    ],
+    [
+      "--terminal-cursor",
+      "#f9fbfb",
+    ],
+    [
+      "--terminal-cursor-accent",
+      "#090b0c",
+    ],
+    [
+      "--terminal-selection",
+      "rgba(156,168,171,0.28)",
+    ],
+    [
+      "--terminal-ansi-black",
+      "#1b2124",
+    ],
+    [
+      "--terminal-ansi-red",
+      "#e05561",
+    ],
+    [
+      "--terminal-ansi-green",
+      "#62b47e",
+    ],
+    [
+      "--terminal-ansi-yellow",
+      "#d3a04a",
+    ],
+    [
+      "--terminal-ansi-blue",
+      "#5aa2e0",
+    ],
+    [
+      "--terminal-ansi-magenta",
+      "#b48ee0",
+    ],
+    [
+      "--terminal-ansi-cyan",
+      "#4fb3bf",
+    ],
+    [
+      "--terminal-ansi-white",
+      "#c8ced3",
+    ],
+    [
+      "--terminal-ansi-bright-black",
+      "#6b757d",
+    ],
+    [
+      "--terminal-ansi-bright-red",
+      "#ef7078",
+    ],
+    [
+      "--terminal-ansi-bright-green",
+      "#7ecb96",
+    ],
+    [
+      "--terminal-ansi-bright-yellow",
+      "#e6b866",
+    ],
+    [
+      "--terminal-ansi-bright-blue",
+      "#77b8ee",
+    ],
+    [
+      "--terminal-ansi-bright-magenta",
+      "#c8a6ef",
+    ],
+    [
+      "--terminal-ansi-bright-cyan",
+      "#6ecad6",
+    ],
+    [
+      "--terminal-ansi-bright-white",
+      "#eef2f4",
+    ],
+    [
+      "--syntax-comment",
+      "#6b757d",
+    ],
+    [
+      "--syntax-keyword",
+      "#b48ee0",
+    ],
+    [
+      "--syntax-string",
+      "#62b47e",
+    ],
+    [
+      "--syntax-number",
+      "#d3a04a",
+    ],
+    [
+      "--syntax-constant",
+      "#c8a6ef",
+    ],
+    [
+      "--syntax-func",
+      "#5aa2e0",
+    ],
+    [
+      "--syntax-variable",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--syntax-property",
+      "#4fb3bf",
+    ],
+    [
+      "--syntax-gutter-fg",
+      "#6b757d",
+    ],
+    [
+      "--syntax-type",
+      "#6ecad6",
+    ],
+    [
+      "--syntax-operator",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--syntax-tag",
+      "#e05561",
+    ],
+    [
+      "--syntax-tag-bracket",
+      "#6b757d",
+    ],
+    [
+      "--syntax-attr",
+      "#e6b866",
+    ],
+    [
+      "--syntax-attr-value",
+      "#62b47e",
+    ],
+    [
+      "--syntax-heading",
+      "#5aa2e0",
+    ],
+    [
+      "--syntax-link",
+      "#4fb3bf",
+    ],
+    [
+      "--syntax-invalid",
+      "#ef7078",
+    ],
+    [
+      "--status-added",
+      "#62b47e",
+    ],
+    [
+      "--status-modified",
+      "#d3a04a",
+    ],
+    [
+      "--status-deleted",
+      "#e05561",
+    ],
+    [
+      "--status-renamed",
+      "#5aa2e0",
+    ],
+    [
+      "--status-warning",
+      "#d3a04a",
+    ],
+    [
+      "--status-conflict",
+      "#4fb3bf",
+    ],
+    [
+      "--status-ok",
+      "#62b47e",
     ],
     [
       "--emph-faint",
@@ -4715,6 +5107,118 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
   "mode": "light",
   "vars": [
     [
+      "--background",
+      "oklch(0.978 0.002 228.8)",
+    ],
+    [
+      "--foreground",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--card",
+      "oklch(1 0 0)",
+    ],
+    [
+      "--card-foreground",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--popover",
+      "oklch(1 0 0)",
+    ],
+    [
+      "--popover-foreground",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--primary",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--primary-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--secondary",
+      "oklch(0.963 0.002 197.1)",
+    ],
+    [
+      "--secondary-foreground",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--muted",
+      "oklch(0.963 0.002 197.1)",
+    ],
+    [
+      "--muted-foreground",
+      "oklch(0.544 0.021 213.5)",
+    ],
+    [
+      "--accent",
+      "oklch(0.963 0.002 197.1)",
+    ],
+    [
+      "--accent-foreground",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--destructive",
+      "oklch(0.577 0.245 27.325)",
+    ],
+    [
+      "--border",
+      "oklch(0.925 0.005 214.3)",
+    ],
+    [
+      "--input",
+      "oklch(0.925 0.005 214.3)",
+    ],
+    [
+      "--ring",
+      "oklch(0.723 0.014 214.4)",
+    ],
+    [
+      "--sidebar",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--sidebar-foreground",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--sidebar-primary",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--sidebar-primary-foreground",
+      "oklch(0.987 0.002 197.1)",
+    ],
+    [
+      "--sidebar-accent",
+      "oklch(0.963 0.002 197.1)",
+    ],
+    [
+      "--sidebar-accent-foreground",
+      "oklch(0.218 0.008 223.9)",
+    ],
+    [
+      "--sidebar-border",
+      "oklch(0.925 0.005 214.3)",
+    ],
+    [
+      "--sidebar-ring",
+      "oklch(0.723 0.014 214.4)",
+    ],
+    [
+      "--radius",
+      "0.625rem",
+    ],
+    [
+      "--border-style",
+      "solid",
+    ],
+    [
       "--frame-border-width",
       "1px",
     ],
@@ -4769,6 +5273,190 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     [
       "--ui-spacing",
       "0.25rem",
+    ],
+    [
+      "--terminal-background",
+      "#f6f8f9",
+    ],
+    [
+      "--terminal-foreground",
+      "#090b0c",
+    ],
+    [
+      "--terminal-cursor",
+      "#090b0c",
+    ],
+    [
+      "--terminal-cursor-accent",
+      "#f6f8f9",
+    ],
+    [
+      "--terminal-selection",
+      "rgba(103,120,124,0.22)",
+    ],
+    [
+      "--terminal-ansi-black",
+      "#dfe3e6",
+    ],
+    [
+      "--terminal-ansi-red",
+      "#c0392f",
+    ],
+    [
+      "--terminal-ansi-green",
+      "#1f7a52",
+    ],
+    [
+      "--terminal-ansi-yellow",
+      "#8a6100",
+    ],
+    [
+      "--terminal-ansi-blue",
+      "#1f66b0",
+    ],
+    [
+      "--terminal-ansi-magenta",
+      "#7d47b5",
+    ],
+    [
+      "--terminal-ansi-cyan",
+      "#10707a",
+    ],
+    [
+      "--terminal-ansi-white",
+      "#4a5259",
+    ],
+    [
+      "--terminal-ansi-bright-black",
+      "#6e7880",
+    ],
+    [
+      "--terminal-ansi-bright-red",
+      "#9e2b24",
+    ],
+    [
+      "--terminal-ansi-bright-green",
+      "#17603f",
+    ],
+    [
+      "--terminal-ansi-bright-yellow",
+      "#6d4c00",
+    ],
+    [
+      "--terminal-ansi-bright-blue",
+      "#17508a",
+    ],
+    [
+      "--terminal-ansi-bright-magenta",
+      "#62368f",
+    ],
+    [
+      "--terminal-ansi-bright-cyan",
+      "#0c5960",
+    ],
+    [
+      "--terminal-ansi-bright-white",
+      "#171a1d",
+    ],
+    [
+      "--syntax-comment",
+      "#6e7880",
+    ],
+    [
+      "--syntax-keyword",
+      "#7d47b5",
+    ],
+    [
+      "--syntax-string",
+      "#1f7a52",
+    ],
+    [
+      "--syntax-number",
+      "#8a6100",
+    ],
+    [
+      "--syntax-constant",
+      "#62368f",
+    ],
+    [
+      "--syntax-func",
+      "#1f66b0",
+    ],
+    [
+      "--syntax-variable",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--syntax-property",
+      "#10707a",
+    ],
+    [
+      "--syntax-gutter-fg",
+      "#6e7880",
+    ],
+    [
+      "--syntax-type",
+      "#0c5960",
+    ],
+    [
+      "--syntax-operator",
+      "oklch(0.148 0.004 228.8)",
+    ],
+    [
+      "--syntax-tag",
+      "#c0392f",
+    ],
+    [
+      "--syntax-tag-bracket",
+      "#6e7880",
+    ],
+    [
+      "--syntax-attr",
+      "#6d4c00",
+    ],
+    [
+      "--syntax-attr-value",
+      "#1f7a52",
+    ],
+    [
+      "--syntax-heading",
+      "#1f66b0",
+    ],
+    [
+      "--syntax-link",
+      "#10707a",
+    ],
+    [
+      "--syntax-invalid",
+      "#9e2b24",
+    ],
+    [
+      "--status-added",
+      "#1f7a52",
+    ],
+    [
+      "--status-modified",
+      "#8a6100",
+    ],
+    [
+      "--status-deleted",
+      "#c0392f",
+    ],
+    [
+      "--status-renamed",
+      "#1f66b0",
+    ],
+    [
+      "--status-warning",
+      "#8a6100",
+    ],
+    [
+      "--status-conflict",
+      "#10707a",
+    ],
+    [
+      "--status-ok",
+      "#1f7a52",
     ],
     [
       "--emph-faint",

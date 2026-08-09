@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
-import type { Theme, ThemeMode, ThemeVariant } from "../types";
+import type { ThemeMode, ThemeVariant } from "../types";
 import { listBuiltinThemes } from "./index";
 import { contrast } from "../oklab";
 
 type Palette = { bg: string; fg: string; ansi: readonly string[] };
 
+// A theme that omits terminal.background/foreground is not untested, it renders
+// on the app canvas: globals.css maps --terminal-background to var(--background)
+// and --terminal-foreground to var(--foreground). Reading the same fallback the
+// engine reads is what puts every palette under the floors below. Requiring the
+// keys to be declared instead is what let three builtins ship unmeasured.
 function palette(v: ThemeVariant | undefined): Palette | null {
-  const t = v?.terminal;
-  if (!t?.ansi || !t.background || !t.foreground) return null;
-  return { bg: t.background, fg: t.foreground, ansi: t.ansi };
+  const ansi = v?.terminal?.ansi;
+  if (!ansi) return null;
+  const bg = v.terminal?.background ?? v.colors?.background;
+  const fg = v.terminal?.foreground ?? v.colors?.foreground;
+  if (!bg || !fg) return null;
+  return { bg, fg, ansi };
 }
 
 const NAMES = [
@@ -29,7 +37,8 @@ describe.each(cases)("%s (%s) terminal palette", (_id, _mode, p) => {
   });
 
   // A slot that matches the background renders as invisible text rather than
-  // as a color choice. Retro Pixel shipped brightWhite === background.
+  // as a color choice. Retro Pixel shipped brightWhite === background, and the
+  // canonical Gruvbox light mapping puts the background in slot 0.
   it.each(p.ansi.map((c, i) => [NAMES[i % 8], i, c] as const))(
     "%s (slot %i) is not the background",
     (_name, _i, color) => {
@@ -43,35 +52,26 @@ describe.each(cases)("%s (%s) terminal palette", (_id, _mode, p) => {
   ] as const)("separates %s from %s", (_a, ai, _b, bi) => {
     expect(p.ansi[ai].toLowerCase()).not.toBe(p.ansi[bi].toLowerCase());
   });
-});
 
-// Stardew is authored to a contrast budget rather than transcribed from an
-// upstream palette, so it is the one theme that can hold the numeric floor.
-describe("stardew terminal contrast budget", () => {
-  const theme = listBuiltinThemes().find(
-    (t: Theme) => t.id === "stardew",
-  ) as Theme;
+  // Slot 0 is exempt from the ratio: it is legitimately near-background on dark
+  // themes. It is not exempt from the equality check above.
+  it.each(p.ansi.slice(1, 8).map((c, i) => [NAMES[i + 1], c] as const))(
+    "%s clears 4.5:1",
+    (_name, color) => {
+      expect(contrast(color, p.bg)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 
-  describe.each(["light", "dark"] as ThemeMode[])("%s", (mode) => {
-    const p = palette(theme.variants[mode]) as Palette;
+  it.each(p.ansi.slice(9, 16).map((c, i) => [NAMES[i + 1], c] as const))(
+    "bright %s clears 3:1",
+    (_name, color) => {
+      expect(contrast(color, p.bg)).toBeGreaterThanOrEqual(3);
+    },
+  );
 
-    it.each(p.ansi.slice(1, 8).map((c, i) => [NAMES[i + 1], c] as const))(
-      "%s clears 4.5:1",
-      (_name, color) => {
-        expect(contrast(color, p.bg)).toBeGreaterThanOrEqual(4.5);
-      },
-    );
-
-    it.each(p.ansi.slice(9, 16).map((c, i) => [NAMES[i + 1], c] as const))(
-      "bright %s clears 3:1",
-      (_name, color) => {
-        expect(contrast(color, p.bg)).toBeGreaterThanOrEqual(3);
-      },
-    );
-
-    // Dim/comment text. The shipped dark variant sat at 1.6:1 here.
-    it("keeps bright black usable for dim text", () => {
-      expect(contrast(p.ansi[8], p.bg)).toBeGreaterThanOrEqual(3);
-    });
+  // Dim/comment text. This is the slot everyone gets wrong: a "subtle" value
+  // lands near 1.6:1 and makes every comment in the terminal unreadable.
+  it("keeps bright black usable for dim text", () => {
+    expect(contrast(p.ansi[8], p.bg)).toBeGreaterThanOrEqual(3);
   });
 });

@@ -20,7 +20,7 @@ export function applyTheme(theme: Theme, mode: ThemeMode): void {
   lastApplied = theme.id;
 }
 
-export function clearTheme(): void {
+function clearTheme(): void {
   if (lastApplied === null) return;
   const root = document.documentElement;
   for (const v of ALL_VARS) root.style.removeProperty(v);
