@@ -1,6 +1,7 @@
 import { DEFAULT_THEME_ID, type Theme } from "../types";
 import { caffeine } from "./caffeine";
 import { everforest } from "./everforest";
+import { gameboy } from "./gameboy";
 import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
@@ -15,6 +16,7 @@ import { tokyoNight } from "./tokyo-night";
 export {
   terraDefault,
   stardew,
+  gameboy,
   kanagawa,
   kanagawaDragon,
   everforest,
@@ -31,6 +33,7 @@ export const BUILTIN: readonly Theme[] = [
   terraDefault,
   nothing,
   stardew,
+  gameboy,
   kanagawa,
   kanagawaDragon,
   everforest,
