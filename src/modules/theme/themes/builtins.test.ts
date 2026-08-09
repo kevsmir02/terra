@@ -31,9 +31,11 @@ describe("built-in themes", () => {
   });
 });
 
-describe.each(["stardew"])(
-  "%s",
-  (id) => {
+// Every builtin, not a hand-kept list. A theme with one variant silently
+// serves the wrong palette in the other mode, and the list naming which themes
+// to check went stale the moment a theme was added without being added here:
+// kanagawa-dragon shipped dark-only past this very file.
+describe.each(builtins.map((t) => t.id))("%s", (id) => {
   const theme = getBuiltinTheme(id);
 
   it("defines both variants so the applied mode never falls back", () => {
