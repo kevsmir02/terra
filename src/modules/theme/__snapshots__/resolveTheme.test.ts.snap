@@ -1430,31 +1430,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#687900",
+      "#647400",
     ],
     [
       "--status-modified",
-      "#a06400",
+      "#9b6000",
     ],
     [
       "--status-deleted",
-      "#d53135",
+      "#cf2b30",
     ],
     [
       "--status-renamed",
-      "#1478a8",
+      "#0c74a4",
     ],
     [
       "--status-warning",
-      "#a06400",
+      "#9b6000",
     ],
     [
       "--status-conflict",
-      "#008159",
+      "#007d56",
     ],
     [
       "--status-ok",
-      "#687900",
+      "#647400",
     ],
     [
       "--emph-faint",
@@ -1799,7 +1799,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#98971a",
+      "#9d9c22",
     ],
     [
       "--status-modified",
@@ -1807,11 +1807,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#f95546",
+      "#ff6453",
     ],
     [
       "--status-renamed",
-      "#59999b",
+      "#61a2a3",
     ],
     [
       "--status-warning",
@@ -1819,11 +1819,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-conflict",
-      "#689d6a",
+      "#6ea470",
     ],
     [
       "--status-ok",
-      "#98971a",
+      "#9d9c22",
     ],
     [
       "--emph-faint",
@@ -3644,31 +3644,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#597238",
+      "#50682f",
     ],
     [
       "--status-modified",
-      "#726b3a",
+      "#696232",
     ],
     [
       "--status-deleted",
-      "#bf384c",
+      "#b42d44",
     ],
     [
       "--status-renamed",
-      "#4d699b",
+      "#466193",
     ],
     [
       "--status-warning",
-      "#726b3a",
+      "#696232",
     ],
     [
       "--status-conflict",
-      "#4f706b",
+      "#476763",
     ],
     [
       "--status-ok",
-      "#597238",
+      "#50682f",
     ],
     [
       "--emph-faint",
@@ -4021,11 +4021,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#e17f87",
+      "#f59199",
     ],
     [
       "--status-renamed",
-      "#81a1c1",
+      "#90b1d1",
     ],
     [
       "--status-warning",
@@ -4791,7 +4791,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-deleted",
-      "#d24a3b",
+      "#d85040",
     ],
     [
       "--status-renamed",
@@ -5184,31 +5184,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--status-added",
-      "#2e7d5b",
+      "#257554",
     ],
     [
       "--status-modified",
-      "#976600",
+      "#8f5e00",
     ],
     [
       "--status-deleted",
-      "#c23b2e",
+      "#be382b",
     ],
     [
       "--status-renamed",
-      "#2b6cb0",
+      "#296aae",
     ],
     [
       "--status-warning",
-      "#976600",
+      "#8f5e00",
     ],
     [
       "--status-conflict",
-      "#2c7a7b",
+      "#247375",
     ],
     [
       "--status-ok",
-      "#2e7d5b",
+      "#257554",
     ],
     [
       "--emph-faint",

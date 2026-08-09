@@ -1,4 +1,4 @@
-import { ensureContrast } from "./oklab";
+import { contrast, ensureContrast } from "./oklab";
 
 
 export type TokenKind =
@@ -7,6 +7,24 @@ export type TokenKind =
   | "length"
   | "keyword"
   | "alpha";
+
+/**
+ * Status text lands on the app canvas and on card surfaces both. When the two
+ * surfaces sit on opposite sides of the luminance midpoint no single lightness
+ * clears 4.5:1 against each, so the canvas wins as the larger surface.
+ */
+function statusColor(slot: number) {
+  return (d: DerivedValues): string | undefined => {
+    const base = d.ansi?.[slot];
+    const bg = d["colors.background"];
+    if (!base || !bg) return base;
+    const onCanvas = ensureContrast(base, bg, 4.5);
+    const card = d["colors.card"];
+    if (!card) return onCanvas;
+    const withCard = ensureContrast(onCanvas, card, 4.5);
+    return contrast(withCard, bg) >= 4.5 ? withCard : onCanvas;
+  };
+}
 
 export type DerivedValues = Readonly<Record<string, string | undefined>> & {
   readonly ansi?: readonly string[];
@@ -119,13 +137,13 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "syntax.link", cssVar: "--syntax-link", group: "syntax", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[6]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Link color." },
   { key: "syntax.invalid", cssVar: "--syntax-invalid", group: "syntax", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[9]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Invalid token color." },
 
-  { key: "status.added", cssVar: "--status-added", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[2]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Added status color." },
-  { key: "status.modified", cssVar: "--status-modified", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[3]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Modified status color." },
-  { key: "status.deleted", cssVar: "--status-deleted", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[1]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Deleted status color." },
-  { key: "status.renamed", cssVar: "--status-renamed", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[4]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Renamed status color." },
-  { key: "status.warning", cssVar: "--status-warning", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[3]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Warning status color." },
-  { key: "status.conflict", cssVar: "--status-conflict", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[6]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "Conflict status color." },
-  { key: "status.ok", cssVar: "--status-ok", group: "status", kind: "color", deps: ["colors.background"], derive: (d) => { const v = d.ansi?.[2]; return v ? ensureContrast(v, d["colors.background"] || "#000", 4.5) : undefined; }, doc: "OK status color." },
+  { key: "status.added", cssVar: "--status-added", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(2), doc: "Added status color." },
+  { key: "status.modified", cssVar: "--status-modified", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(3), doc: "Modified status color." },
+  { key: "status.deleted", cssVar: "--status-deleted", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(1), doc: "Deleted status color." },
+  { key: "status.renamed", cssVar: "--status-renamed", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(4), doc: "Renamed status color." },
+  { key: "status.warning", cssVar: "--status-warning", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(3), doc: "Warning status color." },
+  { key: "status.conflict", cssVar: "--status-conflict", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(6), doc: "Conflict status color." },
+  { key: "status.ok", cssVar: "--status-ok", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(2), doc: "OK status color." },
 
   { key: "emphasis.faint", cssVar: "--emph-faint", group: "emphasis", kind: "alpha", fallback: "0.1", doc: "Faint emphasis." },
   { key: "emphasis.subtle", cssVar: "--emph-subtle", group: "emphasis", kind: "alpha", fallback: "0.3", doc: "Subtle emphasis." },
