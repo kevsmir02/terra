@@ -69,12 +69,12 @@ export const nothing: Theme = {
       // without buying any of the texture this theme wants. Restraint is the
       // point of the design, so border contrast carries the dots instead.
       emphasis: {
-        faint: "0.12",
-        subtle: "0.32",
-        soft: "0.45",
-        medium: "0.55",
-        strong: "0.68",
-        bold: "0.88",
+        faint: "12%",
+        subtle: "32%",
+        soft: "45%",
+        medium: "55%",
+        strong: "68%",
+        bold: "88%",
       },
       terminal: {
         background: "#0b0b0b",
@@ -152,12 +152,12 @@ export const nothing: Theme = {
       // without buying any of the texture this theme wants. Restraint is the
       // point of the design, so border contrast carries the dots instead.
       emphasis: {
-        faint: "0.12",
-        subtle: "0.32",
-        soft: "0.45",
-        medium: "0.55",
-        strong: "0.68",
-        bold: "0.88",
+        faint: "12%",
+        subtle: "32%",
+        soft: "45%",
+        medium: "55%",
+        strong: "68%",
+        bold: "88%",
       },
       terminal: {
         background: "#f7f7f7",

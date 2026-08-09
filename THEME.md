@@ -193,6 +193,7 @@ unset and keeps JetBrains Mono.
 
 
 <!-- token-reference:start -->
+<!-- token-reference:start -->
 
 ### `colors`
 
@@ -321,13 +322,14 @@ unset and keeps JetBrains Mono.
 
 | Key | Variable | Default | Doc |
 |---|---|---|---|
-| `emphasis.faint` | `--emph-faint` | `0.1` | Faint emphasis. |
-| `emphasis.subtle` | `--emph-subtle` | `0.3` | Subtle emphasis. |
-| `emphasis.soft` | `--emph-soft` | `0.4` | Soft emphasis. |
-| `emphasis.medium` | `--emph-medium` | `0.5` | Medium emphasis. |
-| `emphasis.strong` | `--emph-strong` | `0.6` | Strong emphasis. |
-| `emphasis.bold` | `--emph-bold` | `0.85` | Bold emphasis. |
+| `emphasis.faint` | `--emph-faint` | `10%` | Faint emphasis. |
+| `emphasis.subtle` | `--emph-subtle` | `30%` | Subtle emphasis. |
+| `emphasis.soft` | `--emph-soft` | `40%` | Soft emphasis. |
+| `emphasis.medium` | `--emph-medium` | `50%` | Medium emphasis. |
+| `emphasis.strong` | `--emph-strong` | `60%` | Strong emphasis. |
+| `emphasis.bold` | `--emph-bold` | `85%` | Bold emphasis. |
 
+<!-- token-reference:end -->
 <!-- token-reference:end -->
 
 ## Fonts

@@ -56,13 +56,24 @@ describe("token registry", () => {
   it("declares the emphasis ladder with its modal defaults", () => {
     const ladder = TOKENS.filter((t) => t.group === "emphasis");
     expect(ladder.map((t) => [t.cssVar, t.fallback])).toEqual([
-      ["--emph-faint", "0.1"],
-      ["--emph-subtle", "0.3"],
-      ["--emph-soft", "0.4"],
-      ["--emph-medium", "0.5"],
-      ["--emph-strong", "0.6"],
-      ["--emph-bold", "0.85"],
+      ["--emph-faint", "10%"],
+      ["--emph-subtle", "30%"],
+      ["--emph-soft", "40%"],
+      ["--emph-medium", "50%"],
+      ["--emph-strong", "60%"],
+      ["--emph-bold", "85%"],
     ]);
+  });
+
+  // Regression guard. These values are substituted into
+  // `color-mix(in oklab, <color> <value>, transparent)`, and that slot requires
+  // a <percentage>. A bare number like "0.6" is invalid CSS, so the declaration
+  // is dropped and every laddered border silently renders at full opacity. The
+  // ladder shipped inert exactly once because nothing asserted this.
+  it("expresses every alpha token as a percentage, never a bare number", () => {
+    for (const t of TOKENS.filter((x) => x.kind === "alpha")) {
+      expect(t.fallback, `${t.key} fallback`).toMatch(/^\d+(\.\d+)?%$/);
+    }
   });
 
   it("keeps the THEME.md token reference in sync with the registry", () => {

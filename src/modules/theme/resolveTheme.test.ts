@@ -55,14 +55,14 @@ describe("resolveTheme", () => {
       variants: {
         dark: {
           colors: { background: "#101010", foreground: "#f0f0f0" },
-          emphasis: { strong: "0.9" },
+          emphasis: { strong: "90%" },
         },
       },
     };
     const vars = resolveTheme(theme, "dark") ?? [];
-    expect(get(vars, "--emph-strong")).toBe("0.9");
+    expect(get(vars, "--emph-strong")).toBe("90%");
     // Untouched steps still fall back to the registry defaults.
-    expect(get(vars, "--emph-faint")).toBe("0.1");
+    expect(get(vars, "--emph-faint")).toBe("10%");
   });
 
   it("returns null when the theme has no usable variant", () => {

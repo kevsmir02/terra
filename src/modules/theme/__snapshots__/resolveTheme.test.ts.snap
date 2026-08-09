@@ -347,27 +347,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -720,27 +720,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -1089,27 +1089,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -1458,27 +1458,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -1827,27 +1827,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -2196,27 +2196,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -2565,27 +2565,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -2934,27 +2934,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -3303,27 +3303,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -3672,27 +3672,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -4041,27 +4041,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -4410,27 +4410,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -4811,27 +4811,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.12",
+      "12%",
     ],
     [
       "--emph-subtle",
-      "0.32",
+      "32%",
     ],
     [
       "--emph-soft",
-      "0.45",
+      "45%",
     ],
     [
       "--emph-medium",
-      "0.55",
+      "55%",
     ],
     [
       "--emph-strong",
-      "0.68",
+      "68%",
     ],
     [
       "--emph-bold",
-      "0.88",
+      "88%",
     ],
   ],
 }
@@ -5212,27 +5212,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.12",
+      "12%",
     ],
     [
       "--emph-subtle",
-      "0.32",
+      "32%",
     ],
     [
       "--emph-soft",
-      "0.45",
+      "45%",
     ],
     [
       "--emph-medium",
-      "0.55",
+      "55%",
     ],
     [
       "--emph-strong",
-      "0.68",
+      "68%",
     ],
     [
       "--emph-bold",
-      "0.88",
+      "88%",
     ],
   ],
 }
@@ -5585,27 +5585,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -5958,27 +5958,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -6359,27 +6359,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.15",
+      "15%",
     ],
     [
       "--emph-subtle",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-soft",
-      "0.55",
+      "55%",
     ],
     [
       "--emph-medium",
-      "0.7",
+      "70%",
     ],
     [
       "--emph-strong",
-      "0.85",
+      "85%",
     ],
     [
       "--emph-bold",
-      "1",
+      "100%",
     ],
   ],
 }
@@ -6760,27 +6760,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.15",
+      "15%",
     ],
     [
       "--emph-subtle",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-soft",
-      "0.55",
+      "55%",
     ],
     [
       "--emph-medium",
-      "0.7",
+      "70%",
     ],
     [
       "--emph-strong",
-      "0.85",
+      "85%",
     ],
     [
       "--emph-bold",
-      "1",
+      "100%",
     ],
   ],
 }
@@ -6849,27 +6849,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -6938,27 +6938,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -7311,27 +7311,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -7684,27 +7684,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -8053,27 +8053,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }
@@ -8422,27 +8422,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "10%",
     ],
     [
       "--emph-subtle",
-      "0.3",
+      "30%",
     ],
     [
       "--emph-soft",
-      "0.4",
+      "40%",
     ],
     [
       "--emph-medium",
-      "0.5",
+      "50%",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "60%",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "85%",
     ],
   ],
 }

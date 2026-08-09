@@ -145,10 +145,10 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "status.conflict", cssVar: "--status-conflict", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(6), doc: "Conflict status color." },
   { key: "status.ok", cssVar: "--status-ok", group: "status", kind: "color", deps: ["colors.background", "colors.card"], derive: statusColor(2), doc: "OK status color." },
 
-  { key: "emphasis.faint", cssVar: "--emph-faint", group: "emphasis", kind: "alpha", fallback: "0.1", doc: "Faint emphasis." },
-  { key: "emphasis.subtle", cssVar: "--emph-subtle", group: "emphasis", kind: "alpha", fallback: "0.3", doc: "Subtle emphasis." },
-  { key: "emphasis.soft", cssVar: "--emph-soft", group: "emphasis", kind: "alpha", fallback: "0.4", doc: "Soft emphasis." },
-  { key: "emphasis.medium", cssVar: "--emph-medium", group: "emphasis", kind: "alpha", fallback: "0.5", doc: "Medium emphasis." },
-  { key: "emphasis.strong", cssVar: "--emph-strong", group: "emphasis", kind: "alpha", fallback: "0.6", doc: "Strong emphasis." },
-  { key: "emphasis.bold", cssVar: "--emph-bold", group: "emphasis", kind: "alpha", fallback: "0.85", doc: "Bold emphasis." },
+  { key: "emphasis.faint", cssVar: "--emph-faint", group: "emphasis", kind: "alpha", fallback: "10%", doc: "Faint emphasis." },
+  { key: "emphasis.subtle", cssVar: "--emph-subtle", group: "emphasis", kind: "alpha", fallback: "30%", doc: "Subtle emphasis." },
+  { key: "emphasis.soft", cssVar: "--emph-soft", group: "emphasis", kind: "alpha", fallback: "40%", doc: "Soft emphasis." },
+  { key: "emphasis.medium", cssVar: "--emph-medium", group: "emphasis", kind: "alpha", fallback: "50%", doc: "Medium emphasis." },
+  { key: "emphasis.strong", cssVar: "--emph-strong", group: "emphasis", kind: "alpha", fallback: "60%", doc: "Strong emphasis." },
+  { key: "emphasis.bold", cssVar: "--emph-bold", group: "emphasis", kind: "alpha", fallback: "85%", doc: "Bold emphasis." },
 ];

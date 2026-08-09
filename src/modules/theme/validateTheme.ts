@@ -97,9 +97,17 @@ function validateTokenValue(
       }
     }
   } else if (def.kind === "alpha") {
-    const num = Number(v);
-    if (Number.isNaN(num) || num < 0 || num > 1) {
-      diagnostics.push({ severity: "error", path, message: `${path} must be a number from 0 to 1` });
+    // Must be a percentage. These land in `color-mix(in oklab, <color> <here>,
+    // transparent)`, whose grammar requires <percentage>; a bare number makes
+    // the whole declaration invalid, so the browser silently falls back to the
+    // unblended colour and the ladder stops doing anything at all.
+    const m = /^(\d+(?:\.\d+)?)%$/.exec(v);
+    if (!m || Number(m[1]) < 0 || Number(m[1]) > 100) {
+      diagnostics.push({
+        severity: "error",
+        path,
+        message: `${path} must be a percentage from 0% to 100%, e.g. "60%"`,
+      });
       return false;
     }
   }

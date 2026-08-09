@@ -58,12 +58,12 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
-    --emph-faint: 0.1;
-    --emph-subtle: 0.3;
-    --emph-soft: 0.4;
-    --emph-medium: 0.5;
-    --emph-strong: 0.6;
-    --emph-bold: 0.85;
+    --emph-faint: 10%;
+    --emph-subtle: 30%;
+    --emph-soft: 40%;
+    --emph-medium: 50%;
+    --emph-strong: 60%;
+    --emph-bold: 85%;
 }
 
 /* Border width is emitted by the utility itself, not by preflight, so a base
