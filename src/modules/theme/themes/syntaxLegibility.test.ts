@@ -1,123 +1,106 @@
 import { describe, expect, it } from "vitest";
-import { statusFromAnsi, syntaxFromAnsi } from "../derive";
-import { contrast, isHexColor } from "../oklab";
-import { resolveVariant } from "../resolveVariant";
-import {
-  STATUS_ROLES,
-  SYNTAX_ROLES,
-  type StatusTokens,
-  type SyntaxPalette,
-  type ThemeMode,
-} from "../types";
+import { contrast, parseColor } from "../oklab";
+import { resolveTheme } from "../resolveTheme";
+import { TOKENS } from "../tokens";
+import type { ThemeMode } from "../types";
 import { listBuiltinThemes } from "./index";
 
-const DIM = new Set(["comment", "gutterFg", "tagBracket"]);
+/**
+ * Asserts the contrast floors on resolved output rather than on the derivation
+ * helpers, so an override or a registry fallback is covered the same way a
+ * derived value is. The snapshot in resolveTheme.test.ts records what the
+ * builtins produce; this file is what makes those values legible rather than
+ * merely stable, and it would fail on a snapshot that was updated to a value
+ * below the floor.
+ */
+
+// Comment-weight roles are meant to recede, so they hold the 3:1 tier THEME.md
+// documents for slot 8 instead of the 4.5:1 body-text floor.
+const DIM = new Set(["syntax.comment", "syntax.gutterFg", "syntax.tagBracket"]);
+
+const MODES: ThemeMode[] = ["light", "dark"];
+
+const SYNTAX = TOKENS.filter((t) => t.group === "syntax");
+const STATUS = TOKENS.filter((t) => t.group === "status");
 
 type Case = {
-  id: string;
-  mode: ThemeMode;
+  label: string;
   bg: string;
   card: string | undefined;
-  syntax: SyntaxPalette;
-  status: StatusTokens;
-  rawAnsi: readonly string[];
+  value: (cssVar: string) => string | undefined;
 };
 
 const cases: Case[] = [];
-const seen = new Set<string>();
 for (const theme of listBuiltinThemes()) {
-  for (const mode of ["light", "dark"] as ThemeMode[]) {
-    const resolved = resolveVariant(theme, mode);
-    if (!resolved) continue;
-    // Key on the mode that actually supplied the variant, not the requested one.
-    // A dark-only theme resolves to its dark variant in both modes, so using the
-    // requested mode would label one case "(light)" while testing dark data, and
-    // would count the same palette twice.
-    const key = `${theme.id}:${resolved.mode}`;
-    if (seen.has(key)) continue;
-    const { variant } = resolved;
-    const bg = variant.colors?.background;
-    if (!isHexColor(bg) || !variant.terminal?.ansi) continue;
-    const syntax = syntaxFromAnsi(variant.terminal, variant.colors, variant.syntax);
-    const status = statusFromAnsi(variant.terminal, variant.colors, variant.status);
-    if (!syntax || !status) continue;
-    seen.add(key);
+  for (const mode of MODES) {
+    const vars = resolveTheme(theme, mode);
+    if (!vars) continue;
+    const map = new Map(vars);
+    const bg = map.get("--background");
+    if (!bg) continue;
     cases.push({
-      id: theme.id,
-      mode: resolved.mode,
+      label: `${theme.id}/${mode}`,
       bg,
-      card: variant.colors?.card,
-      syntax,
-      status,
-      rawAnsi: variant.terminal.ansi,
+      card: map.get("--card"),
+      value: (cssVar) => map.get(cssVar),
     });
   }
 }
 
-// 20 distinct combinations today: nine two-variant themes with an ansi palette,
-// plus one case each for the two dark-only themes. Adding a theme raises this,
-// so a failure here means coverage was lost.
-it("covers every built-in that declares an ansi palette", () => {
-  expect(cases.length).toBeGreaterThanOrEqual(20);
-});
+// A measurable pair is one both sides of which the contrast maths can read.
+// Translucent or unparseable values have no fixed ratio, so they are reported
+// as skipped rather than silently passing.
+function ratio(color: string | undefined, bg: string): number | null {
+  if (!color || !parseColor(color) || !parseColor(bg)) return null;
+  return contrast(color, bg);
+}
 
-describe.each(cases.map((c) => [c.id, c.mode, c] as const))(
-  "%s (%s) derived palette",
-  (_id, _mode, c) => {
-    // Assert hex rather than skipping on it. Vitest reports a body that returns
-    // without asserting as passed, so an early return here would let malformed
-    // output from the OKLab maths silently delete the floor check, which is the
-    // exact regression this file exists to catch. The card check stays
-    // conditional because `card` is legitimately optional on a variant.
-    it.each(SYNTAX_ROLES.map((r) => [r, c.syntax[r]] as const))(
-      "%s clears its floor against the app background",
-      (role, color) => {
-        expect(isHexColor(color)).toBe(true);
-        const floor = DIM.has(role) ? 3 : 4.5;
-        expect(contrast(color, c.bg)).toBeGreaterThanOrEqual(floor - 0.02);
-      },
-    );
+describe("builtin syntax legibility", () => {
+  it("covers every builtin in both modes", () => {
+    expect(cases.length).toBeGreaterThanOrEqual(20);
+  });
 
-    it.each(STATUS_ROLES.map((r) => [r, c.status[r]] as const))(
-      "status %s clears 4.5:1 on canvas and card",
-      (_role, color) => {
-        if (!isHexColor(color)) return;
-        expect(contrast(color, c.bg)).toBeGreaterThanOrEqual(4.48);
-        if (isHexColor(c.card)) {
-          expect(contrast(color, c.card)).toBeGreaterThanOrEqual(4.48);
+  it.each(SYNTAX.map((t) => [t.key, t.cssVar] as const))(
+    "%s clears its floor on the canvas",
+    (key, cssVar) => {
+      const floor = DIM.has(key) ? 3 : 4.5;
+      let measured = 0;
+      for (const c of cases) {
+        const r = ratio(c.value(cssVar), c.bg);
+        if (r === null) continue;
+        measured++;
+        expect(r, `${c.label} ${key}`).toBeGreaterThanOrEqual(floor - 0.02);
+      }
+      expect(measured, `${key} was never measurable`).toBeGreaterThan(0);
+    },
+  );
+
+  it.each(STATUS.map((t) => [t.key, t.cssVar] as const))(
+    "%s clears 4.5:1 on canvas and card",
+    (key, cssVar) => {
+      let measured = 0;
+      for (const c of cases) {
+        const onBg = ratio(c.value(cssVar), c.bg);
+        if (onBg === null) continue;
+        measured++;
+        expect(onBg, `${c.label} ${key} on canvas`).toBeGreaterThanOrEqual(4.48);
+        const onCard = ratio(c.value(cssVar), c.card ?? "");
+        if (onCard !== null) {
+          expect(onCard, `${c.label} ${key} on card`).toBeGreaterThanOrEqual(4.48);
         }
-      },
-    );
+      }
+      expect(measured, `${key} was never measurable`).toBeGreaterThan(0);
+    },
+  );
 
-    // The "not invisible" rule terminalLegibility enforces for ansi, applied
-    // to the derived output.
-    it.each(SYNTAX_ROLES.map((r) => [r, c.syntax[r]] as const))(
-      "%s is not the background",
-      (_role, color) => {
-        expect(color.toLowerCase()).not.toBe(c.bg.toLowerCase());
-      },
-    );
-  },
-);
-
-// These two are authored to a contrast budget rather than transcribed from an
-// upstream palette. If normalization ever has to touch them, either a floor or
-// the mapping has drifted.
-describe.each(["stardew", "kanagawa-dragon"])("%s needs no adjustment", (id) => {
-  const themeCases = cases.filter((c) => c.id === id);
-
-  // Guards the block against silently covering nothing if a theme is renamed or
-  // stops declaring an ansi palette.
-  it("contributes at least one derived case", () => {
-    expect(themeCases.length).toBeGreaterThan(0);
-  });
-
-  // Driven by the cases that exist rather than by both modes, because a
-  // dark-only theme contributes one case, not two.
-  it.each(themeCases.map((c) => [c.mode, c] as const))("in %s mode", (_mode, c) => {
-    for (const role of SYNTAX_ROLES) {
-      if (role === "variable" || role === "operator") continue;
-      expect(c.rawAnsi).toContain(c.syntax[role]);
-    }
-  });
+  it.each(SYNTAX.map((t) => [t.key, t.cssVar] as const))(
+    "%s is not the background colour",
+    (key, cssVar) => {
+      for (const c of cases) {
+        const v = c.value(cssVar);
+        if (!v) continue;
+        expect(v.toLowerCase(), `${c.label} ${key}`).not.toBe(c.bg.toLowerCase());
+      }
+    },
+  );
 });

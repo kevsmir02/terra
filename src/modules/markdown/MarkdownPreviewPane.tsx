@@ -55,7 +55,7 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
   return (
     <div
       className={cn(
-        "relative flex h-full w-full flex-col overflow-hidden rounded-md border border-border/60 bg-background",
+        "relative flex h-full w-full flex-col overflow-hidden rounded-md border border-border/(--emph-strong) bg-background",
         !visible && "pointer-events-none",
       )}
     >

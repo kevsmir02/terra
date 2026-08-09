@@ -149,7 +149,7 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
               ref={setInputRef}
               value={q}
               placeholder={placeholder}
-              className="h-7 w-full bg-muted/80 pr-7 pl-7 text-[13px]! placeholder:text-muted-foreground/70 focus-visible:ring-0"
+              className="h-7 w-full bg-muted/(--emph-bold) pr-7 pl-7 text-[13px]! placeholder:text-muted-foreground/(--emph-strong) focus-visible:ring-0"
               onChange={(e) => {
                 const next = e.target.value;
                 setQ(next);

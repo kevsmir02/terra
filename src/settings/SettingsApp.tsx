@@ -128,7 +128,7 @@ export function SettingsApp() {
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground select-none">
       <header
         data-tauri-drag-region
-        className={`flex h-11 shrink-0 items-center border-b border-border/60 bg-card/60 ${
+        className={`flex h-11 shrink-0 items-center border-b border-border/(--emph-strong) bg-card/(--emph-strong) ${
           IS_MAC ? "pr-3 pl-22" : "pr-0 pl-3"
         }`}
       >
@@ -139,7 +139,7 @@ export function SettingsApp() {
           className="flex-1 items-center"
           data-tauri-drag-region
         >
-          <TabsList className="mx-auto h-7 bg-muted/40 px-2">
+          <TabsList className="mx-auto h-7 bg-muted/(--emph-soft) px-2">
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.id}

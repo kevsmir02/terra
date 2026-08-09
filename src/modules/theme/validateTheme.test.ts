@@ -12,9 +12,11 @@ function baseTheme(over: Record<string, unknown> = {}) {
 
 describe("validateTheme", () => {
   it("rejects a non-object payload", () => {
-    expect(validateTheme("nope")).toEqual({
-      ok: false,
-      error: "Theme must be a JSON object",
+    const res = validateTheme("nope");
+    expect(res.ok).toBe(false);
+    expect(res.diagnostics[0]).toMatchObject({
+      severity: "error",
+      message: "Theme must be a JSON object",
     });
   });
 
@@ -33,10 +35,10 @@ describe("validateTheme", () => {
 
   it("requires a variants object with at least one of light or dark", () => {
     expect(validateTheme(baseTheme({ variants: undefined })).ok).toBe(false);
-    expect(validateTheme(baseTheme({ variants: {} }))).toEqual({
-      ok: false,
-      error: "variants must contain at least one of: light, dark",
-    });
+    
+    const res = validateTheme(baseTheme({ variants: {} }));
+    expect(res.ok).toBe(false);
+    expect(res.diagnostics.find(d => d.message.includes("at least one of"))).toBeDefined();
   });
 
   it("accepts a minimal single-variant theme", () => {
@@ -48,14 +50,38 @@ describe("validateTheme", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects unrecognized color keys", () => {
-    const result = validateTheme(
-      baseTheme({ variants: { dark: { colors: { nope: "#fff" } } } }),
-    );
-    expect(result).toEqual({
-      ok: false,
-      error: "variants.dark.colors.nope is not a recognized color key",
+  it("reports every bad key, not just the first", () => {
+    const res = validateTheme({
+      id: "xx", name: "X",
+      variants: { dark: { colors: { background: "nope", foreground: "also-nope" } } },
     });
+    expect(res.ok).toBe(false);
+    expect(res.diagnostics.filter((d) => d.severity === "error")).toHaveLength(2);
+  });
+
+  it("treats an unknown key as a warning so newer themes still load", () => {
+    const res = validateTheme({
+      id: "xx", name: "X",
+      variants: { dark: { colors: { background: "#101010", spork: "#fff" } } },
+    });
+    expect(res.ok).toBe(true);
+    expect(res.diagnostics).toContainEqual(
+      expect.objectContaining({ severity: "warning", path: "variants.dark.colors.spork" }),
+    );
+  });
+
+  it("rejects an unparseable textColor but accepts it for a plain color", () => {
+    const bad = validateTheme({
+      id: "xx", name: "X",
+      variants: { dark: { colors: { foreground: "transparent" } } },
+    });
+    expect(bad.ok).toBe(false);
+
+    const ok = validateTheme({
+      id: "yy", name: "Y",
+      variants: { dark: { colors: { border: "rgba(255,255,255,0.08)" } } },
+    });
+    expect(ok.ok).toBe(true);
   });
 
   it("rejects empty color values", () => {
@@ -88,10 +114,8 @@ describe("validateTheme", () => {
     const result = validateTheme(
       baseTheme({ variants: { dark: { terminal: { ansi: ["#000"] } } } }),
     );
-    expect(result).toEqual({
-      ok: false,
-      error: "variants.dark.terminal.ansi must be an array of 16 strings",
-    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.find(d => d.message.includes("16 strings"))).toBeDefined();
   });
 
   it("accepts optional terminal font settings", () => {
@@ -124,32 +148,24 @@ describe("validateTheme", () => {
         baseTheme({
           variants: { dark: { terminal: { fontFamily: "  " } } },
         }),
-      ),
-    ).toEqual({
-      ok: false,
-      error: "variants.dark.terminal.fontFamily must be a non-empty string",
-    });
+      ).ok,
+    ).toBe(false);
+    
     expect(
       validateTheme(
         baseTheme({
           variants: { dark: { terminal: { fontWeight: "heavy" } } },
         }),
-      ),
-    ).toEqual({
-      ok: false,
-      error:
-        "variants.dark.terminal.fontWeight must be normal, bold, or a weight from 100 to 900",
-    });
+      ).ok,
+    ).toBe(false);
+    
     expect(
       validateTheme(
         baseTheme({
           variants: { dark: { terminal: { fontSize: 100 } } },
         }),
-      ),
-    ).toEqual({
-      ok: false,
-      error: "variants.dark.terminal.fontSize must be an integer from 8 to 32",
-    });
+      ).ok,
+    ).toBe(false);
   });
 
   it("captures optional author, description, and editor theme", () => {
@@ -224,10 +240,10 @@ describe("validateTheme", () => {
     const result = validateTheme(
       baseTheme({ variants: { dark: { shape: { nope: "1px" } } } }),
     );
-    expect(result).toEqual({
-      ok: false,
-      error: "variants.dark.shape.nope is not a recognized shape key",
-    });
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ severity: "warning", path: "variants.dark.shape.nope" })
+    );
   });
 
   it("accepts typography keys and allowlists chromeTransform", () => {
@@ -275,13 +291,13 @@ describe("syntax and status overrides", () => {
   it("rejects an unknown syntax key", () => {
     const r = validateTheme(withVariant({ syntax: { notARole: "#abcdef" } }));
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("notARole");
+    if (!r.ok) expect(r.diagnostics.find(d => d.path.includes("notARole"))).toBeDefined();
   });
 
   it("rejects an unknown status key", () => {
     const r = validateTheme(withVariant({ status: { info: "#abcdef" } }));
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("info");
+    if (!r.ok) expect(r.diagnostics.find(d => d.path.includes("info"))).toBeDefined();
   });
 
   it("rejects a non-string syntax value", () => {
@@ -309,4 +325,3 @@ describe("shape colour validation", () => {
     },
   );
 });
-

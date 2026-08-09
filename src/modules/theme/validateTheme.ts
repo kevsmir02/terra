@@ -4,58 +4,26 @@ import {
   SYNTAX_ROLES,
   STATUS_ROLES,
   TEXT_TRANSFORMS,
-  type BorderStyle,
-  type TextTransform,
   type Theme,
   type ThemeColors,
+  type ThemeEmphasis,
   type ThemeShape,
   type ThemeTypography,
   type ThemeVariant,
   type TerminalPalette,
 } from "./types";
+import { TOKENS } from "./tokens";
+import { parseColor } from "./oklab";
+import type { Diagnostic } from "./diagnostics";
 
 export type ValidationResult =
-  | { ok: true; theme: Theme }
-  | { ok: false; error: string };
+  | { ok: true; theme: Theme; diagnostics: Diagnostic[] }
+  | { ok: false; diagnostics: Diagnostic[] };
 
-const COLOR_KEYS: readonly (keyof ThemeColors)[] = [
-  "background", "foreground",
-  "card", "cardForeground",
-  "popover", "popoverForeground",
-  "primary", "primaryForeground",
-  "secondary", "secondaryForeground",
-  "muted", "mutedForeground",
-  "accent", "accentForeground",
-  "destructive",
-  "border", "input", "ring",
-  "sidebar", "sidebarForeground",
-  "sidebarPrimary", "sidebarPrimaryForeground",
-  "sidebarAccent", "sidebarAccentForeground",
-  "sidebarBorder", "sidebarRing",
-  "radius",
-  "borderStyle",
-];
-
-const SHAPE_LENGTH_KEYS: readonly (keyof ThemeShape)[] = [
-  "frameWidth", "frameRadius", "framePadding",
-  "chromeWidth", "panelWidth", "slotWidth", "controlWidth",
-  "bevelWidth", "liftDepth", "spacing",
-];
-
-const SHAPE_COLOR_KEYS: readonly (keyof ThemeShape)[] = [
-  "bevelOuter", "bevelMid", "bevelInner", "liftColor",
-];
-
-// Lengths compose into a shared box-shadow, so they are matched rather than
-// passed through: a comma or a function call would rewrite the declaration.
 const LENGTH_RE = /^(0|-?\d+(\.\d+)?(px|rem|em))$/;
 
-// Shape colours compose into a shared box-shadow, so the value is matched
-// rather than passed through: one bad token takes out every ring and the lift.
-const COLOR_RE =
-  /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch)\([^;{}()]*\))$/;
-
-const TYPE_STRING_KEYS = ["sans", "mono", "display", "chromeTracking"] as const;
+export const COLOR_RE =
+  /^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|(rgb|rgba|hsl|hsla|oklch|oklab)\([^;{}()]*\))$/;
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const TERMINAL_FONT_WEIGHTS = new Set([
@@ -82,65 +50,132 @@ function isStr(v: unknown): v is string {
   return typeof v === "string";
 }
 
-function parseColors(raw: unknown, path: string): ThemeColors | string {
-  if (raw === undefined) return {};
-  if (!isObj(raw)) return `${path} must be an object`;
-  const out: ThemeColors = {};
-  for (const k of Object.keys(raw)) {
-    if (!(COLOR_KEYS as string[]).includes(k)) {
-      return `${path}.${k} is not a recognized color key`;
+const tokensByGroup: Record<string, (typeof TOKENS)[number][]> = {};
+for (const t of TOKENS) {
+  if (!tokensByGroup[t.group]) tokensByGroup[t.group] = [];
+  tokensByGroup[t.group].push(t);
+}
+
+function validateTokenValue(
+  v: unknown,
+  def: (typeof TOKENS)[number],
+  path: string,
+  diagnostics: Diagnostic[]
+): boolean {
+  if (!isStr(v) || v.length === 0) {
+    diagnostics.push({ severity: "error", path, message: `${path} must be a non-empty string` });
+    return false;
+  }
+  if (def.kind === "color") {
+    if (!COLOR_RE.test(v)) {
+      diagnostics.push({ severity: "error", path, message: `${path} must be a colour such as #rrggbb, transparent, or oklch(...)` });
+      return false;
     }
-    const v = raw[k];
-    if (!isStr(v) || v.length === 0) return `${path}.${k} must be a non-empty string`;
-    // borderStyle lands in a CSS property that accepts a token sequence, so it
-    // is allowlisted rather than passed through like the colour values.
-    if (k === "borderStyle") {
-      if (!(BORDER_STYLES as readonly string[]).includes(v)) {
-        return `${path}.borderStyle must be one of: ${BORDER_STYLES.join(", ")}`;
+  } else if (def.kind === "textColor") {
+    if (!COLOR_RE.test(v) || parseColor(v) === null) {
+      diagnostics.push({ severity: "error", path, message: `${path} must be a parseable colour` });
+      return false;
+    }
+  } else if (def.kind === "length") {
+    if (!LENGTH_RE.test(v)) {
+      diagnostics.push({ severity: "error", path, message: `${path} must be a CSS length such as 4px or 0` });
+      return false;
+    }
+  } else if (def.kind === "keyword") {
+    if (def.keywords && !def.keywords.includes(v)) {
+      diagnostics.push({ severity: "error", path, message: `${path} must be one of: ${def.keywords.join(", ")}` });
+      return false;
+    }
+    if (!def.keywords) {
+      if (def.key === "colors.borderStyle" && !(BORDER_STYLES as readonly string[]).includes(v)) {
+        diagnostics.push({ severity: "error", path, message: `${path} must be one of: ${BORDER_STYLES.join(", ")}` });
+        return false;
       }
-      out.borderStyle = v as BorderStyle;
+      if (def.key === "type.chromeTransform" && !(TEXT_TRANSFORMS as readonly string[]).includes(v)) {
+        diagnostics.push({ severity: "error", path, message: `${path} must be one of: ${TEXT_TRANSFORMS.join(", ")}` });
+        return false;
+      }
+    }
+  } else if (def.kind === "alpha") {
+    const num = Number(v);
+    if (Number.isNaN(num) || num < 0 || num > 1) {
+      diagnostics.push({ severity: "error", path, message: `${path} must be a number from 0 to 1` });
+      return false;
+    }
+  }
+  return true;
+}
+
+function parseTokens(raw: unknown, path: string, group: string, diagnostics: Diagnostic[]): Record<string, unknown> {
+  if (raw === undefined) return {};
+  if (!isObj(raw)) {
+    diagnostics.push({ severity: "error", path, message: `${path} must be an object` });
+    return {};
+  }
+  const out: Record<string, unknown> = {};
+  const groupTokens = tokensByGroup[group] || [];
+  
+  for (const k of Object.keys(raw)) {
+    const def = groupTokens.find(t => t.key === `${group}.${k}`);
+    if (!def) {
+      diagnostics.push({ severity: "warning", path: `${path}.${k}`, message: `${path}.${k} is not a recognized ${group} key` });
       continue;
     }
-    out[k as Exclude<keyof ThemeColors, "borderStyle">] = v;
+    const isValid = validateTokenValue(raw[k], def, `${path}.${k}`, diagnostics);
+    if (isValid) {
+      out[k] = raw[k];
+    }
   }
   return out;
 }
 
-function parseTerminal(raw: unknown, path: string): TerminalPalette | string {
+function parseTerminal(raw: unknown, path: string, diagnostics: Diagnostic[]): TerminalPalette {
   if (raw === undefined) return {};
-  if (!isObj(raw)) return `${path} must be an object`;
+  if (!isObj(raw)) {
+    diagnostics.push({ severity: "error", path, message: `${path} must be an object` });
+    return {};
+  }
+  
   const out: TerminalPalette = {};
+  
   if (raw.background !== undefined) {
-    if (!isStr(raw.background)) return `${path}.background must be a string`;
-    out.background = raw.background;
+    if (!isStr(raw.background) || raw.background.length === 0) {
+      diagnostics.push({ severity: "error", path: `${path}.background`, message: `${path}.background must be a non-empty string` });
+    } else out.background = raw.background;
   }
   if (raw.foreground !== undefined) {
-    if (!isStr(raw.foreground)) return `${path}.foreground must be a string`;
-    out.foreground = raw.foreground;
+    if (!isStr(raw.foreground) || raw.foreground.length === 0) {
+      diagnostics.push({ severity: "error", path: `${path}.foreground`, message: `${path}.foreground must be a non-empty string` });
+    } else out.foreground = raw.foreground;
   }
   if (raw.cursor !== undefined) {
-    if (!isStr(raw.cursor)) return `${path}.cursor must be a string`;
-    out.cursor = raw.cursor;
+    if (!isStr(raw.cursor) || raw.cursor.length === 0) {
+      diagnostics.push({ severity: "error", path: `${path}.cursor`, message: `${path}.cursor must be a non-empty string` });
+    } else out.cursor = raw.cursor;
   }
   if (raw.cursorAccent !== undefined) {
-    if (!isStr(raw.cursorAccent)) return `${path}.cursorAccent must be a string`;
-    out.cursorAccent = raw.cursorAccent;
+    if (!isStr(raw.cursorAccent) || raw.cursorAccent.length === 0) {
+      diagnostics.push({ severity: "error", path: `${path}.cursorAccent`, message: `${path}.cursorAccent must be a non-empty string` });
+    } else out.cursorAccent = raw.cursorAccent;
   }
   if (raw.selection !== undefined) {
-    if (!isStr(raw.selection)) return `${path}.selection must be a string`;
-    out.selection = raw.selection;
+    if (!isStr(raw.selection) || raw.selection.length === 0) {
+      diagnostics.push({ severity: "error", path: `${path}.selection`, message: `${path}.selection must be a non-empty string` });
+    } else out.selection = raw.selection;
   }
   if (raw.fontFamily !== undefined) {
     if (!isStr(raw.fontFamily) || raw.fontFamily.trim().length === 0) {
-      return `${path}.fontFamily must be a non-empty string`;
+      diagnostics.push({ severity: "error", path: `${path}.fontFamily`, message: `${path}.fontFamily must be a non-empty string` });
+    } else {
+      out.fontFamily = raw.fontFamily.trim();
     }
-    out.fontFamily = raw.fontFamily.trim();
   }
   if (raw.fontWeight !== undefined) {
     if (!isStr(raw.fontWeight) || !TERMINAL_FONT_WEIGHTS.has(raw.fontWeight)) {
-      return `${path}.fontWeight must be normal, bold, or a weight from 100 to 900`;
+      diagnostics.push({ severity: "error", path: `${path}.fontWeight`, message: `${path}.fontWeight must be normal, bold, or a weight from 100 to 900` });
+    } else {
+      out.fontWeight = raw.fontWeight;
     }
-    out.fontWeight = raw.fontWeight;
   }
   if (raw.fontSize !== undefined) {
     if (
@@ -149,76 +184,49 @@ function parseTerminal(raw: unknown, path: string): TerminalPalette | string {
       raw.fontSize < TERMINAL_FONT_SIZE_MIN ||
       raw.fontSize > TERMINAL_FONT_SIZE_MAX
     ) {
-      return `${path}.fontSize must be an integer from ${TERMINAL_FONT_SIZE_MIN} to ${TERMINAL_FONT_SIZE_MAX}`;
+      diagnostics.push({ severity: "error", path: `${path}.fontSize`, message: `${path}.fontSize must be an integer from ${TERMINAL_FONT_SIZE_MIN} to ${TERMINAL_FONT_SIZE_MAX}` });
+    } else {
+      out.fontSize = raw.fontSize;
     }
-    out.fontSize = raw.fontSize;
   }
   if (raw.ansi !== undefined) {
     if (!Array.isArray(raw.ansi) || raw.ansi.length !== 16) {
-      return `${path}.ansi must be an array of 16 strings`;
+      diagnostics.push({ severity: "error", path: `${path}.ansi`, message: `${path}.ansi must be an array of 16 strings` });
+    } else {
+      let ok = true;
+      for (let i = 0; i < 16; i++) {
+        if (!isStr(raw.ansi[i])) {
+          diagnostics.push({ severity: "error", path: `${path}.ansi[${i}]`, message: `${path}.ansi[${i}] must be a string` });
+          ok = false;
+        }
+      }
+      if (ok) out.ansi = raw.ansi as unknown as TerminalPalette["ansi"];
     }
-    for (let i = 0; i < 16; i++) {
-      if (!isStr(raw.ansi[i])) return `${path}.ansi[${i}] must be a string`;
-    }
-    out.ansi = raw.ansi as unknown as TerminalPalette["ansi"];
   }
   return out;
 }
 
-function parseShape(raw: unknown, path: string): ThemeShape | string {
+function parseTypography(raw: unknown, path: string, diagnostics: Diagnostic[]): ThemeTypography {
   if (raw === undefined) return {};
-  if (!isObj(raw)) return `${path} must be an object`;
-  const out: ThemeShape = {};
-  for (const k of Object.keys(raw)) {
-    const isLength = (SHAPE_LENGTH_KEYS as string[]).includes(k);
-    const isColor = (SHAPE_COLOR_KEYS as string[]).includes(k);
-    if (!isLength && !isColor) {
-      return `${path}.${k} is not a recognized shape key`;
-    }
-    const v = raw[k];
-    if (!isStr(v) || v.length === 0) {
-      return `${path}.${k} must be a non-empty string`;
-    }
-    if (isLength && !LENGTH_RE.test(v)) {
-      return `${path}.${k} must be a CSS length such as 4px or 0`;
-    }
-    if (isColor && !COLOR_RE.test(v)) {
-      return `${path}.${k} must be a colour such as #rrggbb, transparent, or oklch(...)`;
-    }
-    out[k as keyof ThemeShape] = v;
+  if (!isObj(raw)) {
+    diagnostics.push({ severity: "error", path, message: `${path} must be an object` });
+    return {};
   }
-  return out;
-}
-
-function parseTypography(raw: unknown, path: string): ThemeTypography | string {
-  if (raw === undefined) return {};
-  if (!isObj(raw)) return `${path} must be an object`;
   const out: ThemeTypography = {};
-  for (const k of Object.keys(raw)) {
-    if (k === "fonts") {
-      if (!Array.isArray(raw.fonts) || !raw.fonts.every(isFontId)) {
-        return `${path}.fonts must be an array of bundled font ids`;
-      }
+  
+  if (raw.fonts !== undefined) {
+    if (!Array.isArray(raw.fonts) || !raw.fonts.every(isFontId)) {
+      diagnostics.push({ severity: "error", path: `${path}.fonts`, message: `${path}.fonts must be an array of bundled font ids` });
+    } else {
       out.fonts = raw.fonts;
-      continue;
     }
-    const v = raw[k];
-    if (!isStr(v) || v.length === 0) {
-      return `${path}.${k} must be a non-empty string`;
-    }
-    if (k === "chromeTransform") {
-      if (!(TEXT_TRANSFORMS as readonly string[]).includes(v)) {
-        return `${path}.chromeTransform must be one of: ${TEXT_TRANSFORMS.join(", ")}`;
-      }
-      out.chromeTransform = v as TextTransform;
-      continue;
-    }
-    if (!(TYPE_STRING_KEYS as readonly string[]).includes(k)) {
-      return `${path}.${k} is not a recognized typography key`;
-    }
-    out[k as (typeof TYPE_STRING_KEYS)[number]] = v;
   }
-  return out;
+  
+  const rawTokens = { ...raw };
+  delete rawTokens.fonts;
+  
+  const parsed = parseTokens(rawTokens, path, "type", diagnostics);
+  return { ...out, ...parsed } as ThemeTypography;
 }
 
 function parseRoleMap<T extends string>(
@@ -226,69 +234,97 @@ function parseRoleMap<T extends string>(
   path: string,
   roles: readonly T[],
   label: string,
-): Partial<Record<T, string>> | string {
+  diagnostics: Diagnostic[]
+): Partial<Record<T, string>> {
   if (raw === undefined) return {};
-  if (!isObj(raw)) return `${path} must be an object`;
+  if (!isObj(raw)) {
+    diagnostics.push({ severity: "error", path, message: `${path} must be an object` });
+    return {};
+  }
   const out: Partial<Record<T, string>> = {};
   for (const k of Object.keys(raw)) {
     if (!(roles as readonly string[]).includes(k)) {
-      return `${path}.${k} is not a recognized ${label} role`;
+      diagnostics.push({ severity: "error", path: `${path}.${k}`, message: `${path}.${k} is not a recognized ${label} role` });
+      continue;
     }
     const v = raw[k];
     if (!isStr(v) || v.length === 0) {
-      return `${path}.${k} must be a non-empty string`;
+      diagnostics.push({ severity: "error", path: `${path}.${k}`, message: `${path}.${k} must be a non-empty string` });
+      continue;
     }
     out[k as T] = v;
   }
   return out;
 }
 
-function parseVariant(raw: unknown, path: string): ThemeVariant | string {
-  if (!isObj(raw)) return `${path} must be an object`;
-  const colors = parseColors(raw.colors, `${path}.colors`);
-  if (typeof colors === "string") return colors;
-  const terminal = parseTerminal(raw.terminal, `${path}.terminal`);
-  if (typeof terminal === "string") return terminal;
-  const shape = parseShape(raw.shape, `${path}.shape`);
-  if (typeof shape === "string") return shape;
-  const type = parseTypography(raw.type, `${path}.type`);
-  if (typeof type === "string") return type;
-  const syntax = parseRoleMap(raw.syntax, `${path}.syntax`, SYNTAX_ROLES, "syntax");
-  if (typeof syntax === "string") return syntax;
-  const status = parseRoleMap(raw.status, `${path}.status`, STATUS_ROLES, "status");
-  if (typeof status === "string") return status;
-  return { colors, terminal, shape, type, syntax, status };
+function parseVariant(raw: unknown, path: string, diagnostics: Diagnostic[]): ThemeVariant | undefined {
+  if (!isObj(raw)) {
+    diagnostics.push({ severity: "error", path, message: `${path} must be an object` });
+    return undefined;
+  }
+  
+  const colors = parseTokens(raw.colors, `${path}.colors`, "colors", diagnostics) as ThemeColors;
+  const terminal = parseTerminal(raw.terminal, `${path}.terminal`, diagnostics);
+  const shape = parseTokens(raw.shape, `${path}.shape`, "shape", diagnostics) as ThemeShape;
+  const type = parseTypography(raw.type, `${path}.type`, diagnostics);
+  const syntax = parseRoleMap(raw.syntax, `${path}.syntax`, SYNTAX_ROLES, "syntax", diagnostics);
+  const status = parseRoleMap(raw.status, `${path}.status`, STATUS_ROLES, "status", diagnostics);
+  const emphasis = parseTokens(
+    raw.emphasis,
+    `${path}.emphasis`,
+    "emphasis",
+    diagnostics,
+  ) as ThemeEmphasis;
+
+  return { colors, terminal, shape, type, syntax, status, emphasis };
 }
 
-
 export function validateTheme(raw: unknown): ValidationResult {
-  if (!isObj(raw)) return { ok: false, error: "Theme must be a JSON object" };
+  const diagnostics: Diagnostic[] = [];
+  
+  if (!isObj(raw)) {
+    diagnostics.push({ severity: "error", path: "", message: "Theme must be a JSON object" });
+    return { ok: false, diagnostics };
+  }
   if (!isStr(raw.id) || !ID_RE.test(raw.id)) {
-    return { ok: false, error: "id must be a kebab-case string (a-z, 0-9, -)" };
+    diagnostics.push({ severity: "error", path: "id", message: "id must be a kebab-case string (a-z, 0-9, -)" });
   }
+  let name = "";
   if (!isStr(raw.name) || raw.name.trim().length === 0) {
-    return { ok: false, error: "name must be a non-empty string" };
+    diagnostics.push({ severity: "error", path: "name", message: "name must be a non-empty string" });
+  } else {
+    name = raw.name.trim();
   }
-  if (!isObj(raw.variants)) return { ok: false, error: "variants must be an object" };
+  
   const variants: Theme["variants"] = {};
-  if (raw.variants.light !== undefined) {
-    const v = parseVariant(raw.variants.light, "variants.light");
-    if (typeof v === "string") return { ok: false, error: v };
-    variants.light = v;
+  if (!isObj(raw.variants)) {
+    diagnostics.push({ severity: "error", path: "variants", message: "variants must be an object" });
+  } else {
+    if (raw.variants.light !== undefined) {
+      const v = parseVariant(raw.variants.light, "variants.light", diagnostics);
+      if (v) variants.light = v;
+    }
+    if (raw.variants.dark !== undefined) {
+      const v = parseVariant(raw.variants.dark, "variants.dark", diagnostics);
+      if (v) variants.dark = v;
+    }
+    if (raw.variants.light === undefined && raw.variants.dark === undefined) {
+      diagnostics.push({ severity: "error", path: "variants", message: "variants must contain at least one of: light, dark" });
+    }
   }
-  if (raw.variants.dark !== undefined) {
-    const v = parseVariant(raw.variants.dark, "variants.dark");
-    if (typeof v === "string") return { ok: false, error: v };
-    variants.dark = v;
+  
+  const hasErrors = diagnostics.some(d => d.severity === "error");
+  
+  if (hasErrors) {
+    return { ok: false, diagnostics };
   }
-  if (!variants.light && !variants.dark) {
-    return { ok: false, error: "variants must contain at least one of: light, dark" };
-  }
+
   const theme: Theme = {
-    id: raw.id,
-    name: raw.name.trim(),
+    id: raw.id as string,
+    name,
     variants,
   };
+  
   if (isStr(raw.author)) theme.author = raw.author;
   if (isStr(raw.description)) theme.description = raw.description;
   if (isObj(raw.editorTheme)) {
@@ -297,5 +333,6 @@ export function validateTheme(raw: unknown): ValidationResult {
     if (isStr(raw.editorTheme.dark)) et.dark = raw.editorTheme.dark;
     if (et.light || et.dark) theme.editorTheme = et;
   }
-  return { ok: true, theme };
+  
+  return { ok: true, theme, diagnostics };
 }

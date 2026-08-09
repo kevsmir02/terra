@@ -105,7 +105,7 @@ function DiskStateBanner({
   if (state === "in-sync") return null;
   const missing = state === "missing";
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-1.5 text-xs">
+    <div className="flex shrink-0 items-center gap-2 border-b border-border/(--emph-strong) bg-muted/(--emph-soft) px-3 py-1.5 text-xs">
       <span className="text-muted-foreground">
         {missing
           ? "This file no longer exists on disk."
@@ -483,7 +483,7 @@ export const EditorPane = memo(
             <button
               type="button"
               onClick={openAnyway}
-              className="mt-2 rounded-md border border-border bg-muted/60 px-3 py-1 text-xs text-foreground hover:bg-accent"
+              className="mt-2 rounded-md border border-border bg-muted/(--emph-strong) px-3 py-1 text-xs text-foreground hover:bg-accent"
             >
               Open anyway
             </button>

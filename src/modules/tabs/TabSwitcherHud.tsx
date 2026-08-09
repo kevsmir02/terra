@@ -33,7 +33,7 @@ export function TabSwitcherHud({
       aria-hidden
       className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center"
     >
-      <div className="flex max-h-[60vh] w-72 flex-col gap-0.5 overflow-y-auto rounded-2xl border border-border bg-popover/95 p-1.5 shadow-2xl ring-1 ring-foreground/5 backdrop-blur-md">
+      <div className="flex max-h-[60vh] w-72 flex-col gap-0.5 overflow-y-auto rounded-2xl border border-border bg-popover/(--emph-bold) p-1.5 shadow-2xl ring-1 ring-foreground/(--emph-faint) backdrop-blur-md">
         {rows.map((t) => {
           const subtitle = subtitleFor(t);
           return (
@@ -49,7 +49,7 @@ export function TabSwitcherHud({
               <TabIcon tab={t} />
               <span className="min-w-0 flex-1 truncate">{labelFor(t)}</span>
               {subtitle && (
-                <span className="shrink-0 truncate text-[10px] text-muted-foreground/55">
+                <span className="shrink-0 truncate text-[10px] text-muted-foreground/(--emph-medium)">
                   {subtitle}
                 </span>
               )}

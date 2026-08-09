@@ -99,7 +99,7 @@ type Props = {
 };
 
 const SOURCE_CONTROL_TOOLTIP_CLASS =
-  "border border-border/70 bg-zinc-950 text-zinc-100 shadow-lg shadow-black/30 dark:border-border/60 dark:bg-zinc-950 dark:text-zinc-100";
+  "border border-border/(--emph-strong) bg-popover text-popover-foreground shadow-lg shadow-black/30 dark:border-border/(--emph-strong)";
 
 const ROW_HEIGHTS = {
   banner: 32,
@@ -147,7 +147,7 @@ function statusAccent(code: string): string {
     case "R":
       return "bg-status-renamed/85";
     default:
-      return "bg-muted-foreground/40";
+      return "bg-muted-foreground/(--emph-soft)";
   }
 }
 
@@ -242,7 +242,7 @@ function BranchDropdown({
         <button
           type="button"
           disabled={checkingOut}
-          className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md bg-foreground/5 px-2 py-1 text-[11.5px] font-medium leading-none text-foreground transition-colors hover:bg-foreground/10 disabled:cursor-default disabled:opacity-70"
+          className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md bg-foreground/(--emph-faint) px-2 py-1 text-[11.5px] font-medium leading-none text-foreground transition-colors hover:bg-foreground/(--emph-faint) disabled:cursor-default disabled:opacity-70"
         >
           <HugeiconsIcon
             icon={FolderGitTwoIcon}
@@ -267,7 +267,7 @@ function BranchDropdown({
           <>
             {localBranches.length > 0 && (
               <>
-                <DropdownMenuLabel className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/85">
+                <DropdownMenuLabel className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/(--emph-bold)">
                   Local Branches
                 </DropdownMenuLabel>
                 <DropdownMenuGroup>
@@ -296,7 +296,7 @@ function BranchDropdown({
             {worktrees.length > 0 && (
               <>
                 {localBranches.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/85">
+                <DropdownMenuLabel className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/(--emph-bold)">
                   Worktrees
                 </DropdownMenuLabel>
                 <DropdownMenuGroup>
@@ -617,8 +617,8 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
   return (
     <TooltipProvider delayDuration={800} skipDelayDuration={300}>
-      <aside className="flex h-full min-w-0 flex-col bg-card/80 backdrop-blur [contain:layout_style]">
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 pb-2.5 pt-3">
+      <aside className="flex h-full min-w-0 flex-col bg-card/(--emph-bold) backdrop-blur [contain:layout_style]">
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/(--emph-medium) px-3 pb-2.5 pt-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <BranchDropdown
               repoRoot={scm.repo?.repoRoot ?? null}
@@ -629,7 +629,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
             {scm.status && (scm.status.ahead > 0 || scm.status.behind > 0) ? (
               <div className="flex shrink-0 items-center gap-0.5 text-[10px] font-semibold tabular-nums leading-none text-muted-foreground">
                 {scm.status.ahead > 0 ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-md border border-border/60 px-1 py-0.5">
+                  <span className="inline-flex items-center gap-0.5 rounded-md border border-border/(--emph-strong) px-1 py-0.5">
                     <HugeiconsIcon
                       icon={ArrowUp01Icon}
                       size={9}
@@ -639,7 +639,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   </span>
                 ) : null}
                 {scm.status.behind > 0 ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-md border border-border/60 px-1 py-0.5">
+                  <span className="inline-flex items-center gap-0.5 rounded-md border border-border/(--emph-strong) px-1 py-0.5">
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
                       size={9}
@@ -651,7 +651,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               </div>
             ) : null}
             {scm.status?.isDetached ? (
-              <span className="rounded bg-muted/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="rounded bg-muted/(--emph-medium) px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 detached
               </span>
             ) : null}
@@ -678,7 +678,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                 pullBusy
                   ? "Pulling…"
                   : isDiverged
-                    ? "Branch diverged — resolve in terminal"
+                    ? "Branch diverged - resolve in terminal"
                     : !hasUpstream
                       ? "No upstream configured"
                       : (scm.status?.behind ?? 0) === 0
@@ -723,7 +723,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
           <button
             type="button"
             onClick={() => onOpenGitGraph()}
-            className="group flex shrink-0 cursor-pointer items-center gap-2 border-b border-border/40 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+            className="group flex shrink-0 cursor-pointer items-center gap-2 border-b border-border/(--emph-soft) px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
           >
             <HugeiconsIcon
               icon={GitBranchIcon}
@@ -766,14 +766,14 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
         {scm.panelState === "ready" && scm.status ? (
           <>
-            <div className="relative shrink-0 space-y-2 border-b border-border/40 bg-gradient-to-b from-card/65 to-card/30 px-2.5 pb-2.5 pt-2.5">
+            <div className="relative shrink-0 space-y-2 border-b border-border/(--emph-soft) bg-gradient-to-b from-card/65 to-card/30 px-2.5 pb-2.5 pt-2.5">
               <div
                 className={cn(
-                  "relative rounded-lg border bg-background/95 shadow-sm transition-colors",
+                  "relative rounded-lg border bg-background/(--emph-bold) shadow-sm transition-colors",
                   scm.commitMessage.length > 0
-                    ? "border-border/70"
-                    : "border-border/45",
-                  "focus-within:border-primary/45 focus-within:shadow-md focus-within:shadow-primary/5",
+                    ? "border-border/(--emph-strong)"
+                    : "border-border/(--emph-soft)",
+                  "focus-within:border-primary/(--emph-soft) focus-within:shadow-md focus-within:shadow-primary/5",
                 )}
               >
                 <Textarea
@@ -783,10 +783,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   placeholder="Commit message"
                   rows={3}
                   className={cn(
-                    "min-h-[72px] border-border resize-none rounded-lg bg-transparent px-3 pb-7 pt-2.5 text-[12.5px] leading-snug shadow-none placeholder:text-muted-foreground/65 focus-visible:ring-0 focus:border-0",
+                    "min-h-[72px] border-border resize-none rounded-lg bg-transparent px-3 pb-7 pt-2.5 text-[12.5px] leading-snug shadow-none placeholder:text-muted-foreground/(--emph-strong) focus-visible:ring-0 focus:border-0",
                   )}
                 />
-                <div className="pointer-events-none absolute inset-x-3 bottom-1.5 flex items-center justify-between p-1 gap-2 text-[10px] tabular-nums text-muted-foreground/55">
+                <div className="pointer-events-none absolute inset-x-3 bottom-1.5 flex items-center justify-between p-1 gap-2 text-[10px] tabular-nums text-muted-foreground/(--emph-medium)">
                   {scm.commitMessage.length > 0 ? (
                     <span>Ch: {scm.commitMessage.length}</span>
                   ) : (
@@ -804,9 +804,9 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                         disabled={!scm.canGenerateCommitMessage}
                         onClick={() => void scm.generateCommitMessage()}
                         className={cn(
-                          "inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/65 transition-colors",
+                          "inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/(--emph-strong) transition-colors",
                           "hover:bg-foreground/[0.06] hover:text-foreground",
-                          "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground/65",
+                          "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground/(--emph-strong)",
                         )}
                       >
                         {scm.actionBusy === "generate-message" ? (
@@ -838,18 +838,18 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   className={cn(
                     "size-1.5 shrink-0 rounded-full transition-colors",
                     canCommit
-                      ? "bg-foreground/80"
+                      ? "bg-foreground/(--emph-bold)"
                       : stagedCount > 0
-                        ? "bg-muted-foreground/60"
-                        : "bg-muted-foreground/30",
+                        ? "bg-muted-foreground/(--emph-strong)"
+                        : "bg-muted-foreground/(--emph-subtle)",
                   )}
                 />
-                <span className="truncate font-medium text-foreground/85">
+                <span className="truncate font-medium text-foreground/(--emph-bold)">
                   {stagedCount === 0
                     ? "Nothing staged"
                     : `${stagedCount} ${stagedCount === 1 ? "file" : "files"} staged`}
                 </span>
-                <span className="ml-auto shrink-0 truncate text-muted-foreground/65">
+                <span className="ml-auto shrink-0 truncate text-muted-foreground/(--emph-strong)">
                   {pushStatusLabel}
                 </span>
               </div>
@@ -915,7 +915,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                   focusedRowKey ? `scm-row-${focusedRowKey}` : undefined
                 }
                 onKeyDown={handlePanelKeyDown}
-                className="relative min-h-0 flex-1 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+                className="relative min-h-0 flex-1 outline-none focus-visible:ring-1 focus-visible:ring-primary/(--emph-subtle)"
               >
                 <div
                   ref={scrollRef}
@@ -1024,7 +1024,7 @@ function PanelCenter({
 function CleanTreeHint({ repoLabel }: { repoLabel: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-4 text-center">
-      <div className="flex size-8 items-center justify-center rounded-full border border-border/55 text-muted-foreground">
+      <div className="flex size-8 items-center justify-center rounded-full border border-border/(--emph-medium) text-muted-foreground">
         <HugeiconsIcon
           icon={CheckmarkCircle01Icon}
           size={16}
@@ -1035,7 +1035,7 @@ function CleanTreeHint({ repoLabel }: { repoLabel: string }) {
         Working tree clean
       </div>
       <div className="text-[10.5px] leading-snug text-muted-foreground">
-        on <span className="font-mono text-foreground/80">{repoLabel}</span>
+        on <span className="font-mono text-foreground/(--emph-bold)">{repoLabel}</span>
       </div>
     </div>
   );
@@ -1070,7 +1070,7 @@ const RowRenderer = memo(function RowRenderer(props: RowRendererProps) {
 
 function DivergedBanner() {
   return (
-    <div className="mx-2 mt-1 flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-foreground/[0.04] px-2 text-[10.5px] leading-none text-muted-foreground">
+    <div className="mx-2 mt-1 flex h-7 items-center gap-1.5 rounded-md border border-border/(--emph-strong) bg-foreground/[0.04] px-2 text-[10.5px] leading-none text-muted-foreground">
       <HugeiconsIcon
         icon={Alert02Icon}
         size={11}
@@ -1078,10 +1078,10 @@ function DivergedBanner() {
         className="shrink-0"
       />
       <span className="min-w-0 flex-1 truncate">
-        <span className="font-medium text-foreground/85">
+        <span className="font-medium text-foreground/(--emph-bold)">
           Diverged from upstream
         </span>
-        <span className="ml-1 opacity-75">— resolve in terminal</span>
+        <span className="ml-1 opacity-75">- resolve in terminal</span>
       </span>
     </div>
   );
@@ -1097,10 +1097,10 @@ function ListHeader({
 }) {
   return (
     <div className="flex h-7 items-center gap-2 px-3">
-      <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85">
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/(--emph-bold)">
         Changes
       </span>
-      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/60 px-1 text-[9.5px] font-semibold tabular-nums text-muted-foreground">
+      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/(--emph-strong) px-1 text-[9.5px] font-semibold tabular-nums text-muted-foreground">
         {row.count}
       </span>
       <label
@@ -1167,10 +1167,10 @@ const EntryRow = memo(function EntryRow({
           className={cn(
             "group relative flex h-[30px] items-center gap-2 rounded-md pl-2 pr-2 transition-all duration-100",
             focused
-              ? "bg-accent/60"
+              ? "bg-accent/(--emph-strong)"
               : isSelected
-                ? "bg-accent/55 text-foreground"
-                : "hover:bg-accent/30",
+                ? "bg-accent/(--emph-medium) text-foreground"
+                : "hover:bg-accent/(--emph-subtle)",
           )}
         >
           <span
@@ -1202,14 +1202,14 @@ const EntryRow = memo(function EntryRow({
                   "truncate text-[12px] leading-tight",
                   isSelected || focused
                     ? "font-semibold text-foreground"
-                    : "font-medium text-foreground/95",
+                    : "font-medium text-foreground/(--emph-bold)",
                   pathLabel ? "max-w-[58%] shrink-0" : "min-w-0 flex-1",
                 )}
               >
                 {fileName}
               </span>
               {pathLabel ? (
-                <span className="min-w-0 flex-1 truncate text-[10.5px] leading-tight text-muted-foreground/75">
+                <span className="min-w-0 flex-1 truncate text-[10.5px] leading-tight text-muted-foreground/(--emph-strong)">
                   {pathLabel}
                 </span>
               ) : null}
@@ -1404,14 +1404,14 @@ function CommitFeedback({
         "pointer-events-none absolute inset-x-3 top-[calc(100%-0.25rem)] z-20 flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug shadow-lg shadow-black/15 backdrop-blur transition-all duration-200",
         isVisible ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
         isError
-          ? "border-destructive/30 bg-card/95 text-destructive"
-          : "border-border/70 bg-card/95 text-muted-foreground",
+          ? "border-destructive/(--emph-subtle) bg-card/(--emph-bold) text-destructive"
+          : "border-border/(--emph-strong) bg-card/(--emph-bold) text-muted-foreground",
       )}
     >
       <span
         className={cn(
           "size-1.5 shrink-0 rounded-full",
-          isError ? "bg-destructive" : "bg-foreground/70",
+          isError ? "bg-destructive" : "bg-foreground/(--emph-strong)",
         )}
       />
       <span

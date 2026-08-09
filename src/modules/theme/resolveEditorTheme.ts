@@ -4,7 +4,6 @@ import {
   type EditorThemeId,
   type EditorThemePref,
 } from "@/modules/settings/store";
-import { syntaxFromAnsi } from "./derive";
 import { resolveVariant } from "./resolveVariant";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
@@ -37,7 +36,7 @@ export function resolveEditorTheme(
   const resolved = resolveVariant(theme, mode);
   if (resolved) {
     const { variant } = resolved;
-    if (syntaxFromAnsi(variant.terminal, variant.colors, variant.syntax)) {
+    if (variant.terminal?.ansi) {
       return { kind: "derived", mode: resolved.mode };
     }
   }

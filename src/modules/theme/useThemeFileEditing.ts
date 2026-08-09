@@ -43,7 +43,8 @@ export function useThemeFileEditing({ tabsRef, openFileTab }: Params) {
                 return;
               const parsed = parseThemeFile(res.content);
               if (!parsed.ok) {
-                console.warn("[terra] theme not applied:", parsed.error);
+                const errs = parsed.diagnostics.filter(d => d.severity === "error").map(d => `${d.path}: ${d.message}`).join(", ");
+                console.warn("[terra] theme not applied:", errs);
                 return;
               }
               await saveCustomTheme(parsed.theme);

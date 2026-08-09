@@ -20,7 +20,7 @@ function Shell({
         narrow ? "px-3" : "px-6",
       )}
     >
-      <div className="flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-card text-muted-foreground">
+      <div className="flex size-10 items-center justify-center rounded-2xl border border-border/(--emph-strong) bg-card text-muted-foreground">
         <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.5} />
       </div>
       <p className="text-[12.5px] font-medium text-foreground">{title}</p>
@@ -81,13 +81,13 @@ function CreateAvd({ onCreate, busy }: { onCreate: (name: string, pkg: string) =
         aria-label="AVD name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-foreground"
+        className="rounded-md border border-border/(--emph-strong) bg-card px-2 py-1 text-xs text-foreground"
       />
       <select
         aria-label="System image"
         value={pkg}
         onChange={(e) => setPkg(e.target.value)}
-        className="rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-foreground"
+        className="rounded-md border border-border/(--emph-strong) bg-card px-2 py-1 text-xs text-foreground"
       >
         {images.map((img) => (
           <option key={img.package} value={img.package}>
@@ -99,7 +99,7 @@ function CreateAvd({ onCreate, busy }: { onCreate: (name: string, pkg: string) =
         type="button"
         disabled={busy || !name.trim() || !pkg}
         onClick={() => onCreate(name.trim(), pkg)}
-        className="rounded-md border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
+        className="rounded-md border border-border/(--emph-strong) bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/(--emph-strong) disabled:opacity-50"
       >
         {busy ? "Creating…" : "Create AVD"}
       </button>
@@ -130,7 +130,7 @@ export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: 
                   type="button"
                   disabled={busy || !!runningSerial}
                   onClick={() => void launch(avd.name)}
-                  className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
+                  className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/(--emph-strong) bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/(--emph-strong) disabled:opacity-50"
                 >
                   <span className="truncate">{avd.name}</span>
                   <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
@@ -142,7 +142,7 @@ export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: 
                     type="button"
                     disabled={busy}
                     onClick={() => void stop(runningSerial)}
-                    className="shrink-0 rounded-md border border-border/60 px-2 py-1.5 text-[10px] text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
+                    className="shrink-0 rounded-md border border-border/(--emph-strong) px-2 py-1.5 text-[10px] text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
                   >
                     Stop
                   </button>
@@ -158,7 +158,7 @@ export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: 
       <button
         type="button"
         onClick={onRefresh}
-        className="mt-2 rounded-md border border-border/60 bg-card px-3 py-1 text-[11px] hover:bg-accent/50"
+        className="mt-2 rounded-md border border-border/(--emph-strong) bg-card px-3 py-1 text-[11px] hover:bg-accent/(--emph-medium)"
       >
         Refresh
       </button>
@@ -181,7 +181,7 @@ export function UnauthorizedDevice({
       <button
         type="button"
         onClick={onRefresh}
-        className="mt-1 rounded-md border border-border/60 bg-card px-3 py-1 text-[11px] hover:bg-accent/50"
+        className="mt-1 rounded-md border border-border/(--emph-strong) bg-card px-3 py-1 text-[11px] hover:bg-accent/(--emph-medium)"
       >
         Refresh
       </button>

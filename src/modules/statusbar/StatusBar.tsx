@@ -29,7 +29,7 @@ export function StatusBar({
   privateActive,
 }: Props) {
   return (
-    <footer className="terra-chrome flex h-9 shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-card/60 pl-3 pr-4 text-[11px]">
+    <footer className="terra-chrome flex h-9 shrink-0 items-center justify-between gap-3 border-t border-border/(--emph-strong) bg-card/(--emph-strong) pl-3 pr-4 text-[11px]">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
         <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />

@@ -105,6 +105,24 @@ export type StatusRole = (typeof STATUS_ROLES)[number];
 export type SyntaxPalette = Record<SyntaxRole, string>;
 export type StatusTokens = Record<StatusRole, string>;
 
+export const EMPHASIS_STEPS = [
+  "faint",
+  "subtle",
+  "soft",
+  "medium",
+  "strong",
+  "bold",
+] as const;
+
+export type EmphasisStep = (typeof EMPHASIS_STEPS)[number];
+
+/**
+ * Alpha ladder the UI reads for every token-on-token blend. A theme whose
+ * design leans on outlines rather than value shifts raises these; one that
+ * wants surfaces to melt together lowers them.
+ */
+export type ThemeEmphasis = Partial<Record<EmphasisStep, string>>;
+
 export type ThemeVariant = {
   colors?: ThemeColors;
   terminal?: TerminalPalette;
@@ -112,6 +130,7 @@ export type ThemeVariant = {
   type?: ThemeTypography;
   syntax?: Partial<Record<SyntaxRole, string>>;
   status?: Partial<Record<StatusRole, string>>;
+  emphasis?: ThemeEmphasis;
 };
 
 

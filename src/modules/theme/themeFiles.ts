@@ -65,7 +65,7 @@ export function parseThemeFile(text: string): ValidationResult {
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "invalid JSON",
+      diagnostics: [{ severity: "error", path: "", message: e instanceof Error ? e.message : "invalid JSON" }],
     };
   }
   return validateTheme(parsed);

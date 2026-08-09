@@ -7,16 +7,19 @@
  * sites; the ~250 text-[11px]-style literals would stay small and the UI would
  * end up mixed. size-adjust is a font metric, so it lands on every site at once.
  *
- * 115% splits the difference between x-height parity (121%) and cap-height
- * parity (104%). Webviews without size-adjust render at 100%, which is the
- * current appearance rather than a broken one.
+ * 104% is cap-height parity. x-height parity (121%) and the midpoint (115%)
+ * both read better in isolation, but Pixelify is a wide face and at those
+ * sizes it overflowed the sidebar tab strip, truncating "Source" and
+ * "Devices" to "S..." and "Devic...". Fitting the chrome wins. Webviews
+ * without size-adjust render at 100%, which is close to this rather than
+ * broken.
  */
 @font-face {
   font-family: 'Pixelify Sans';
   font-style: normal;
   font-display: swap;
   font-weight: 400;
-  size-adjust: 115%;
+  size-adjust: 104%;
   src: url('@fontsource/pixelify-sans/files/pixelify-sans-latin-400-normal.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
@@ -28,7 +31,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 700;
-  size-adjust: 115%;
+  size-adjust: 104%;
   src: url('@fontsource/pixelify-sans/files/pixelify-sans-latin-700-normal.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
@@ -40,7 +43,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 400;
-  size-adjust: 115%;
+  size-adjust: 104%;
   src: url('@fontsource/pixelify-sans/files/pixelify-sans-latin-ext-400-normal.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
@@ -52,7 +55,7 @@
   font-style: normal;
   font-display: swap;
   font-weight: 700;
-  size-adjust: 115%;
+  size-adjust: 104%;
   src: url('@fontsource/pixelify-sans/files/pixelify-sans-latin-ext-700-normal.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,

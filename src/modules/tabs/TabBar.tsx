@@ -340,7 +340,7 @@ export function TabBar({
                     isNew && "terra-tab-in",
                     isActive
                       ? "text-foreground dark:text-foreground"
-                      : "text-muted-foreground hover:text-foreground/80 dark:text-muted-foreground",
+                      : "text-muted-foreground hover:text-foreground/(--emph-bold) dark:text-muted-foreground",
                     draggingId === t.id && "opacity-50",
                     compact
                       ? "px-1.5!"
@@ -368,7 +368,7 @@ export function TabBar({
                             role="button"
                             tabIndex={-1}
                             data-no-drag
-                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/30 hover:shadow-[0_0_4px_var(--color-popover-foreground)]"
+                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-[0_0_4px_var(--color-popover-foreground)]"
                           >
                             <TabIcon tab={t} />
                           </span>
@@ -378,7 +378,7 @@ export function TabBar({
                           side="bottom"
                           sideOffset={6}
                           alignOffset={-4}
-                          className="max-h-75 w-48 overflow-y-auto rounded-xl border border-border/40 bg-popover/90 p-1 backdrop-blur-md shadow-lg"
+                          className="max-h-75 w-48 overflow-y-auto rounded-xl border border-border/(--emph-soft) bg-popover/(--emph-bold) p-1 backdrop-blur-md shadow-lg"
                           onClick={(e) => e.stopPropagation()}
                           onPointerDown={(e) => e.stopPropagation()}
                           onPointerUp={(e) => e.stopPropagation()}
@@ -412,13 +412,13 @@ export function TabBar({
                               e.preventDefault();
                               setShowAllLanguages((v) => !v);
                             }}
-                            className="w-full px-2.5 py-1.5 text-left text-xs text-primary/60 hover:text-primary rounded-lg transition-colors hover:bg-accent"
+                            className="w-full px-2.5 py-1.5 text-left text-xs text-primary/(--emph-strong) hover:text-primary rounded-lg transition-colors hover:bg-accent"
                           >
                             {showAllLanguages
                               ? "↑ Fewer languages"
                               : "↓ All languages"}
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator className="my-1 border-t border-border/30" />
+                          <DropdownMenuSeparator className="my-1 border-t border-border/(--emph-subtle)" />
                           {(showAllLanguages
                             ? ALL_LANGUAGES
                             : EXPOSED_LANGUAGES
@@ -462,7 +462,7 @@ export function TabBar({
                       <span
                         role="img"
                         aria-label="Unsaved changes"
-                        className="size-1.5 shrink-0 rounded-full bg-foreground/70"
+                        className="size-1.5 shrink-0 rounded-full bg-foreground/(--emph-strong)"
                       />
                     ) : null}
                   </span>

@@ -5,6 +5,27 @@ minimumReleaseAgeStrict: true
 overrides:
   mermaid: ">=11.16.1"
   dompurify: ">=3.4.9"
+  # Dev-only transitives. Ranges stay inside the current major on purpose: the
+  # consumers expect those APIs, and a bare ">=" pin would resolve to a new
+  # major and break the build rather than patch it. Each version below was
+  # already present in the tree via some other consumer, so these pins
+  # deduplicate onto a resolution pnpm had picked anyway.
+  #
+  # react-scan -> react-doctor -> conf -> ajv
+  fast-uri: "^3.1.5"
+  # @rolldown/plugin-babel -> vite
+  postcss: "^8.5.23"
+  nanoid: "^3.3.17"
+  # shadcn. Terra consumes exactly one file from that package,
+  # `shadcn/tailwind.css`, imported by src/styles/globals.css. Its CLI is run as
+  # `pnpm dlx shadcn add`, which fetches its own copy, so none of the code below
+  # is ever executed here. Pinned anyway to keep the audit signal honest.
+  undici: "^7.29.0"
+  ip-address: "^10.4.0"
+  brace-expansion: "^5.0.9"
+  js-yaml: "^4.3.1"
+  hono: "^4.13.0"
+  "@hono/node-server": "^2.1.0"
 allowBuilds:
   esbuild: true
   msgpackr-extract: false

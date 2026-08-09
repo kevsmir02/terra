@@ -191,6 +191,145 @@ Always end a family string with a real fallback:
 or pixel face is illegible at those sizes. Stardew deliberately leaves `mono`
 unset and keeps JetBrains Mono.
 
+
+<!-- token-reference:start -->
+
+### `colors`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `colors.background` | `--background` |  | App canvas. |
+| `colors.foreground` | `--foreground` |  | Primary text on the canvas. |
+| `colors.card` | `--card` |  | Raised surface. Falls back to the canvas. |
+| `colors.cardForeground` | `--card-foreground` |  | Text on card surfaces. |
+| `colors.popover` | `--popover` |  | Popover surface. |
+| `colors.popoverForeground` | `--popover-foreground` |  | Text on popover surfaces. |
+| `colors.primary` | `--primary` |  | Primary accent color. |
+| `colors.primaryForeground` | `--primary-foreground` |  | Text on primary color. |
+| `colors.secondary` | `--secondary` |  | Secondary accent color. |
+| `colors.secondaryForeground` | `--secondary-foreground` |  | Text on secondary color. |
+| `colors.muted` | `--muted` |  | Muted surface. |
+| `colors.mutedForeground` | `--muted-foreground` |  | Text on muted surfaces. |
+| `colors.accent` | `--accent` |  | Accent color. |
+| `colors.accentForeground` | `--accent-foreground` |  | Text on accent color. |
+| `colors.destructive` | `--destructive` |  | Destructive action color. |
+| `colors.border` | `--border` |  | Default border color. |
+| `colors.input` | `--input` |  | Input border color. |
+| `colors.ring` | `--ring` |  | Focus ring color. |
+| `colors.sidebar` | `--sidebar` |  | Sidebar background. |
+| `colors.sidebarForeground` | `--sidebar-foreground` |  | Sidebar text. |
+| `colors.sidebarPrimary` | `--sidebar-primary` |  | Sidebar primary accent. |
+| `colors.sidebarPrimaryForeground` | `--sidebar-primary-foreground` |  | Text on sidebar primary. |
+| `colors.sidebarAccent` | `--sidebar-accent` |  | Sidebar accent. |
+| `colors.sidebarAccentForeground` | `--sidebar-accent-foreground` |  | Text on sidebar accent. |
+| `colors.sidebarBorder` | `--sidebar-border` |  | Sidebar border. |
+| `colors.sidebarRing` | `--sidebar-ring` |  | Sidebar focus ring. |
+| `colors.radius` | `--radius` |  | Border radius. |
+| `colors.borderStyle` | `--border-style` |  | Border style. |
+
+### `shape`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `shape.frameWidth` | `--frame-border-width` | `1px` | Frame border width. |
+| `shape.frameRadius` | `--frame-radius` | `12px` | Frame border radius. |
+| `shape.framePadding` | `--frame-padding` | `0px` | Frame padding. |
+| `shape.chromeWidth` | `--chrome-border-width` | `1px` | Chrome border width. |
+| `shape.panelWidth` | `--panel-border-width` | `1px` | Panel border width. |
+| `shape.slotWidth` | `--slot-border-width` | `1px` | Slot border width. |
+| `shape.controlWidth` | `--control-border-width` | `1px` | Control border width. |
+| `shape.bevelWidth` | `--bevel-width` | `0px` | Bevel width. |
+| `shape.bevelOuter` | `--bevel-outer` | `transparent` | Bevel outer color. |
+| `shape.bevelMid` | `--bevel-mid` | `transparent` | Bevel mid color. |
+| `shape.bevelInner` | `--bevel-inner` | `transparent` | Bevel inner color. |
+| `shape.liftColor` | `--lift-color` | `transparent` | Lift shadow color. |
+| `shape.liftDepth` | `--lift-depth` | `0px` | Lift depth. |
+| `shape.spacing` | `--ui-spacing` | `0.25rem` | UI spacing. |
+
+### `type`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `type.sans` | `--ui-font-sans` |  | Sans serif font. |
+| `type.mono` | `--ui-font-mono` |  | Monospace font. |
+| `type.display` | `--ui-font-display` |  | Display font. |
+| `type.chromeTracking` | `--chrome-tracking` |  | Chrome letter spacing. |
+| `type.chromeTransform` | `--chrome-transform` |  | Chrome text transform. |
+
+### `terminal`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `terminal.background` | `--terminal-background` |  | Terminal background. |
+| `terminal.foreground` | `--terminal-foreground` |  | Terminal foreground. |
+| `terminal.cursor` | `--terminal-cursor` |  | Terminal cursor. |
+| `terminal.cursorAccent` | `--terminal-cursor-accent` |  | Terminal cursor accent. |
+| `terminal.selection` | `--terminal-selection` |  | Terminal selection. |
+| `terminal.ansiBlack` | `--terminal-ansi-black` |  | ANSI Black. |
+| `terminal.ansiRed` | `--terminal-ansi-red` |  | ANSI Red. |
+| `terminal.ansiGreen` | `--terminal-ansi-green` |  | ANSI Green. |
+| `terminal.ansiYellow` | `--terminal-ansi-yellow` |  | ANSI Yellow. |
+| `terminal.ansiBlue` | `--terminal-ansi-blue` |  | ANSI Blue. |
+| `terminal.ansiMagenta` | `--terminal-ansi-magenta` |  | ANSI Magenta. |
+| `terminal.ansiCyan` | `--terminal-ansi-cyan` |  | ANSI Cyan. |
+| `terminal.ansiWhite` | `--terminal-ansi-white` |  | ANSI White. |
+| `terminal.ansiBrightBlack` | `--terminal-ansi-bright-black` |  | ANSI Bright Black. |
+| `terminal.ansiBrightRed` | `--terminal-ansi-bright-red` |  | ANSI Bright Red. |
+| `terminal.ansiBrightGreen` | `--terminal-ansi-bright-green` |  | ANSI Bright Green. |
+| `terminal.ansiBrightYellow` | `--terminal-ansi-bright-yellow` |  | ANSI Bright Yellow. |
+| `terminal.ansiBrightBlue` | `--terminal-ansi-bright-blue` |  | ANSI Bright Blue. |
+| `terminal.ansiBrightMagenta` | `--terminal-ansi-bright-magenta` |  | ANSI Bright Magenta. |
+| `terminal.ansiBrightCyan` | `--terminal-ansi-bright-cyan` |  | ANSI Bright Cyan. |
+| `terminal.ansiBrightWhite` | `--terminal-ansi-bright-white` |  | ANSI Bright White. |
+
+### `syntax`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `syntax.comment` | `--syntax-comment` |  | Comment color. |
+| `syntax.keyword` | `--syntax-keyword` |  | Keyword color. |
+| `syntax.string` | `--syntax-string` |  | String color. |
+| `syntax.number` | `--syntax-number` |  | Number color. |
+| `syntax.constant` | `--syntax-constant` |  | Constant color. |
+| `syntax.func` | `--syntax-func` |  | Function color. |
+| `syntax.variable` | `--syntax-variable` |  | Variable color. |
+| `syntax.property` | `--syntax-property` |  | Property color. |
+| `syntax.gutterFg` | `--syntax-gutter-fg` |  | Gutter foreground color. |
+| `syntax.type` | `--syntax-type` |  | Type color. |
+| `syntax.operator` | `--syntax-operator` |  | Operator color. |
+| `syntax.tag` | `--syntax-tag` |  | Tag color. |
+| `syntax.tagBracket` | `--syntax-tag-bracket` |  | Tag bracket color. |
+| `syntax.attr` | `--syntax-attr` |  | Attribute color. |
+| `syntax.attrValue` | `--syntax-attr-value` |  | Attribute value color. |
+| `syntax.heading` | `--syntax-heading` |  | Heading color. |
+| `syntax.link` | `--syntax-link` |  | Link color. |
+| `syntax.invalid` | `--syntax-invalid` |  | Invalid token color. |
+
+### `status`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `status.added` | `--status-added` |  | Added status color. |
+| `status.modified` | `--status-modified` |  | Modified status color. |
+| `status.deleted` | `--status-deleted` |  | Deleted status color. |
+| `status.renamed` | `--status-renamed` |  | Renamed status color. |
+| `status.warning` | `--status-warning` |  | Warning status color. |
+| `status.conflict` | `--status-conflict` |  | Conflict status color. |
+| `status.ok` | `--status-ok` |  | OK status color. |
+
+### `emphasis`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `emphasis.faint` | `--emph-faint` | `0.1` | Faint emphasis. |
+| `emphasis.subtle` | `--emph-subtle` | `0.3` | Subtle emphasis. |
+| `emphasis.soft` | `--emph-soft` | `0.4` | Soft emphasis. |
+| `emphasis.medium` | `--emph-medium` | `0.5` | Medium emphasis. |
+| `emphasis.strong` | `--emph-strong` | `0.6` | Strong emphasis. |
+| `emphasis.bold` | `--emph-bold` | `0.85` | Bold emphasis. |
+
+<!-- token-reference:end -->
+
 ## Fonts
 
 A theme may name any installed family in `sans`/`mono`/`display`, but that

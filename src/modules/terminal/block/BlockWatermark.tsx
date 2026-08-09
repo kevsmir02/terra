@@ -67,7 +67,7 @@ function Hint(props: {
 }) {
   return (
     <>
-      <span className="justify-self-start text-muted-foreground/60">
+      <span className="justify-self-start text-muted-foreground/(--emph-strong)">
         {props.label}
       </span>
       <span className="flex items-center gap-1 justify-self-end">
@@ -94,7 +94,7 @@ function ShortcutKeys({ id }: { id: Parameters<typeof useShortcutLabel>[0] }) {
 
 function Key({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md border border-border/45 bg-muted/30 px-1.5 font-sans text-[11px] font-medium text-muted-foreground/80">
+    <kbd className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-md border border-border/(--emph-soft) bg-muted/(--emph-subtle) px-1.5 font-sans text-[11px] font-medium text-muted-foreground/(--emph-bold)">
       {children}
     </kbd>
   );

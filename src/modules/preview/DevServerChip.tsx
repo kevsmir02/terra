@@ -19,8 +19,8 @@ export function DevServerChip({ leafId }: { leafId: number }) {
     <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2">
       <div
         className={cn(
-          "flex items-center gap-1.5 rounded-full border border-border/70",
-          "bg-background/95 py-1 pr-1 pl-2.5 text-xs shadow-lg backdrop-blur-sm",
+          "flex items-center gap-1.5 rounded-full border border-border/(--emph-strong)",
+          "bg-background/(--emph-bold) py-1 pr-1 pl-2.5 text-xs shadow-lg backdrop-blur-sm",
         )}
       >
         <button

@@ -280,13 +280,13 @@ export function NotificationBell({ onActivate }: Props) {
         </div>
 
         {empty ? (
-          <div className="border-t border-border/60 px-3 py-5 text-center text-xs leading-relaxed text-muted-foreground">
+          <div className="border-t border-border/(--emph-strong) px-3 py-5 text-center text-xs leading-relaxed text-muted-foreground">
             No agent activity yet.
             <br />
             Run a coding agent to track it here.
           </div>
         ) : (
-          <div className="max-h-80 overflow-y-auto border-t border-border/60 p-1">
+          <div className="max-h-80 overflow-y-auto border-t border-border/(--emph-strong) p-1">
             {active.map((s) => (
               <StatusRow
                 key={s.leafId}
@@ -296,7 +296,7 @@ export function NotificationBell({ onActivate }: Props) {
               />
             ))}
             {activeCount > 0 && notifications.length > 0 ? (
-              <div className="mx-2 my-1 h-px bg-border/50" />
+              <div className="mx-2 my-1 h-px bg-border/(--emph-medium)" />
             ) : null}
             {notifications.map((n) => (
               <NotificationRow
@@ -308,18 +308,18 @@ export function NotificationBell({ onActivate }: Props) {
           </div>
         )}
 
-        <div className="border-t border-border/60 p-1">
+        <div className="border-t border-border/(--emph-strong) p-1">
           <button
             type="button"
             onClick={() => setAlertsOpen((v) => !v)}
             aria-expanded={alertsOpen}
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 transition-colors hover:text-foreground"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/(--emph-strong) transition-colors hover:text-foreground"
           >
             <HugeiconsIcon icon={Notification03Icon} size={11} strokeWidth={2} />
             Agent alerts
             <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
               {enabledCount > 0 ? (
-                <span className="text-[10px] text-muted-foreground/60">
+                <span className="text-[10px] text-muted-foreground/(--emph-strong)">
                   {enabledCount} on
                 </span>
               ) : null}

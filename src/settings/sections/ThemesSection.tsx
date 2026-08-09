@@ -30,15 +30,19 @@ import {
 import {
   deleteCustomTheme,
   saveCustomTheme,
+  listCustomThemesWithDiagnostics,
+  onCustomThemesChange,
 } from "@/modules/theme/customThemes";
 import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
 import { listBuiltinThemes } from "@/modules/theme/themes";
 import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import { validateTheme } from "@/modules/theme/validateTheme";
+import type { Diagnostic } from "@/modules/theme/diagnostics";
 import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useMemo, useRef, useState } from "react";
+
+import { useMemo, useRef, useState, useEffect } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
@@ -53,10 +57,21 @@ export function ThemesSection() {
     [customThemes],
   );
 
-  const [importError, setImportError] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<{ type: "error" | "warning"; text: string } | null>(null);
   const [bgError, setBgError] = useState<string | null>(null);
+  const [rejectedThemes, setRejectedThemes] = useState<{ id: string; diagnostics: Diagnostic[] }[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
+    const promise = onCustomThemesChange(() => {
+      void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
+    });
+    return () => {
+      void promise.then((unsub) => unsub());
+    };
+  }, []);
 
   const onCreateTheme = () => {
     void emitThemeEdit({ action: "create" });
@@ -75,7 +90,7 @@ export function ThemesSection() {
   const backgroundBlur = usePreferencesStore((s) => s.backgroundBlur);
 
   const handleThemeFiles = async (files: FileList | null) => {
-    setImportError(null);
+    setImportMessage(null);
     if (!files || files.length === 0) return;
     for (const file of Array.from(files)) {
       try {
@@ -83,15 +98,19 @@ export function ThemesSection() {
         const parsed = JSON.parse(text);
         const result = validateTheme(parsed);
         if (!result.ok) {
-          setImportError(`${file.name}: ${result.error}`);
+          setImportMessage({ type: "error", text: `${file.name}: ${result.diagnostics.map(d => d.message).join(", ")}` });
           return;
         }
         await saveCustomTheme(result.theme);
         setThemeId(result.theme.id);
+        if (result.diagnostics.length > 0) {
+          setImportMessage({ type: "warning", text: `${file.name} imported with warnings: ${result.diagnostics.map(d => d.message).join(", ")}` });
+        }
       } catch (e) {
-        setImportError(
-          `${file.name}: ${e instanceof Error ? e.message : "failed to read"}`,
-        );
+        setImportMessage({
+          type: "error",
+          text: `${file.name}: ${e instanceof Error ? e.message : "failed to read"}`,
+        });
         return;
       }
     }
@@ -186,9 +205,16 @@ export function ThemesSection() {
             }}
           />
         </div>
-        {importError ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive">
-            {importError}
+        {importMessage ? (
+          <div
+            className={cn(
+              "rounded-md border px-2.5 py-1.5 text-[11.5px]",
+              importMessage.type === "error"
+                ? "border-destructive/(--emph-soft) bg-destructive/(--emph-faint) text-destructive"
+                : "border-orange-500/40 bg-orange-500/10 text-orange-500",
+            )}
+          >
+            {importMessage.text}
           </div>
         ) : null}
         <div className="grid grid-cols-2 gap-2">
@@ -210,12 +236,12 @@ export function ThemesSection() {
                 className={cn(
                   "group flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
                   selected
-                    ? "border-foreground/60 ring-1 ring-foreground/20"
-                    : "border-border/60 hover:border-border",
+                    ? "border-foreground/(--emph-strong) ring-1 ring-foreground/(--emph-subtle)"
+                    : "border-border/(--emph-strong) hover:border-border",
                 )}
               >
                 <div
-                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/40"
+                  className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/(--emph-soft)"
                   style={{ background: swatchBg }}
                 >
                   <span
@@ -281,6 +307,25 @@ export function ThemesSection() {
             );
           })}
         </div>
+        {rejectedThemes.length > 0 ? (
+          <div className="flex flex-col gap-2 pt-2">
+            <Label>Rejected Stored Themes</Label>
+            <div className="flex flex-col gap-2">
+              {rejectedThemes.map((rt, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: multiple rejected themes might have the same 'unknown' id
+                <div key={`${rt.id}-${idx}`} className="rounded-md border border-destructive/(--emph-soft) bg-destructive/(--emph-faint) px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
+                  <div className="flex flex-col">
+                    <span className="font-semibold">{rt.id}</span>
+                    <span>{rt.diagnostics[0]?.message}</span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 hover:bg-destructive/(--emph-subtle) text-destructive" onClick={() => void onRemoveCustomTheme(rt.id)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -371,12 +416,12 @@ export function ThemesSection() {
           </div>
         </div>
         {bgError ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive">
+          <div className="rounded-md border border-destructive/(--emph-soft) bg-destructive/(--emph-faint) px-2.5 py-1.5 text-[11.5px] text-destructive">
             {bgError}
           </div>
         ) : null}
         {backgroundKind === "image" && backgroundImageId ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-border/60 p-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-border/(--emph-strong) p-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[11.5px] text-muted-foreground">
                 Opacity

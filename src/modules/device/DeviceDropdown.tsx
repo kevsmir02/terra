@@ -43,13 +43,13 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/40 text-xs font-semibold text-foreground">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/(--emph-soft) text-xs font-semibold text-foreground">
         <span>Devices</span>
         <button
           type="button"
           onClick={refresh}
           disabled={isRefreshing}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
           title="Refresh device & emulator list"
         >
           <HugeiconsIcon icon={RefreshIcon} size={13} className={isRefreshing ? "animate-spin" : ""} />
@@ -77,7 +77,7 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
                     type="button"
                     disabled={d.state !== "device"}
                     onClick={() => onPick(d.serial)}
-                    className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/50 disabled:opacity-50"
+                    className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/(--emph-medium) disabled:opacity-50"
                     title={d.state === "device" ? "Open device preview" : `state: ${d.state}`}
                   >
                     <span className="truncate">{d.model ?? d.serial}</span>
@@ -91,7 +91,7 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
           )}
 
           {avds && avds.length > 0 && (
-            <div className="flex flex-col gap-1 border-t border-border/40 px-3 py-2">
+            <div className="flex flex-col gap-1 border-t border-border/(--emph-soft) px-3 py-2">
               <div className="text-[11px] font-medium text-foreground">Emulators</div>
               {avds.map((avd) => {
                 const booting = boot?.name === avd.name;
@@ -111,7 +111,7 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
                       onClick={() =>
                         runningSerial ? onPick(runningSerial) : void launch(avd.name)
                       }
-                      className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/60 bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/60 disabled:opacity-50"
+                      className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/(--emph-strong) bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/(--emph-strong) disabled:opacity-50"
                       title={
                         runningSerial
                           ? deviceReady
@@ -134,7 +134,7 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
                         type="button"
                         disabled={busy}
                         onClick={() => void stop(runningSerial)}
-                        className="shrink-0 rounded-md border border-border/60 px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:opacity-50"
+                        className="shrink-0 rounded-md border border-border/(--emph-strong) px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
                         title="Stop this emulator"
                       >
                         Stop

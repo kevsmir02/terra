@@ -25,7 +25,7 @@ type Props = {
 };
 
 const PILL_CLASS =
-  "terra-pill-in ml-1.5 flex h-6 shrink-0 cursor-pointer [&_button]:cursor-pointer items-center gap-1 rounded-full border border-border/50 bg-accent/50 px-2 text-[10.5px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground";
+  "terra-pill-in ml-1.5 flex h-6 shrink-0 cursor-pointer [&_button]:cursor-pointer items-center gap-1 rounded-full border border-border/(--emph-medium) bg-accent/(--emph-medium) px-2 text-[10.5px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground";
 
 export function LspStatusPill({ filePath }: Props) {
   const hint = useLspHint(filePath);
@@ -121,7 +121,7 @@ function DismissButton({ preset }: { preset: LspPreset }) {
   return (
     <button
       type="button"
-      className="rounded-full p-0.5 hover:bg-foreground/10"
+      className="rounded-full p-0.5 hover:bg-foreground/(--emph-faint)"
       onClick={() => void setLspActivation(preset.id, "dismissed")}
       title="Dismiss (you can re-enable from Settings)"
     >
@@ -173,7 +173,7 @@ function InstallPill({ preset }: { preset: LspPreset }) {
           PATH. Install it, then check again:
         </p>
         {install ? (
-          <div className="mb-2 flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1.5 font-mono text-[11px]">
+          <div className="mb-2 flex items-center gap-1 rounded-md border border-border bg-muted/(--emph-soft) px-2 py-1.5 font-mono text-[11px]">
             <span className="min-w-0 flex-1 truncate select-text">
               {install.command}
             </span>
@@ -205,7 +205,7 @@ function InstallPill({ preset }: { preset: LspPreset }) {
           )}
           <button
             type="button"
-            className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/(--emph-bold) disabled:opacity-60"
             onClick={checkAgain}
             disabled={checking}
           >
