@@ -30,6 +30,14 @@ type Case = {
   value: (cssVar: string) => string | undefined;
 };
 
+// terra-default authors no variant colors: it is the globals.css baseline, and
+// ThemeProvider clears the variables for it rather than applying any, so there
+// is no resolved --background to measure against. Every builtin that does
+// author colors has to be covered, in both modes.
+const MEASURABLE = listBuiltinThemes().filter(
+  (t) => t.variants.light?.colors || t.variants.dark?.colors,
+);
+
 const cases: Case[] = [];
 for (const theme of listBuiltinThemes()) {
   for (const mode of MODES) {
@@ -57,7 +65,7 @@ function ratio(color: string | undefined, bg: string): number | null {
 
 describe("builtin syntax legibility", () => {
   it("covers every builtin in both modes", () => {
-    expect(cases.length).toBeGreaterThanOrEqual(20);
+    expect(cases.length).toBe(MEASURABLE.length * MODES.length);
   });
 
   it.each(SYNTAX.map((t) => [t.key, t.cssVar] as const))(
