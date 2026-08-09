@@ -6,8 +6,18 @@ import { kanagawaDragon } from "./kanagawa-dragon";
 import { nothing } from "./nothing";
 import { stardew } from "./stardew";
 import { terraDefault } from "./terra-default";
+import { windowsXp } from "./windows-xp";
 
-export { terraDefault, stardew, gameboy, kanagawa, kanagawaDragon, gruvbox, nothing };
+export {
+  terraDefault,
+  stardew,
+  gameboy,
+  kanagawa,
+  kanagawaDragon,
+  gruvbox,
+  nothing,
+  windowsXp,
+};
 
 export const BUILTIN: readonly Theme[] = [
   terraDefault,
@@ -17,6 +27,7 @@ export const BUILTIN: readonly Theme[] = [
   kanagawa,
   kanagawaDragon,
   gruvbox,
+  windowsXp,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));
