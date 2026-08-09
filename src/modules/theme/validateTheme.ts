@@ -6,6 +6,7 @@ import {
   TEXT_TRANSFORMS,
   type Theme,
   type ThemeColors,
+  type ThemeEmphasis,
   type ThemeShape,
   type ThemeTypography,
   type ThemeVariant,
@@ -268,8 +269,14 @@ function parseVariant(raw: unknown, path: string, diagnostics: Diagnostic[]): Th
   const type = parseTypography(raw.type, `${path}.type`, diagnostics);
   const syntax = parseRoleMap(raw.syntax, `${path}.syntax`, SYNTAX_ROLES, "syntax", diagnostics);
   const status = parseRoleMap(raw.status, `${path}.status`, STATUS_ROLES, "status", diagnostics);
-  
-  return { colors, terminal, shape, type, syntax, status };
+  const emphasis = parseTokens(
+    raw.emphasis,
+    `${path}.emphasis`,
+    "emphasis",
+    diagnostics,
+  ) as ThemeEmphasis;
+
+  return { colors, terminal, shape, type, syntax, status, emphasis };
 }
 
 export function validateTheme(raw: unknown): ValidationResult {

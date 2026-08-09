@@ -96,17 +96,23 @@ async function capture(out, waitMax = 25) {
   });
   const pid = child.pid;
   try {
+    // The window is `visible: false` until the frontend boots and calls show(),
+    // so a near-uniform root means it has not painted. A low-but-nonzero count
+    // means it is mid-paint: a real frame observed here is ~600-2000 colours,
+    // while a half-drawn one came back at 68 and would pass a naive threshold.
+    // Require the count to clear MIN and then hold steady across two grabs.
+    const MIN = 300;
     let colours = 0;
     for (let i = 0; i < waitMax; i++) {
       await sleep(1000);
       colours = rootColours(out);
-      // The window is `visible: false` until the frontend boots and calls
-      // show(), so an all-one-colour root means it has not painted yet.
-      if (colours > 50) {
-        await sleep(2000); // let the first paint settle
-        rootColours(out);
-        break;
+      if (colours < MIN) continue;
+      await sleep(1500);
+      const settled = rootColours(out);
+      if (settled >= MIN && Math.abs(settled - colours) <= colours * 0.2) {
+        return settled;
       }
+      colours = settled;
     }
     return colours;
   } finally {
@@ -168,7 +174,7 @@ async function main() {
       const out =
         cmd === "shot-all" ? join(outdir, `${id}-${mode}.png`) : arg("out", "/tmp/terra.png");
       const colours = await withTheme(id, mode, () => capture(out));
-      const verdict = colours > 50 ? "ok" : "BLANK - window never painted";
+      const verdict = colours >= 300 ? "ok" : "NOT PAINTED - blank or mid-paint";
       console.log(`${id.padEnd(16)} ${String(mode).padEnd(7)} ${out}  (${colours} colours, ${verdict})`);
     }
   } finally {

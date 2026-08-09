@@ -46,6 +46,25 @@ describe("resolveTheme", () => {
     expect(keyword).not.toBe("rgb(20,20,20)");
   });
 
+  // The ladder is meant to be theme-owned. Without this the six steps are just
+  // global constants and a theme that leans on outlines cannot say so.
+  it("lets a theme override an emphasis step", () => {
+    const theme: Theme = {
+      id: "outlined",
+      name: "Outlined",
+      variants: {
+        dark: {
+          colors: { background: "#101010", foreground: "#f0f0f0" },
+          emphasis: { strong: "0.9" },
+        },
+      },
+    };
+    const vars = resolveTheme(theme, "dark") ?? [];
+    expect(get(vars, "--emph-strong")).toBe("0.9");
+    // Untouched steps still fall back to the registry defaults.
+    expect(get(vars, "--emph-faint")).toBe("0.1");
+  });
+
   it("returns null when the theme has no usable variant", () => {
     expect(resolveTheme({ id: "empty", name: "Empty", variants: {} }, "dark"))
       .toBeNull();

@@ -62,8 +62,11 @@ node .claude/skills/run-terra/driver.mjs shot-all --mode dark --outdir /tmp/terr
 ```
 
 `--mode` is `dark`, `light` or `system`. Each line reports the unique-colour
-count; **anything under 50 means the window never painted** and the PNG is a
-blank root, not a screenshot. Treat that as a failure, not a result.
+count. A real frame is roughly 600-2000; **anything under 300 is reported as
+`NOT PAINTED`** and the PNG is a blank or half-drawn root, not a screenshot.
+The driver also requires the count to hold steady across two grabs, because a
+mid-paint frame came back at 68 colours once and would have passed a naive
+threshold.
 
 **Look at the PNG.** A capture that "succeeded" can still show a half-loaded
 frame. Read the file.

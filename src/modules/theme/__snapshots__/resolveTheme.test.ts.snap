@@ -5991,111 +5991,111 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
   "vars": [
     [
       "--background",
-      "#2b1104",
+      "#241609",
     ],
     [
       "--foreground",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--card",
-      "#481f08",
+      "#33200e",
     ],
     [
       "--card-foreground",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--popover",
-      "#54250a",
+      "#3d2712",
     ],
     [
       "--popover-foreground",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--primary",
-      "#d96b27",
+      "#e8a33d",
     ],
     [
       "--primary-foreground",
-      "#2b1104",
+      "#241609",
     ],
     [
       "--secondary",
-      "#662f0f",
+      "#2e1d0d",
     ],
     [
       "--secondary-foreground",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--muted",
-      "#662f0f",
+      "#2e1d0d",
     ],
     [
       "--muted-foreground",
-      "#c4905e",
+      "#b89a78",
     ],
     [
       "--accent",
-      "#7d3c16",
+      "#4a2e14",
     ],
     [
       "--accent-foreground",
-      "#ffe3c2",
+      "#f2dcc0",
     ],
     [
       "--destructive",
-      "#d9503f",
+      "#c4453a",
     ],
     [
       "--border",
-      "#8c3a0e",
+      "#6b4423",
     ],
     [
       "--input",
-      "#8c3a0e",
+      "#6b4423",
     ],
     [
       "--ring",
-      "#ffd46b",
+      "#e8a33d",
     ],
     [
       "--sidebar",
-      "#200c02",
+      "#150d06",
     ],
     [
       "--sidebar-foreground",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--sidebar-primary",
-      "#d96b27",
+      "#e8a33d",
     ],
     [
       "--sidebar-primary-foreground",
-      "#2b1104",
+      "#241609",
     ],
     [
       "--sidebar-accent",
-      "#7d3c16",
+      "#4a2e14",
     ],
     [
       "--sidebar-accent-foreground",
-      "#ffe3c2",
+      "#f2dcc0",
     ],
     [
       "--sidebar-border",
-      "#8c3a0e",
+      "#6b4423",
     ],
     [
       "--sidebar-ring",
-      "#ffd46b",
+      "#e8a33d",
     ],
     [
       "--radius",
-      "0.25rem",
+      "0rem",
     ],
     [
       "--border-style",
@@ -6103,15 +6103,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--frame-border-width",
-      "5px",
+      "3px",
     ],
     [
       "--frame-radius",
-      "6px",
+      "0px",
     ],
     [
       "--frame-padding",
-      "6px",
+      "0px",
     ],
     [
       "--chrome-border-width",
@@ -6131,11 +6131,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "2px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "#ffd46b",
+      "#7a5228",
     ],
     [
       "--bevel-mid",
@@ -6147,11 +6147,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--lift-color",
-      "#150c05",
+      "#0d0703",
     ],
     [
       "--lift-depth",
-      "3px",
+      "2px",
     ],
     [
       "--ui-spacing",
@@ -6167,31 +6167,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--chrome-tracking",
-      "0.04em",
+      "0.01em",
     ],
     [
       "--chrome-transform",
-      "uppercase",
+      "none",
     ],
     [
       "--terminal-background",
-      "#231005",
+      "#1e1208",
     ],
     [
       "--terminal-foreground",
-      "#f5e3ba",
+      "#f2dcc0",
     ],
     [
       "--terminal-cursor",
-      "#e0a84e",
+      "#e8a33d",
     ],
     [
       "--terminal-cursor-accent",
-      "#231005",
+      "#1e1208",
     ],
     [
       "--terminal-selection",
-      "rgba(217,143,69,0.32)",
+      "rgba(232,163,61,0.30)",
     ],
     [
       "--terminal-ansi-black",
@@ -6283,7 +6283,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-variable",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--syntax-property",
@@ -6299,7 +6299,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-operator",
-      "#ffcd9b",
+      "#f2dcc0",
     ],
     [
       "--syntax-tag",
@@ -6359,27 +6359,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "0.15",
     ],
     [
       "--emph-subtle",
-      "0.3",
-    ],
-    [
-      "--emph-soft",
       "0.4",
     ],
     [
+      "--emph-soft",
+      "0.55",
+    ],
+    [
       "--emph-medium",
-      "0.5",
+      "0.7",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "0.85",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "1",
     ],
   ],
 }
@@ -6392,111 +6392,111 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
   "vars": [
     [
       "--background",
-      "#f7e8c6",
+      "#f4e4c1",
     ],
     [
       "--foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--card",
-      "#e8cfa0",
+      "#e9d4a8",
     ],
     [
       "--card-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--popover",
-      "#f7e8c6",
+      "#fbf1da",
     ],
     [
       "--popover-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--primary",
-      "#b4602c",
+      "#a85d22",
     ],
     [
       "--primary-foreground",
-      "#fdf2d8",
+      "#fbf1da",
     ],
     [
       "--secondary",
-      "#e2c48d",
+      "#e3d0a4",
     ],
     [
       "--secondary-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--muted",
-      "#e2c48d",
+      "#e3d0a4",
     ],
     [
       "--muted-foreground",
-      "#6d4a2b",
+      "#6b5335",
     ],
     [
       "--accent",
-      "#e8b26a",
+      "#e3b970",
     ],
     [
       "--accent-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--destructive",
-      "#a83226",
+      "#a3342a",
     ],
     [
       "--border",
-      "#4a2c14",
+      "#7a5228",
     ],
     [
       "--input",
-      "#4a2c14",
+      "#7a5228",
     ],
     [
       "--ring",
-      "#ffd46b",
+      "#a85d22",
     ],
     [
       "--sidebar",
-      "#e8cfa0",
+      "#e0c795",
     ],
     [
       "--sidebar-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--sidebar-primary",
-      "#b4602c",
+      "#a85d22",
     ],
     [
       "--sidebar-primary-foreground",
-      "#fdf2d8",
+      "#fbf1da",
     ],
     [
       "--sidebar-accent",
-      "#e8b26a",
+      "#e3b970",
     ],
     [
       "--sidebar-accent-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--sidebar-border",
-      "#4a2c14",
+      "#7a5228",
     ],
     [
       "--sidebar-ring",
-      "#ffd46b",
+      "#a85d22",
     ],
     [
       "--radius",
-      "0.25rem",
+      "0rem",
     ],
     [
       "--border-style",
@@ -6504,15 +6504,15 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--frame-border-width",
-      "5px",
+      "3px",
     ],
     [
       "--frame-radius",
-      "6px",
+      "0px",
     ],
     [
       "--frame-padding",
-      "6px",
+      "0px",
     ],
     [
       "--chrome-border-width",
@@ -6532,11 +6532,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--bevel-width",
-      "2px",
+      "1px",
     ],
     [
       "--bevel-outer",
-      "#ffd46b",
+      "#d9b877",
     ],
     [
       "--bevel-mid",
@@ -6548,11 +6548,11 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--lift-color",
-      "#381303",
+      "#7a5228",
     ],
     [
       "--lift-depth",
-      "3px",
+      "2px",
     ],
     [
       "--ui-spacing",
@@ -6568,31 +6568,31 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--chrome-tracking",
-      "0.04em",
+      "0.01em",
     ],
     [
       "--chrome-transform",
-      "uppercase",
+      "none",
     ],
     [
       "--terminal-background",
-      "#f7e8c6",
+      "#f4e4c1",
     ],
     [
       "--terminal-foreground",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--terminal-cursor",
-      "#b4602c",
+      "#a85d22",
     ],
     [
       "--terminal-cursor-accent",
-      "#f7e8c6",
+      "#f4e4c1",
     ],
     [
       "--terminal-selection",
-      "rgba(180,96,44,0.28)",
+      "rgba(168,93,34,0.26)",
     ],
     [
       "--terminal-ansi-black",
@@ -6656,7 +6656,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--terminal-ansi-bright-white",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--syntax-comment",
@@ -6684,7 +6684,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-variable",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--syntax-property",
@@ -6700,7 +6700,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--syntax-operator",
-      "#3a2412",
+      "#3b2712",
     ],
     [
       "--syntax-tag",
@@ -6760,27 +6760,27 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--emph-faint",
-      "0.1",
+      "0.15",
     ],
     [
       "--emph-subtle",
-      "0.3",
-    ],
-    [
-      "--emph-soft",
       "0.4",
     ],
     [
+      "--emph-soft",
+      "0.55",
+    ],
+    [
       "--emph-medium",
-      "0.5",
+      "0.7",
     ],
     [
       "--emph-strong",
-      "0.6",
+      "0.85",
     ],
     [
       "--emph-bold",
-      "0.85",
+      "1",
     ],
   ],
 }
