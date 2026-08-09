@@ -108,11 +108,11 @@ export const nothing: Theme = {
         panelWidth: "1px",
       },
       type: {
-        sans: "'DotGothic16', 'Inter Variable', sans-serif",
+        sans: "'Space Grotesk', 'Inter Variable', sans-serif",
         display: "'DotGothic16', monospace",
         chromeTracking: "0.02em",
         chromeTransform: "none",
-        fonts: ["dotgothic16"],
+        fonts: ["space-grotesk", "dotgothic16"],
       },
     },
     light: {
@@ -191,11 +191,11 @@ export const nothing: Theme = {
         panelWidth: "1px",
       },
       type: {
-        sans: "'DotGothic16', 'Inter Variable', sans-serif",
+        sans: "'Space Grotesk', 'Inter Variable', sans-serif",
         display: "'DotGothic16', monospace",
         chromeTracking: "0.02em",
         chromeTransform: "none",
-        fonts: ["dotgothic16"],
+        fonts: ["space-grotesk", "dotgothic16"],
       },
     },
   },

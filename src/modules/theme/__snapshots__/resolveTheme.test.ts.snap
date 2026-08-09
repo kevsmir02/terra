@@ -4611,7 +4611,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--ui-font-sans",
-      "'DotGothic16', 'Inter Variable', sans-serif",
+      "'Space Grotesk', 'Inter Variable', sans-serif",
     ],
     [
       "--ui-font-display",
@@ -5012,7 +5012,7 @@ exports[`resolveTheme > resolves every builtin in both modes to a stable variabl
     ],
     [
       "--ui-font-sans",
-      "'DotGothic16', 'Inter Variable', sans-serif",
+      "'Space Grotesk', 'Inter Variable', sans-serif",
     ],
     [
       "--ui-font-display",

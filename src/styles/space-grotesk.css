@@ -1,0 +1,73 @@
+/* Space Grotesk — lazy-imported by modules/theme/fonts.ts, never eager.
+ *
+ * Declared by hand rather than importing the @fontsource index for one reason:
+ * size-adjust. Space Grotesk has an x-height of 0.486em against Inter's 0.546em,
+ * so at Terra's chrome sizes (9px-13px) it renders visibly smaller than the font
+ * it replaces. Scaling font-size instead would only reach the ~130 text-xs/text-sm
+ * sites; the ~250 text-[11px]-style literals would stay small and the UI would
+ * end up mixed. size-adjust is a font metric, so it lands on every site at once.
+ *
+ * 108% splits the difference between x-height parity (112%) and cap-height
+ * parity (104%), the same rule pixelify-sans.css follows. Webviews without
+ * size-adjust render at 100%, which is slightly small rather than broken.
+ */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  size-adjust: 108%;
+  src: url('@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  size-adjust: 108%;
+  src: url('@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  size-adjust: 108%;
+  src: url('@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  size-adjust: 108%;
+  src: url('@fontsource/space-grotesk/files/space-grotesk-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  size-adjust: 108%;
+  src: url('@fontsource/space-grotesk/files/space-grotesk-latin-ext-700-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}

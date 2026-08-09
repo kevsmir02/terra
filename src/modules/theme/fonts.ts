@@ -2,6 +2,7 @@ export const FONT_IDS = [
   "dotgothic16",
   "pixelify-sans",
   "press-start-2p",
+  "space-grotesk",
   "vt323",
 ] as const;
 
@@ -21,6 +22,9 @@ const LOADERS: Record<FontId, () => Promise<unknown>> = {
   // which the package's own @font-face cannot carry. See the file header.
   "pixelify-sans": () => import("@/styles/pixelify-sans.css"),
   "press-start-2p": () => import("@fontsource/press-start-2p"),
+  // Local stylesheet rather than the @fontsource index: it adds size-adjust,
+  // which the package's own @font-face cannot carry. See the file header.
+  "space-grotesk": () => import("@/styles/space-grotesk.css"),
   vt323: () => import("@fontsource/vt323"),
 };
 
