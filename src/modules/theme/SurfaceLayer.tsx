@@ -6,7 +6,10 @@ import { BG_OPACITY_RENDER_FACTOR } from "@/modules/settings/store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-const OVERLAY_Z = 2147483646;
+// One below the max 32-bit z-index, so the wallpaper wash sits above all
+// normal UI. Surfaces that must stay pixel-accurate (e.g. the web preview
+// iframe) opt out by painting above OVERLAY_Z instead.
+export const OVERLAY_Z = 2147483646;
 const RESIZE_IDLE_MS = 280;
 const FADE_IN_MS = 200;
 
