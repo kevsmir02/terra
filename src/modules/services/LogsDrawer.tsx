@@ -40,8 +40,7 @@ export function LogsDrawer({ service }: { service: string }) {
         </pre>
         <div className="flex items-center justify-between gap-3 pt-1">
           <p className="text-muted-foreground text-xs">
-            For a live tail, run: docker compose logs -f {service} in a
-            terminal
+            For a live tail, run: docker compose logs -f {service} in a terminal
           </p>
           <Button
             size="sm"

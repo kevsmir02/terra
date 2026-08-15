@@ -6,9 +6,9 @@ describe("runtimeMessage", () => {
     expect(runtimeMessage({ state: "not-found" }).title).toBe(
       "No container runtime found",
     );
-    expect(runtimeMessage({ state: "no-compose", runtime: "podman" }).title).toBe(
-      "Podman has no compose provider",
-    );
+    expect(
+      runtimeMessage({ state: "no-compose", runtime: "podman" }).title,
+    ).toBe("Podman has no compose provider");
     expect(
       runtimeMessage({ state: "unreachable", runtime: "docker" }).title,
     ).toBe("Docker is not running");
@@ -22,7 +22,11 @@ describe("runtimeMessage", () => {
   });
 
   it("only marks the ready state as usable", () => {
-    expect(runtimeMessage({ state: "ready", runtime: "podman", version: "1" }).ok).toBe(true);
-    expect(runtimeMessage({ state: "unreachable", runtime: "podman" }).ok).toBe(false);
+    expect(
+      runtimeMessage({ state: "ready", runtime: "podman", version: "1" }).ok,
+    ).toBe(true);
+    expect(runtimeMessage({ state: "unreachable", runtime: "podman" }).ok).toBe(
+      false,
+    );
   });
 });

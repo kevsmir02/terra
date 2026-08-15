@@ -13,13 +13,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import {
-  type ComponentType,
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-} from "react";
+import { type ComponentType, lazy, Suspense, useEffect, useState } from "react";
 import { GeneralSection } from "./sections/GeneralSection";
 
 // Only one section is ever on screen, so the other four stay out of the startup
@@ -27,10 +21,14 @@ import { GeneralSection } from "./sections/GeneralSection";
 // formatter registry. General is the default tab and stays eager, so opening
 // Settings still paints its content in the first frame.
 const EditorSection = lazy(() =>
-  import("./sections/EditorSection").then((m) => ({ default: m.EditorSection })),
+  import("./sections/EditorSection").then((m) => ({
+    default: m.EditorSection,
+  })),
 );
 const ThemesSection = lazy(() =>
-  import("./sections/ThemesSection").then((m) => ({ default: m.ThemesSection })),
+  import("./sections/ThemesSection").then((m) => ({
+    default: m.ThemesSection,
+  })),
 );
 const ServicesSection = lazy(() =>
   import("./sections/ServicesSection").then((m) => ({

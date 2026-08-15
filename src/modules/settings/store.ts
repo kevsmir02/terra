@@ -387,8 +387,7 @@ export async function loadPreferences(): Promise<Preferences> {
     lspCustomServers:
       get<LspCustomServer[]>(KEY_LSP_CUSTOM_SERVERS) ??
       DEFAULT_PREFERENCES.lspCustomServers,
-    services:
-      get<ServicesConfig>(KEY_SERVICES) ?? DEFAULT_PREFERENCES.services,
+    services: get<ServicesConfig>(KEY_SERVICES) ?? DEFAULT_PREFERENCES.services,
   };
 }
 
@@ -411,9 +410,7 @@ export async function setLspCustomServers(
   await writePref(KEY_LSP_CUSTOM_SERVERS, value);
 }
 
-export async function setServicesConfig(
-  value: ServicesConfig,
-): Promise<void> {
+export async function setServicesConfig(value: ServicesConfig): Promise<void> {
   await writePref(KEY_SERVICES, value);
 }
 
@@ -687,5 +684,3 @@ export async function onPreferencesChange(
     unsubEvent();
   };
 }
-
-
