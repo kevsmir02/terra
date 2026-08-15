@@ -5,7 +5,9 @@
 
 ## Summary
 
-Terra gains an on-demand local service stack in the spirit of the XAMPP control panel: MariaDB or MySQL, PostgreSQL, Redis and Mailpit, started and stopped from a new Settings tab and backed by Docker containers.
+Terra gains an on-demand local service stack in the spirit of the XAMPP control panel: MariaDB or MySQL, PostgreSQL, Redis, Mailpit and Adminer, started and stopped from a new Settings tab and backed by Docker containers.
+
+This covers XAMPP's service side and its phpMyAdmin equivalent, minus the web server, plus PostgreSQL, Redis and Mailpit, which XAMPP users install by hand today. The web server is excluded on purpose: a web server with nothing to serve does nothing, so adding one requires bind-mounting the user's project, which is where the risk lives. A database does not have that coupling.
 
 Terra never bundles or downloads server binaries. It generates a Docker Compose project in its own app-data directory and drives it through the `docker compose` CLI, so a stopped stack costs zero RAM and zero disk beyond the images the user chose to pull.
 
@@ -77,8 +79,13 @@ Commands: `services_runtime_probe`, `services_status`, `services_up`, `services_
 | PostgreSQL | `postgres`, tag pinned | 5432 | |
 | Redis | `redis`, alpine, tag pinned | 6379 | No persistence configured; it is a dev cache. |
 | Mailpit | `axllent/mailpit`, tag pinned | 8025 web, 1025 SMTP | |
+| Adminer | `adminer`, tag pinned | 8026 | Database GUI. XAMPP's phpMyAdmin equivalent, chosen over phpMyAdmin because it is far smaller and speaks MariaDB, MySQL and PostgreSQL rather than only the MySQL half of the catalog. |
 
-Each entry declares a healthcheck (`pg_isready`, `redis-cli ping`, the MariaDB health script), so the UI can distinguish "container running" from "actually accepting connections". Databases get named volumes; Redis and Mailpit do not.
+Each entry declares a healthcheck (`pg_isready`, `redis-cli ping`, the MariaDB health script), so the UI can distinguish "container running" from "actually accepting connections". Databases get named volumes; Redis, Mailpit and Adminer do not.
+
+The two web UIs sit at 8025 and 8026 rather than the conventional 8080, which is heavily contested by dev servers and would make a port conflict the most common first experience of the feature.
+
+Adminer reaches databases over the compose network by service name, so it needs no host ports of theirs and no credentials of its own. `ADMINER_DEFAULT_SERVER` is rendered to point at whichever database engine is enabled. Adminer therefore **depends on at least one database being enabled**, which is the only inter-service dependency in the catalog.
 
 ### Generated artifacts
 
@@ -115,7 +122,7 @@ Because v1 mounts no host paths, the platform surface is small:
 v1 spawns long-lived processes, so it sits alongside PTY and LSP spawn, but it passes no user-controlled path to the disk.
 
 1. **No user paths reach the compose file.** Storage is Docker named volumes. `WorkspaceRegistry` is therefore not involved in v1, and any future change that introduces a bind mount must add that gate before it lands.
-2. **Loopback-only publishing.** Every published port renders as `127.0.0.1:<port>:<port>`. A bare `3306:3306` publishes on all interfaces and bypasses the host firewall, which would put a development database on the local network.
+2. **Loopback-only publishing.** Every published port renders as `127.0.0.1:<port>:<port>`. A bare `3306:3306` publishes on all interfaces and bypasses the host firewall, which would put a development database on the local network. This matters most for Adminer, which is an unauthenticated-by-default full database administration surface: published beyond loopback it is a hand-over of every database Terra runs.
 3. **Catalog validation.** Service names, engine choices and ports arriving from IPC are validated against catalog enums before reaching an image tag or a port mapping, in the same spirit as `ensure_safe_serial` in the device module.
 4. **No shell.** `docker compose` is invoked argv-style. Nothing generated passes through a shell.
 5. **Credentials.** Database passwords are generated once, stored in the settings store, and shown with a copy action. An initial database named `terra` is created on first start.
@@ -126,7 +133,7 @@ A new **Services** tab in Settings. `open_settings_window` already accepts a `ta
 
 1. **Runtime card.** Three distinct states, because conflating them is the top support question for anything Docker-backed: not installed (documentation link, never an auto-install), installed but daemon down (with the platform-appropriate start action), or ready with version shown.
 2. **Service rows.** Icon, engine or version selector, port field, health dot, toggle. A toggle maps to `docker compose up -d <service>`, so services start independently. A "Delete data" action removes the named volume behind an explicit confirmation naming the volume.
-3. **Connection details.** Host, port, user, generated password and a ready-to-paste connection string per running service, with copy actions. This is the difference between a service that is running and a service you can use.
+3. **Connection details.** Host, port, user, generated password and a ready-to-paste connection string per running service, with copy actions. This is the difference between a service that is running and a service you can use. The two web UIs, Mailpit and Adminer, show an Open action instead, which reuses the existing preview tab.
 4. **Logs drawer.** `docker compose logs -f` streamed over a `Channel`, collapsible, per service. Not a new tab kind.
 
 The entire `src/modules/services/` frontend sits behind a lazy import, as the LSP module does. The eager bundle carries only the statusbar pill's gate, which reads one boolean from the settings store. The pill renders only while a service is running.
@@ -141,6 +148,7 @@ The entire `src/modules/services/` frontend sits behind a lazy import, as the LS
 | Daemon not running | Distinct state with a platform-appropriate start action |
 | Published port already in use | Preflight `TcpListener` bind on `127.0.0.1` per port before `up`. Abort naming the port, and offer to change it |
 | Both database engines enabled | Rejected in `spec.rs`; the UI presents them as one row with a selector so it cannot normally be expressed |
+| Adminer enabled with no database | Row is disabled with the reason shown inline, and `spec.rs` rejects the combination rather than starting a GUI that can connect to nothing |
 | Image pull slow on first start | Pull progress streamed into the service row |
 | Container exits unhealthy | Health dot plus the last log lines inline, not a toast that scrolls away |
 | Volume deletion | Confirmation naming the exact volume; never implied by stopping a service |
@@ -155,6 +163,7 @@ This touches process spawn, so TERRA.md requires tests that lock the invariants.
 - `spec.rs` rejects an unknown service name, an out-of-enum engine, an out-of-range port, and both database engines at once.
 - `status.rs` parses real `docker compose ps --format json` fixtures, including a container that is running but unhealthy, and a malformed line.
 - Named volumes are stable across a render cycle, so a re-render cannot orphan a user's data.
+- Adminer renders `ADMINER_DEFAULT_SERVER` pointing at the enabled engine, and `spec.rs` rejects Adminer with no database enabled.
 
 ## Phases
 
