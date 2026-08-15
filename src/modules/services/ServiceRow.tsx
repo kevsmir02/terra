@@ -23,13 +23,13 @@ export type RowStatus = "stopped" | "starting" | "healthy" | "unhealthy";
 export function statusColor(s: RowStatus): string {
   switch (s) {
     case "healthy":
-      return "bg-emerald-500";
+      return "bg-status-ok";
     case "starting":
-      return "bg-amber-500";
+      return "bg-status-warning";
     case "unhealthy":
-      return "bg-red-500";
+      return "bg-destructive";
     default:
-      return "bg-muted-foreground/40";
+      return "bg-muted";
   }
 }
 

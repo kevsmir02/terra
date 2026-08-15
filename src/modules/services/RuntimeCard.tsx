@@ -42,8 +42,8 @@ export function RuntimeCard({
             <span
               className={
                 msg.ok
-                  ? "size-2 rounded-full bg-emerald-500"
-                  : "size-2 rounded-full bg-amber-500"
+                  ? "size-2 rounded-full bg-status-ok"
+                  : "size-2 rounded-full bg-status-warning"
               }
             />
             {msg.title}

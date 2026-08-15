@@ -35,9 +35,9 @@ describe("generatePassword", () => {
 
 describe("statusColor", () => {
   it("maps all four row states to a dot color", () => {
-    expect(statusColor("healthy")).toBe("bg-emerald-500");
-    expect(statusColor("starting")).toBe("bg-amber-500");
-    expect(statusColor("unhealthy")).toBe("bg-red-500");
-    expect(statusColor("stopped")).toBe("bg-muted-foreground/40");
+    expect(statusColor("healthy")).toBe("bg-status-ok");
+    expect(statusColor("starting")).toBe("bg-status-warning");
+    expect(statusColor("unhealthy")).toBe("bg-destructive");
+    expect(statusColor("stopped")).toBe("bg-muted");
   });
 });
