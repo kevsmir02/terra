@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, updater, workspace};
+use modules::{agent, device, fs, git, history, lsp, migrate, services, pty, shell, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -355,6 +355,7 @@ pub fn run() {
             device::commands::device_input_swipe,
             device::commands::device_input_key,
             device::commands::device_screen_size,
+            services::commands::services_runtime_probe,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
