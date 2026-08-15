@@ -170,6 +170,14 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
     Ok(())
 }
 
+#[tauri::command]
+async fn open_preview_tab(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.emit("terra:open-preview", url);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(windows)]
@@ -334,6 +342,7 @@ pub fn run() {
             get_launch_dir,
             get_launch_files,
             open_settings_window,
+            open_preview_tab,
             shell::shell_run_command,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,

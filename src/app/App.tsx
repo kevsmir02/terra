@@ -590,6 +590,16 @@ export default function App() {
   );
 
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await listen<string>("terra:open-preview", (e) => {
+        openPreviewTab(e.payload);
+      });
+    })();
+    return () => unlisten?.();
+  }, [openPreviewTab]);
+
+  useEffect(() => {
     setDevServerOpener(openPreviewTab);
   }, [openPreviewTab]);
 

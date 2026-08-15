@@ -1,22 +1,41 @@
+import { IS_WINDOWS } from "@/lib/platform";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { setServicesConfig } from "@/modules/settings/store";
+import { loadAll } from "@/modules/spaces/lib/store";
+import { useSpaces } from "@/modules/spaces";
 import {
   generatePassword,
   LogsDrawer,
+  nextSitePort,
   RuntimeCard,
   SERVICE_META,
   ServiceRow,
+  SitesTable,
+  slugFromName,
   type RowStatus,
   type RuntimeStatus,
   type ServiceId,
   type ServicesConfig,
+  type SiteRow,
   VOLUME_BY_ID,
 } from "@/modules/services";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ServiceStatus = { service: string; state: string; health: string | null };
+
+type DetectedSite = {
+  kind: "php" | "static";
+  docroot: string;
+  confident: boolean;
+};
+
+const FALLBACK_SITE: DetectedSite = {
+  kind: "static",
+  docroot: ".",
+  confident: false,
+};
 
 const POLL_MS = 3000;
 
@@ -34,6 +53,110 @@ export function ServicesSection() {
   const [error, setError] = useState<string | null>(null);
   const ready = status?.state === "ready";
   const config = usePreferencesStore((s) => s.services);
+  const preferencesHydrated = usePreferencesStore((s) => s.hydrated);
+  const spaces = useSpaces((s) => s.spaces);
+  const spacesHydrated = useSpaces((s) => s.hydrated);
+  const [detections, setDetections] = useState<Record<string, DetectedSite>>(
+    {},
+  );
+
+  useEffect(() => {
+    if (spacesHydrated) return;
+    void loadAll()
+      .then(({ spaces: loaded, activeId }) => {
+        useSpaces.getState().hydrate(loaded, activeId);
+      })
+      .catch(() => undefined);
+  }, [spacesHydrated]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      spaces.map(async (space): Promise<[string, DetectedSite]> => {
+        const root = space.root ?? "";
+        if (!root) return [space.id, FALLBACK_SITE];
+        try {
+          return [space.id, await invoke<DetectedSite>("sites_detect", { root })];
+        } catch {
+          return [space.id, FALLBACK_SITE];
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setDetections(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [spaces]);
+
+  const siteRows = useMemo<SiteRow[]>(() => {
+    const saved = new Map(config.sites.map((site) => [site.slug, site]));
+    const taken = config.sites.map((site) => site.port);
+    return spaces.map((space) => {
+      const slug = slugFromName(space.name);
+      const stored = saved.get(slug);
+      const detected = detections[space.id] ?? FALLBACK_SITE;
+      const port = stored?.port ?? nextSitePort(taken);
+      if (!stored) taken.push(port);
+      return {
+        slug,
+        spaceName: space.name,
+        root: space.root ?? "",
+        docroot: stored?.docroot ?? detected.docroot,
+        port,
+        kind: detected.kind,
+        confident: detected.confident,
+        slowMount: IS_WINDOWS && space.env.kind !== "wsl",
+      };
+    });
+  }, [config.sites, detections, spaces]);
+
+  useEffect(() => {
+    if (!preferencesHydrated || !spacesHydrated) return;
+    const sites = siteRows.map(({ slug, root, docroot, port, kind }) => ({
+      slug,
+      root,
+      docroot,
+      port,
+      kind,
+    }));
+    const unchanged =
+      sites.length === config.sites.length &&
+      sites.every((site, index) => {
+        const current = config.sites[index];
+        return (
+          current?.slug === site.slug &&
+          current.root === site.root &&
+          current.docroot === site.docroot &&
+          current.port === site.port &&
+          current.kind === site.kind
+        );
+      });
+    if (!unchanged) void setServicesConfig({ ...config, sites });
+  }, [config, preferencesHydrated, siteRows, spacesHydrated]);
+
+  const setDocroot = useCallback(
+    (slug: string, docroot: string) => {
+      const row = siteRows.find((site) => site.slug === slug);
+      if (!row) return;
+      const sites = config.sites.some((site) => site.slug === slug)
+        ? config.sites.map((site) =>
+            site.slug === slug ? { ...site, docroot } : site,
+          )
+        : [
+            ...config.sites,
+            { slug, root: row.root, docroot, port: row.port, kind: row.kind },
+          ];
+      void setServicesConfig({ ...config, sites });
+    },
+    [config, siteRows],
+  );
+
+  const openPreview = useCallback((url: string) => {
+    void invoke("open_preview_tab", { url });
+  }, []);
+
+  const webHealthy = ready && toRowStatus(statuses.nginx) === "healthy";
 
   const poll = useCallback(async () => {
     try {
@@ -142,6 +265,12 @@ export function ServicesSection() {
               </div>
             );
           })}
+          <SitesTable
+            rows={siteRows}
+            webHealthy={webHealthy}
+            onDocrootChange={setDocroot}
+            onOpen={openPreview}
+          />
         </div>
       )}
     </div>
