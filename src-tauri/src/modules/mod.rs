@@ -6,6 +6,7 @@ pub mod history;
 pub mod lsp;
 pub mod migrate;
 pub mod proc;
+pub mod services;
 pub mod pty;
 pub mod shell;
 pub mod sync;

@@ -7,18 +7,13 @@ import {
   InformationCircleIcon,
   KeyboardIcon,
   PaintBoardIcon,
+  ServerStack01Icon,
   Settings01Icon,
   SourceCodeIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import {
-  type ComponentType,
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-} from "react";
+import { type ComponentType, lazy, Suspense, useEffect, useState } from "react";
 import { GeneralSection } from "./sections/GeneralSection";
 
 // Only one section is ever on screen, so the other four stay out of the startup
@@ -26,10 +21,19 @@ import { GeneralSection } from "./sections/GeneralSection";
 // formatter registry. General is the default tab and stays eager, so opening
 // Settings still paints its content in the first frame.
 const EditorSection = lazy(() =>
-  import("./sections/EditorSection").then((m) => ({ default: m.EditorSection })),
+  import("./sections/EditorSection").then((m) => ({
+    default: m.EditorSection,
+  })),
 );
 const ThemesSection = lazy(() =>
-  import("./sections/ThemesSection").then((m) => ({ default: m.ThemesSection })),
+  import("./sections/ThemesSection").then((m) => ({
+    default: m.ThemesSection,
+  })),
+);
+const ServicesSection = lazy(() =>
+  import("./sections/ServicesSection").then((m) => ({
+    default: m.ServicesSection,
+  })),
 );
 const ShortcutsSection = lazy(() =>
   import("./sections/ShortcutsSection").then((m) => ({
@@ -65,6 +69,12 @@ const TABS: {
     component: ThemesSection,
   },
   {
+    id: "services",
+    label: "Services",
+    icon: ServerStack01Icon,
+    component: ServicesSection,
+  },
+  {
     id: "shortcuts",
     label: "Shortcuts",
     icon: KeyboardIcon,
@@ -82,6 +92,7 @@ const VALID_TABS: SettingsTab[] = [
   "general",
   "editor",
   "themes",
+  "services",
   "shortcuts",
   "about",
 ];

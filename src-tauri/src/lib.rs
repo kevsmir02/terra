@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, updater, workspace};
+use modules::{agent, device, fs, git, history, lsp, migrate, pty, services, shell, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -170,6 +170,14 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
     Ok(())
 }
 
+#[tauri::command]
+async fn open_preview_tab(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.emit("terra:open-preview", url);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(windows)]
@@ -255,6 +263,7 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
+        .manage(std::sync::Arc::new(services::state::ServicesState::default()))
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -333,6 +342,7 @@ pub fn run() {
             get_launch_dir,
             get_launch_files,
             open_settings_window,
+            open_preview_tab,
             shell::shell_run_command,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
@@ -355,6 +365,14 @@ pub fn run() {
             device::commands::device_input_swipe,
             device::commands::device_input_key,
             device::commands::device_screen_size,
+            services::commands::services_runtime_probe,
+            services::commands::services_runtime_probe_all,
+            services::commands::sites_detect,
+            services::commands::services_up,
+            services::commands::services_down,
+            services::commands::services_status,
+            services::commands::services_logs,
+            services::commands::services_delete_data,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -371,6 +389,11 @@ pub fn run() {
                         // Only tears down emulators Terra started; ones the
                         // user launched elsewhere are left running.
                         state.kill_launched_avds();
+                    }
+                    // Containers are deliberately left running; only Terra's
+                    // own in-flight compose invocations are killed.
+                    if let Some(state) = app.try_state::<std::sync::Arc<services::state::ServicesState>>() {
+                        state.kill_all();
                     }
                 }
                 // macOS delivers "Open With" files here, not as argv (cold and
