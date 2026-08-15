@@ -13,13 +13,17 @@ export function RuntimeCard({
 }) {
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
       const next = await probeRuntime();
       setStatus(next);
+      setError(null);
       onStatus(next);
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -29,8 +33,23 @@ export function RuntimeCard({
     void refresh();
   }, [refresh]);
 
+  if (error) {
+    return (
+      <div className="rounded-md border p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-destructive text-sm">{error}</p>
+          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>
+            Check again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!status) {
-    return <div className="text-muted-foreground text-sm">Checking runtime</div>;
+    return (
+      <div className="text-muted-foreground text-sm">Checking runtime</div>
+    );
   }
 
   const msg = runtimeMessage(status);

@@ -130,6 +130,7 @@ pub fn render_compose(stack: &ValidStack, env: &RenderEnv) -> String {
         out.push_str("volumes:\n");
         for v in volumes {
             let _ = writeln!(out, "  {v}:");
+            let _ = writeln!(out, "    name: {v}");
         }
     }
 
@@ -183,7 +184,7 @@ mod tests {
     #[test]
     fn declares_a_named_volume_for_databases_only() {
         let out = render_compose(&stack(vec![ServiceId::Mariadb, ServiceId::Redis]), &plain());
-        assert!(out.contains("terra_mariadb_data:"));
+        assert!(out.contains("  terra_mariadb_data:\n    name: terra_mariadb_data\n"));
         assert!(!out.contains("terra_redis_data"));
     }
 

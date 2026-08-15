@@ -51,7 +51,14 @@ fn valid_docroot(s: &str) -> bool {
     s == "."
         || (!s.starts_with('/')
             && !s.contains('\\')
-            && s.split('/').all(|seg| !seg.is_empty() && seg != ".." && seg != "."))
+            && s.split('/').all(|seg| {
+                !seg.is_empty()
+                    && seg != ".."
+                    && seg != "."
+                    && seg.bytes().all(|b| {
+                        b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')
+                    })
+            }))
 }
 
 fn valid_password(s: &str) -> bool {
@@ -207,6 +214,40 @@ mod tests {
             ..base()
         };
         assert!(validate(s).unwrap_err().contains("docroot"));
+    }
+
+    #[test]
+    fn rejects_nginx_metacharacters_in_a_docroot() {
+        for docroot in ["public;", "pub\\\"lic", "pub{lic", "publ\\nic", "a b", "a$b"] {
+            let s = StackSpec {
+                sites: vec![SiteSpec {
+                    slug: "app".into(),
+                    root: "/tmp/x".into(),
+                    docroot: docroot.into(),
+                    port: 8000,
+                    kind: SiteKind::Php,
+                }],
+                ..base()
+            };
+            assert!(validate(s).is_err(), "accepted unsafe docroot: {docroot:?}");
+        }
+    }
+
+    #[test]
+    fn accepts_safe_docroots() {
+        for docroot in ["public", "web/dist", "my.site", "_static", ".well-known"] {
+            let s = StackSpec {
+                sites: vec![SiteSpec {
+                    slug: "app".into(),
+                    root: "/tmp/x".into(),
+                    docroot: docroot.into(),
+                    port: 8000,
+                    kind: SiteKind::Php,
+                }],
+                ..base()
+            };
+            assert!(validate(s).is_ok(), "rejected safe docroot: {docroot:?}");
+        }
     }
 
     #[test]

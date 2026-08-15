@@ -10,7 +10,7 @@ pub fn render_php_dockerfile() -> String {
         "FROM php:{PHP_TAG}\n\
          COPY --from={EXT_INSTALLER} /usr/bin/install-php-extensions /usr/local/bin/\n\
          RUN install-php-extensions {EXTENSIONS}\n\
-         COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer\n\
+         COPY --from=composer:2.10.2 /usr/bin/composer /usr/local/bin/composer\n\
          COPY terra-dev.ini /usr/local/etc/php/conf.d/terra-dev.ini\n\
          WORKDIR /sites\n"
     )
@@ -42,7 +42,7 @@ mod tests {
     #[test]
     fn ships_composer_and_the_dev_ini() {
         let out = render_php_dockerfile();
-        assert!(out.contains("COPY --from=composer:2"));
+        assert!(out.contains("COPY --from=composer:2.10.2"));
         assert!(out.contains("terra-dev.ini"));
     }
 
@@ -57,6 +57,8 @@ mod tests {
     fn every_image_reference_is_pinned() {
         let out = render_php_dockerfile();
         assert!(!out.contains(":latest"));
+        assert!(!out.contains("composer:2 "));
+        assert!(out.contains("composer:2.10.2"));
         for line in out.lines().filter(|l| l.starts_with("FROM ") || l.contains("--from=")) {
             assert!(line.contains(':'), "unpinned image reference: {line}");
         }
