@@ -285,11 +285,14 @@ export function ServicesSection() {
       let enabled = next
         ? Array.from(new Set([...config.services, id]))
         : config.services.filter((s) => s !== id);
+      const targets: ServiceId[] = [id];
       if (
+        !next &&
         enabled.includes("adminer") &&
         !enabled.some((s) => s === "mariadb" || s === "postgres")
       ) {
         enabled = enabled.filter((s) => s !== "adminer");
+        targets.push("adminer");
       }
       const nextConfig: ServicesConfig = {
         ...config,
@@ -309,7 +312,7 @@ export function ServicesSection() {
         await invoke(next ? "services_up" : "services_down", {
           runtime: config.runtime,
           spec,
-          targets: [id],
+          targets,
         });
         await poll();
       } catch (e) {
