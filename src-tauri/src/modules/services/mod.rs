@@ -1,6 +1,7 @@
 pub mod catalog;
 pub mod commands;
 pub mod compose;
+pub mod detect;
 pub mod project;
 pub mod runtime;
 pub mod spec;
