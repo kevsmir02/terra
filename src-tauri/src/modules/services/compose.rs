@@ -159,6 +159,20 @@ mod tests {
     }
 
     #[test]
+    fn applies_a_single_port_override() {
+        let mut spec = StackSpec {
+            services: vec![ServiceId::Mariadb],
+            ports: Default::default(),
+            sites: vec![],
+            db_password: "sixteencharacters".into(),
+        };
+        spec.ports.insert(ServiceId::Mariadb, 3307);
+        let out = render_compose(&validate(spec).unwrap(), &plain());
+        assert!(out.contains("\"127.0.0.1:3307:3306\""));
+        assert!(!out.contains("\"127.0.0.1:3306:3306\""));
+    }
+
+    #[test]
     fn points_adminer_at_mariadb_when_both_databases_are_enabled() {
         let out = render_compose(
             &stack(vec![ServiceId::Adminer, ServiceId::Mariadb, ServiceId::Postgres]),

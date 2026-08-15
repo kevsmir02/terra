@@ -87,6 +87,13 @@ pub fn validate(spec: StackSpec) -> Result<ValidStack, String> {
 
     for id in &enabled {
         let d = catalog::def(*id);
+        // The override slot is a single host port, so a service that
+        // publishes several ports cannot take one.
+        if spec.ports.contains_key(id) && d.ports.len() > 1 {
+            return Err(format!(
+                "ports for {id:?} cannot be overridden because it publishes more than one port"
+            ));
+        }
         match spec.ports.get(id) {
             Some(p) => claim(*p, format!("{id:?}"))?,
             None => {
@@ -200,6 +207,23 @@ mod tests {
             ..base()
         };
         assert!(validate(s).unwrap_err().contains("docroot"));
+    }
+
+    #[test]
+    fn rejects_a_port_override_for_a_multi_port_service() {
+        let mut s = base();
+        s.services = vec![ServiceId::Mailpit];
+        s.ports.insert(ServiceId::Mailpit, 8027);
+        let err = validate(s).unwrap_err();
+        assert!(err.contains("Mailpit"));
+        assert!(err.contains("cannot be overridden"));
+    }
+
+    #[test]
+    fn accepts_a_single_port_override() {
+        let mut s = base();
+        s.ports.insert(ServiceId::Mariadb, 3307);
+        assert!(validate(s).is_ok());
     }
 
     #[test]
