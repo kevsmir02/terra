@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, history, lsp, migrate, services, pty, shell, updater, workspace};
+use modules::{agent, device, fs, git, history, lsp, migrate, pty, services, shell, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -255,6 +255,7 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
+        .manage(services::state::ServicesState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -356,6 +357,8 @@ pub fn run() {
             device::commands::device_input_key,
             device::commands::device_screen_size,
             services::commands::services_runtime_probe,
+            services::commands::services_up,
+            services::commands::services_down,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -372,6 +375,11 @@ pub fn run() {
                         // Only tears down emulators Terra started; ones the
                         // user launched elsewhere are left running.
                         state.kill_launched_avds();
+                    }
+                    // Containers are deliberately left running; only Terra's
+                    // own in-flight compose invocations are killed.
+                    if let Some(state) = app.try_state::<services::state::ServicesState>() {
+                        state.kill_all();
                     }
                 }
                 // macOS delivers "Open With" files here, not as argv (cold and
