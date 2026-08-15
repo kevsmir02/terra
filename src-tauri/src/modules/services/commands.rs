@@ -71,13 +71,29 @@ fn compose(
     let mut stderr = child.stderr.take();
     let id = state.register(child);
 
+    // Read both pipes concurrently so neither blocks the other: draining
+    // stdout to EOF first deadlocks when stderr fills while the child runs.
     let mut out = String::new();
-    if let Some(pipe) = stdout.as_mut() {
-        let _ = std::io::Read::read_to_string(pipe, &mut out);
-    }
     let mut err = String::new();
-    if let Some(pipe) = stderr.as_mut() {
-        let _ = std::io::Read::read_to_string(pipe, &mut err);
+    let stdout_thread = stdout.take().map(|mut pipe| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
+            String::from_utf8_lossy(&buf).to_string()
+        })
+    });
+    let stderr_thread = stderr.take().map(|mut pipe| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
+            String::from_utf8_lossy(&buf).to_string()
+        })
+    });
+    if let Some(handle) = stdout_thread {
+        out = handle.join().unwrap_or_default();
+    }
+    if let Some(handle) = stderr_thread {
+        err = handle.join().unwrap_or_default();
     }
 
     let Some(mut child) = state.finish(id) else {
