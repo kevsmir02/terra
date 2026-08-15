@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use tauri::State;
 
+use super::catalog::ServiceId;
 use super::compose::{port_of, RenderEnv};
 use super::detect::{detect_site, DetectedSite};
 use super::project::{port_free, project_dir, write_project};
@@ -20,16 +21,45 @@ pub async fn services_runtime_probe() -> RuntimeStatus {
         .unwrap_or(RuntimeStatus::NotFound)
 }
 
-fn resolve_runtime() -> Result<RuntimeKind, String> {
-    match runtime::detect() {
-        RuntimeStatus::Ready { runtime, .. } => Ok(runtime),
-        RuntimeStatus::NotFound => Err("no container runtime found".into()),
-        RuntimeStatus::NoCompose { runtime } => {
-            Err(format!("{} has no compose provider", runtime.bin()))
-        }
-        RuntimeStatus::Unreachable { runtime } => {
-            Err(format!("{} is not running", runtime.bin()))
-        }
+#[derive(serde::Serialize)]
+pub struct RuntimeProbeReport {
+    pub docker: RuntimeStatus,
+    pub podman: RuntimeStatus,
+}
+
+#[tauri::command]
+pub async fn services_runtime_probe_all() -> RuntimeProbeReport {
+    tauri::async_runtime::spawn_blocking(|| RuntimeProbeReport {
+        docker: runtime::probe_status(RuntimeKind::Docker),
+        podman: runtime::probe_status(RuntimeKind::Podman),
+    })
+    .await
+    .unwrap_or(RuntimeProbeReport {
+        docker: RuntimeStatus::NotFound,
+        podman: RuntimeStatus::NotFound,
+    })
+}
+
+fn resolve_runtime(forced: Option<RuntimeKind>) -> Result<RuntimeKind, String> {
+    match forced {
+        Some(runtime) => match runtime::probe_status(runtime) {
+            RuntimeStatus::Ready { .. } => Ok(runtime),
+            RuntimeStatus::NotFound => Err(format!("{} not found", runtime.bin())),
+            RuntimeStatus::NoCompose { .. } => {
+                Err(format!("{} has no compose provider", runtime.bin()))
+            }
+            RuntimeStatus::Unreachable { .. } => Err(format!("{} is not running", runtime.bin())),
+        },
+        None => match runtime::detect() {
+            RuntimeStatus::Ready { runtime, .. } => Ok(runtime),
+            RuntimeStatus::NotFound => Err("no container runtime found".into()),
+            RuntimeStatus::NoCompose { runtime } => {
+                Err(format!("{} has no compose provider", runtime.bin()))
+            }
+            RuntimeStatus::Unreachable { runtime } => {
+                Err(format!("{} is not running", runtime.bin()))
+            }
+        },
     }
 }
 
@@ -58,7 +88,7 @@ pub fn authorize_mounts(
 ) -> Result<BTreeMap<String, String>, String> {
     let mut mounts = BTreeMap::new();
     for site in sites {
-        let canonical = authorized_read(registry, &site.root, &WorkspaceEnv::Local)?;
+        let canonical = authorized_read(registry, &site.root, &site.env)?;
 
         let docroot = if site.docroot == "." {
             canonical.clone()
@@ -125,9 +155,11 @@ fn shared_run_as(
 #[tauri::command]
 pub async fn sites_detect(
     root: String,
+    env: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<DetectedSite, String> {
-    let path = authorized_read(&registry, &root, &WorkspaceEnv::Local)?;
+    let env = WorkspaceEnv::from_option(env);
+    let path = authorized_read(&registry, &root, &env)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut files = std::collections::BTreeSet::new();
         let mut dirs = std::collections::BTreeSet::new();
@@ -255,14 +287,27 @@ fn compose(
     run_checked(state, runtime.bin(), &argv, Some(&dir))
 }
 
+fn compose_names(id: ServiceId) -> &'static [&'static str] {
+    match id {
+        ServiceId::Web => &["nginx", "php"],
+        ServiceId::Mariadb => &["mariadb"],
+        ServiceId::Postgres => &["postgres"],
+        ServiceId::Redis => &["redis"],
+        ServiceId::Mailpit => &["mailpit"],
+        ServiceId::Adminer => &["adminer"],
+    }
+}
+
 #[tauri::command]
 pub async fn services_up(
+    runtime: Option<RuntimeKind>,
     spec: StackSpec,
+    targets: Vec<ServiceId>,
     state: State<'_, std::sync::Arc<ServicesState>>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
     let stack = validate(spec)?;
-    let runtime = resolve_runtime()?;
+    let runtime = resolve_runtime(runtime)?;
     preflight(&stack)?;
 
     let mounts = authorize_mounts(&registry, &stack.sites)?;
@@ -276,24 +321,38 @@ pub async fn services_up(
 
     let env = RenderEnv { run_as, mounts };
     write_project(&stack, &env)?;
+    let names: Vec<&str> = targets
+        .iter()
+        .flat_map(|id| compose_names(*id))
+        .copied()
+        .collect();
+    let mut args = vec!["up", "-d", "--build", "--remove-orphans"];
+    args.extend(names);
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        compose(&state, runtime, &["up", "-d", "--build"])
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+    tauri::async_runtime::spawn_blocking(move || compose(&state, runtime, &args))
+        .await
+        .map_err(|e| e.to_string())??;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn services_down(
+    runtime: Option<RuntimeKind>,
     spec: StackSpec,
+    targets: Vec<ServiceId>,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
     let _ = validate(spec)?;
-    let runtime = resolve_runtime()?;
+    let runtime = resolve_runtime(runtime)?;
+    let names: Vec<&str> = targets
+        .iter()
+        .flat_map(|id| compose_names(*id))
+        .copied()
+        .collect();
+    let mut args = vec!["stop"];
+    args.extend(names);
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || compose(&state, runtime, &["down"]))
+    tauri::async_runtime::spawn_blocking(move || compose(&state, runtime, &args))
         .await
         .map_err(|e| e.to_string())??;
     Ok(())
@@ -313,9 +372,10 @@ fn check_volume(name: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn services_status(
+    runtime: Option<RuntimeKind>,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<Vec<ServiceStatus>, String> {
-    let runtime = resolve_runtime()?;
+    let runtime = resolve_runtime(runtime)?;
     let state = state.inner().clone();
     let out = tauri::async_runtime::spawn_blocking(move || {
         compose(&state, runtime, &["ps", "--format", "json"])
@@ -327,6 +387,7 @@ pub async fn services_status(
 
 #[tauri::command]
 pub async fn services_logs(
+    runtime: Option<RuntimeKind>,
     service: String,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<String, String> {
@@ -336,7 +397,7 @@ pub async fn services_logs(
     if !known && service != "nginx" && service != "php" {
         return Err(format!("unknown service: {service}"));
     }
-    let runtime = resolve_runtime()?;
+    let runtime = resolve_runtime(runtime)?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         compose(&state, runtime, &["logs", "--tail", "200", "--no-color", &service])
@@ -347,11 +408,12 @@ pub async fn services_logs(
 
 #[tauri::command]
 pub async fn services_delete_data(
+    runtime: Option<RuntimeKind>,
     volume: String,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
     check_volume(&volume)?;
-    let runtime = resolve_runtime()?;
+    let runtime = resolve_runtime(runtime)?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         compose(&state, runtime, &["down"])?;
@@ -376,6 +438,7 @@ mod tests {
             docroot: docroot.into(),
             port: 8000,
             kind: SiteKind::Php,
+            env: WorkspaceEnv::Local,
         }
     }
 

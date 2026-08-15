@@ -69,6 +69,7 @@ mod tests {
             docroot: docroot.into(),
             port: 8000,
             kind,
+            env: Default::default(),
         }
     }
 

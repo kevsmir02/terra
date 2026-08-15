@@ -21,7 +21,7 @@ pub fn port_of(stack: &ValidStack, id: ServiceId, index: usize) -> u16 {
         .unwrap_or_else(|| catalog::def(id).ports[index])
 }
 
-fn service_name(id: ServiceId) -> &'static str {
+pub fn service_name(id: ServiceId) -> &'static str {
     match id {
         ServiceId::Mariadb => "mariadb",
         ServiceId::Postgres => "postgres",
@@ -221,6 +221,7 @@ mod tests {
                 docroot: "public".into(),
                 port: 8000,
                 kind: crate::modules::services::spec::SiteKind::Php,
+                env: Default::default(),
             }],
             db_password: "sixteencharacters".into(),
         })

@@ -17,6 +17,8 @@ pub struct SiteSpec {
     pub docroot: String,
     pub port: u16,
     pub kind: SiteKind,
+    #[serde(default)]
+    pub env: crate::modules::workspace::WorkspaceEnv,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -193,6 +195,7 @@ mod tests {
                     docroot: "public".into(),
                     port: 8000,
                     kind: SiteKind::Php,
+                    env: Default::default(),
                 }],
                 ..base()
             };
@@ -210,6 +213,7 @@ mod tests {
                 docroot: "../../etc".into(),
                 port: 8000,
                 kind: SiteKind::Php,
+                env: Default::default(),
             }],
             ..base()
         };
@@ -226,6 +230,7 @@ mod tests {
                     docroot: docroot.into(),
                     port: 8000,
                     kind: SiteKind::Php,
+                    env: Default::default(),
                 }],
                 ..base()
             };
@@ -243,6 +248,7 @@ mod tests {
                     docroot: docroot.into(),
                     port: 8000,
                     kind: SiteKind::Php,
+                    env: Default::default(),
                 }],
                 ..base()
             };

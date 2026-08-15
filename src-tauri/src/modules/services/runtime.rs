@@ -2,7 +2,7 @@ use std::process::Command;
 
 use crate::modules::proc::hide_console;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RuntimeKind {
     Docker,
@@ -88,6 +88,10 @@ pub fn probe(runtime: RuntimeKind) -> Probe {
         return Probe::Unreachable;
     }
     Probe::Ready { version }
+}
+
+pub fn probe_status(runtime: RuntimeKind) -> RuntimeStatus {
+    status_for(runtime, &probe(runtime))
 }
 
 pub fn detect() -> RuntimeStatus {
