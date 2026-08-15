@@ -8,3 +8,4 @@ pub mod runtime;
 pub mod spec;
 pub mod state;
 pub mod status;
+pub mod vhost;
