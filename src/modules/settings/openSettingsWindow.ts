@@ -4,6 +4,7 @@ export type SettingsTab =
   | "general"
   | "editor"
   | "themes"
+  | "services"
   | "shortcuts"
   | "about";
 

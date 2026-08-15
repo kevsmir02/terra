@@ -7,6 +7,7 @@ import {
   InformationCircleIcon,
   KeyboardIcon,
   PaintBoardIcon,
+  ServerStack01Icon,
   Settings01Icon,
   SourceCodeIcon,
 } from "@hugeicons/core-free-icons";
@@ -30,6 +31,11 @@ const EditorSection = lazy(() =>
 );
 const ThemesSection = lazy(() =>
   import("./sections/ThemesSection").then((m) => ({ default: m.ThemesSection })),
+);
+const ServicesSection = lazy(() =>
+  import("./sections/ServicesSection").then((m) => ({
+    default: m.ServicesSection,
+  })),
 );
 const ShortcutsSection = lazy(() =>
   import("./sections/ShortcutsSection").then((m) => ({
@@ -65,6 +71,12 @@ const TABS: {
     component: ThemesSection,
   },
   {
+    id: "services",
+    label: "Services",
+    icon: ServerStack01Icon,
+    component: ServicesSection,
+  },
+  {
     id: "shortcuts",
     label: "Shortcuts",
     icon: KeyboardIcon,
@@ -82,6 +94,7 @@ const VALID_TABS: SettingsTab[] = [
   "general",
   "editor",
   "themes",
+  "services",
   "shortcuts",
   "about",
 ];
