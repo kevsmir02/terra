@@ -10,4 +10,4 @@ export { SERVICE_META, VOLUME_BY_ID } from "./lib/config";
 export type { ServicesConfig } from "./lib/config";
 export { generatePassword } from "./lib/connection";
 export type { ServiceId } from "./lib/connection";
-export { nextSitePort, slugFromName } from "./lib/sites";
+export { nextSitePort, slugFromName, uniqueSlug } from "./lib/sites";

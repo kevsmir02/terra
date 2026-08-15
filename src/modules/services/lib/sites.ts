@@ -15,3 +15,14 @@ export function nextSitePort(taken: number[]): number {
   while (used.has(port) || RESERVED.has(port)) port++;
   return port;
 }
+
+export function uniqueSlug(
+  name: string,
+  taken: ReadonlySet<string>,
+): string {
+  const base = slugFromName(name) || "site";
+  if (!taken.has(base)) return base;
+  let i = 2;
+  while (taken.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}

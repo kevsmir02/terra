@@ -11,7 +11,7 @@ import {
   SERVICE_META,
   ServiceRow,
   SitesTable,
-  slugFromName,
+  uniqueSlug,
   type RowStatus,
   type RuntimeStatus,
   type ServiceId,
@@ -92,8 +92,10 @@ export function ServicesSection() {
   const siteRows = useMemo<SiteRow[]>(() => {
     const saved = new Map(config.sites.map((site) => [site.slug, site]));
     const taken = config.sites.map((site) => site.port);
+    const used = new Set<string>();
     return spaces.map((space) => {
-      const slug = slugFromName(space.name);
+      const slug = uniqueSlug(space.name, used);
+      used.add(slug);
       const stored = saved.get(slug);
       const detected = detections[space.id] ?? FALLBACK_SITE;
       const port = stored?.port ?? nextSitePort(taken);

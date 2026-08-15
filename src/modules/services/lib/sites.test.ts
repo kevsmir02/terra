@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { nextSitePort, slugFromName } from "@/modules/services/lib/sites";
+import {
+  nextSitePort,
+  slugFromName,
+  uniqueSlug,
+} from "@/modules/services/lib/sites";
 
 describe("slugFromName", () => {
   it("produces a safe DNS-style label", () => {
@@ -15,6 +19,22 @@ describe("slugFromName", () => {
 
   it("returns an empty string when nothing usable survives", () => {
     expect(slugFromName("///")).toBe("");
+  });
+});
+
+describe("uniqueSlug", () => {
+  it("returns the base slug when it is unused", () => {
+    expect(uniqueSlug("My App", new Set())).toBe("my-app");
+  });
+
+  it("appends the next available suffix for collisions", () => {
+    const taken = new Set(["my-app", "my-app-2"]);
+    expect(uniqueSlug("My App", taken)).toBe("my-app-3");
+  });
+
+  it("uses the site fallback for empty slugs", () => {
+    const taken = new Set(["site"]);
+    expect(uniqueSlug("///", taken)).toBe("site-2");
   });
 });
 

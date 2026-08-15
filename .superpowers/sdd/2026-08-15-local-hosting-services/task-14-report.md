@@ -55,3 +55,23 @@ The Open button is enabled only when the nginx service reports healthy. Its URL 
 
 - Manual Tauri and Laravel verification could not run in the headless environment. The controller should validate that flow at the phase gate.
 - Duplicate space names produce the same slug because the task explicitly derives slugs directly from the space name. The existing persisted site format is also slug-keyed, so resolving duplicate-name identity would require a broader schema decision.
+
+## Fix round 1
+
+### What changed
+
+- `src/modules/services/lib/sites.ts:19-29`: added pure `uniqueSlug(name, taken)` helper with the `site` fallback for empty slugs and deterministic numeric suffixes.
+- `src/modules/services/lib/sites.test.ts:25-39`: added coverage for unused base slugs, `-2`/`-3` collision suffixes, and empty-slug fallback deduplication.
+- `src/modules/services/index.ts:13`: re-exported `uniqueSlug` for the settings section.
+- `src/settings/sections/ServicesSection.tsx:95-98`: tracks a `used` slug set across `spaces.map`, while leaving the existing `taken` port logic unchanged.
+
+### Covering tests
+
+- `pnpm test src/modules/services/lib/sites.test.ts`: passed, 1 test file and 7 tests.
+- `pnpm test`: passed, 80 test files and 1190 tests.
+- `pnpm lint && pnpm check-types && pnpm knip`: passed; Biome checked 351 files with no fixes, TypeScript completed successfully, and Knip completed with the repository's existing 9 configuration hints.
+- `pnpm test src/app/eager-budget.test.ts`: passed, 1 test file and 2 tests.
+
+### Commit
+
+- `fix(services): dedupe site slugs for same-named spaces`
