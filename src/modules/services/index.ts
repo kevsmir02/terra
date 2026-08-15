@@ -11,3 +11,5 @@ export type { ServicesConfig } from "./lib/config";
 export { generatePassword } from "./lib/connection";
 export type { ServiceId } from "./lib/connection";
 export { nextSitePort, slugFromName, uniqueSlug } from "./lib/sites";
+export { ServicesPill } from "./ServicesPill";
+export { shouldMountPill } from "./lib/pillGate";

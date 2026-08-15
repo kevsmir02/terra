@@ -52,6 +52,7 @@ A change to a core subsystem (terminal/shell spawn, workspace auth, git, fs, IPC
 - `history::*` (`history_suggest`, `history_commands`, `history_record`, `history_list`): shell-history-backed command suggestions.
 - `device::commands::*` (`device_list`, `device_list_avds`, `device_launch_avd`, `device_stop_avd`, `device_list_system_images`, `device_create_avd`, `device_open`, `device_close`, `device_send_touch`, `device_send_key`, `device_send_scroll`, `device_input_tap`, `device_input_swipe`, `device_input_key`, `device_screen_size`): Android device/emulator mirroring. See **Device module** below.
 - `updater::*` (`updater_package_kind`, `updater_download`, `updater_install`): package-aware update flow around `tauri-plugin-updater`.
+- `services::*` (`services_status`, `services_up`, `services_down`, `services_delete_data`): optional local hosting services for databases, mail, web, and project sites.
 - `agent::*` (`agent_enable_hooks`, `agent_hooks_status`), `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
 - `lsp::*` (`lsp_detect`, `lsp_host_pid`, `lsp_resolve_root`, `lsp_spawn`, `lsp_send`, `lsp_kill`): language server process host. Dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the workspace registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). All sessions killed on `RunEvent::Exit`.
 - `open_settings_window`: separate webview window for Settings (optional `tab` arg deep-links a section).
@@ -120,7 +121,8 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 - **header/** - top bar + inline search (`SearchInline` adapts to terminal vs editor via `SearchTarget`). `WindowControls` rendered when `USE_CUSTOM_WINDOW_CONTROLS` is true (Linux + Windows; macOS uses native traffic lights).
 - **statusbar/** - bottom bar, `CwdBreadcrumb` (handles Unix paths, Windows drive letters, and home `~` segments via `pathUtils.segmentsFromCwd`).
 - **shortcuts/** - keymap registry (`shortcuts.ts`) + `useGlobalShortcuts`. Handlers live in `App.tsx` and are passed in by id (`tab.new`, …). `metaKey || ctrlKey` for cross-platform Cmd/Ctrl.
-- **settings/** - settings store (`store.ts` via `tauri-plugin-store`), preferences hook, settings window opener.
+- **settings/** - settings store (`store.ts` via `tauri-plugin-store`), preferences hook, settings window opener. The Settings window includes a Services tab.
+- **services/** - optional local hosting stack status and controls for databases, mail, web, and project sites.
 - **sidebar/** - activity bar + collapsible side panels (explorer, source control, git history).
 - **source-control/** - git status / stage / commit panel and diff workflow.
 - **git-history/** - commit graph rail, refs, per-commit file diffs.
@@ -132,8 +134,6 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 - **agents/** - agent notifications + management for terminal coding-agents (Claude Code, Codex, Gemini CLI, Pi). Shared store (`store/agentStore.ts`: terminal `sessions` + `notifications`) and a shared router (`lib/route.ts`: suppress when focused-and-visible, OS-notify when unfocused, in-app Sonner toast when focused-but-hidden) feed the header `NotificationBell` (management surface, per-agent hook enable rows). Toasts use Sonner (`components/ui/sonner.tsx`) themed via the central engine; `lib/agentIcon.tsx` renders the per-agent brand mark (Pi logo, Claude/ChatGPT/Gemini hugeicon). Terminal detection is Rust-side (`pty/agent_detect.rs`) on the PTY reader's byte filter, armed on `OSC 133;C;<cmd>` or self-armed by the marker, emitting `terra:agent-signal` transitions (`started`/`working`/`attention`/`finished`/`exited`) driven only by OSC sequences (never raw output, so a repainting TUI never flaps) - zero cost when no agent runs. All terminal agents converge on the same `OSC 777` marker the detector reads, installed via `agent_enable_hooks(agent)` / `agent_hooks_status(agent)` in `modules/agent.rs` (data-driven `AgentSpec` for JSON-hook agents plus a Terra-owned Pi extension; atomic writes, foreign configuration preserved, idempotent; gated on `TERRA_TERMINAL`). Delivery differs because only Claude's hook protocol can return terminal bytes in the hook *response*: **Claude** (`~/.claude/settings.json`, `UserPromptSubmit`/`Notification`/`Stop`) returns the marker via the `terminalSequence` field (legacy 3-field `notify;Terra;<event>`). **Codex** (`~/.codex/hooks.json`, `UserPromptSubmit`/`PermissionRequest`/`Stop`) and **Gemini** (`~/.gemini/settings.json`, `BeforeAgent`/`Notification`/`AfterAgent`, `matcher:"*"`) can't, so the hook *command* emits the 4-field `notify;Terra;<agent>;<event>` marker itself (`printf > /dev/tty` on Unix, or `terra __terra_notify` writing to `CONOUT$` after `AttachConsole` on Windows) and prints `{}` as a JSON stdout no-op (Codex's `Stop` and Gemini both reject empty/non-JSON stdout). **Pi** (`~/.pi/agent/extensions/terra-notifications.ts`) uses `agent_start`/`agent_settled` extension events and writes its named marker directly to stdout. The agent-named marker lets a self-arm name the right agent when no preexec fired (bash/tmux/Windows). The Terra agent path is `ai/components/LocalAgentNotificationsBridge.tsx`, mapping `chatStore.agentMeta` (`awaiting-approval`→attention, busy→idle→finished, `error`) into the same router.
 - **command-palette/** - modal command palette (`CommandPalette.tsx`, `commands.ts`) for actions and navigation.
 - **spaces/** - workspace spaces/projects (name, root, env, color, per-space tab persistence) via `useSpaces` and `SpaceSwitcher`.
-
-
 
 ### UI conventions
 
@@ -153,6 +153,7 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 ### Tauri capabilities
 
 `src-tauri/capabilities/default.json` is the allowlist for plugin APIs available to the webview. New plugins (dialog, autostart, updater, window-state, store, opener, os, log are wired in `lib.rs`) typically need:
+
 1. `Cargo.toml` dependency
 2. `.plugin(...)` call in `lib.rs` `run()`
 3. capability entry in `default.json`
