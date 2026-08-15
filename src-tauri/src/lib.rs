@@ -359,6 +359,9 @@ pub fn run() {
             services::commands::services_runtime_probe,
             services::commands::services_up,
             services::commands::services_down,
+            services::commands::services_status,
+            services::commands::services_logs,
+            services::commands::services_delete_data,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -5,6 +5,7 @@ use super::project::{port_free, project_dir, write_project};
 use super::runtime::{self, RuntimeKind, RuntimeStatus};
 use super::spec::{validate, StackSpec, ValidStack};
 use super::state::ServicesState;
+use super::status::{parse_ps, ServiceStatus};
 use crate::modules::proc::hide_console;
 
 #[tauri::command]
@@ -46,23 +47,22 @@ fn preflight(stack: &ValidStack) -> Result<(), String> {
     Ok(())
 }
 
-fn compose(
+fn run_checked(
     state: &ServicesState,
-    runtime: RuntimeKind,
+    bin: &str,
     args: &[&str],
+    dir: Option<&std::path::Path>,
 ) -> Result<String, String> {
-    let dir = project_dir()?;
-    let mut cmd = std::process::Command::new(runtime.bin());
-    cmd.arg("compose")
-        .arg("--project-directory")
-        .arg(&dir)
-        .args(args)
-        .current_dir(&dir)
+    let mut cmd = std::process::Command::new(bin);
+    if let Some(dir) = dir {
+        cmd.current_dir(dir);
+    }
+    cmd.args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     hide_console(&mut cmd);
 
-    let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", runtime.bin()))?;
+    let mut child = cmd.spawn().map_err(|e| format!("{bin}: {e}"))?;
 
     // Take the pipes before handing the child to the registry: reading them
     // here is what lets the child stay registered (and therefore killable on
@@ -97,13 +97,28 @@ fn compose(
     }
 
     let Some(mut child) = state.finish(id) else {
-        return Err("compose invocation was cancelled".into());
+        return Err("invocation was cancelled".into());
     };
     let status = child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
         return Err(err.trim().to_string());
     }
     Ok(out)
+}
+
+fn compose(
+    state: &ServicesState,
+    runtime: RuntimeKind,
+    args: &[&str],
+) -> Result<String, String> {
+    let dir = project_dir()?;
+    let mut argv = vec![
+        "compose",
+        "--project-directory",
+        dir.to_str().ok_or("project directory is not valid utf-8")?,
+    ];
+    argv.extend_from_slice(args);
+    run_checked(state, runtime.bin(), &argv, Some(&dir))
 }
 
 #[tauri::command]
@@ -129,4 +144,68 @@ pub async fn services_down(
     let runtime = resolve_runtime()?;
     compose(&state, runtime, &["down"])?;
     Ok(())
+}
+
+fn check_volume(name: &str) -> Result<(), String> {
+    let known = super::catalog::CATALOG
+        .iter()
+        .filter_map(|d| d.volume)
+        .any(|v| v == name);
+    if known {
+        Ok(())
+    } else {
+        Err(format!("unknown volume: {name}"))
+    }
+}
+
+#[tauri::command]
+pub async fn services_status(
+    state: State<'_, ServicesState>,
+) -> Result<Vec<ServiceStatus>, String> {
+    let runtime = resolve_runtime()?;
+    let out = compose(&state, runtime, &["ps", "--format", "json"])?;
+    Ok(parse_ps(&out))
+}
+
+#[tauri::command]
+pub async fn services_logs(
+    service: String,
+    state: State<'_, ServicesState>,
+) -> Result<String, String> {
+    let known = super::catalog::CATALOG
+        .iter()
+        .any(|d| format!("{:?}", d.id).to_lowercase() == service.to_lowercase());
+    if !known && service != "nginx" && service != "php" {
+        return Err(format!("unknown service: {service}"));
+    }
+    let runtime = resolve_runtime()?;
+    compose(&state, runtime, &["logs", "--tail", "200", "--no-color", &service])
+}
+
+#[tauri::command]
+pub async fn services_delete_data(
+    volume: String,
+    state: State<'_, ServicesState>,
+) -> Result<(), String> {
+    check_volume(&volume)?;
+    let runtime = resolve_runtime()?;
+    compose(&state, runtime, &["down"])?;
+    run_checked(&state, runtime.bin(), &["volume", "rm", &volume], None)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_terra_owned_volumes_can_be_deleted() {
+        assert!(check_volume("terra_mariadb_data").is_ok());
+        assert!(check_volume("terra_postgres_data").is_ok());
+        // A volume name arriving from IPC must not be able to name someone
+        // else's data.
+        assert!(check_volume("postgres_data").is_err());
+        assert!(check_volume("terra_mariadb_data extra").is_err());
+        assert!(check_volume("../etc").is_err());
+    }
 }
