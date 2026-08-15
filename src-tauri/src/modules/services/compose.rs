@@ -37,11 +37,40 @@ fn publish(out: &mut String, host: u16, container: u16) {
 }
 
 pub fn render_compose(stack: &ValidStack, env: &RenderEnv) -> String {
-    let _ = env;
     let mut out = String::from("name: terra\n\nservices:\n");
 
     for id in &stack.services {
         let d = catalog::def(*id);
+        if *id == ServiceId::Web {
+            let _ = writeln!(out, "  nginx:");
+            let _ = writeln!(out, "    image: {}", d.image);
+            let _ = writeln!(out, "    restart: unless-stopped");
+            let _ = writeln!(out, "    depends_on:");
+            let _ = writeln!(out, "      - php");
+            let _ = writeln!(out, "    ports:");
+            for site in &stack.sites {
+                publish(&mut out, site.port, site.port);
+            }
+            let _ = writeln!(out, "    volumes:");
+            let _ = writeln!(out, "      - ./nginx/conf.d:/etc/nginx/conf.d:ro");
+            for (slug, host) in &env.mounts {
+                let _ = writeln!(out, "      - {host}:/sites/{slug}");
+            }
+            out.push('\n');
+
+            let _ = writeln!(out, "  php:");
+            let _ = writeln!(out, "    build: ./php");
+            let _ = writeln!(out, "    restart: unless-stopped");
+            if let Some((uid, gid)) = env.run_as {
+                let _ = writeln!(out, "    user: \"{uid}:{gid}\"");
+            }
+            let _ = writeln!(out, "    volumes:");
+            for (slug, host) in &env.mounts {
+                let _ = writeln!(out, "      - {host}:/sites/{slug}");
+            }
+            out.push('\n');
+            continue;
+        }
         let name = service_name(*id);
         let _ = writeln!(out, "  {name}:");
         let _ = writeln!(out, "    image: {}", d.image);
@@ -179,5 +208,48 @@ mod tests {
             &plain(),
         );
         assert!(out.contains("ADMINER_DEFAULT_SERVER: mariadb"));
+    }
+
+    fn web_stack() -> (ValidStack, RenderEnv) {
+        let stack = validate(StackSpec {
+            services: vec![ServiceId::Web],
+            ports: Default::default(),
+            sites: vec![crate::modules::services::spec::SiteSpec {
+                slug: "app".into(),
+                root: "/home/u/app".into(),
+                docroot: "public".into(),
+                port: 8000,
+                kind: crate::modules::services::spec::SiteKind::Php,
+            }],
+            db_password: "sixteencharacters".into(),
+        })
+        .unwrap();
+        let mut mounts = BTreeMap::new();
+        mounts.insert("app".to_string(), "/home/u/app".to_string());
+        (stack, RenderEnv { run_as: Some((1000, 1000)), mounts })
+    }
+
+    #[test]
+    fn nginx_and_php_mount_the_same_path() {
+        let (stack, env) = web_stack();
+        let out = render_compose(&stack, &env);
+        // nginx passes SCRIPT_FILENAME as a path php-fpm resolves itself, so a
+        // mismatch here becomes a "file not found" that reads like a config bug.
+        assert_eq!(out.matches("/home/u/app:/sites/app").count(), 2);
+    }
+
+    #[test]
+    fn renders_uid_mapping_only_when_asked() {
+        let (stack, env) = web_stack();
+        assert!(render_compose(&stack, &env).contains("user: \"1000:1000\""));
+
+        let plain_env = RenderEnv { run_as: None, mounts: env.mounts };
+        assert!(!render_compose(&stack, &plain_env).contains("user:"));
+    }
+
+    #[test]
+    fn publishes_each_site_port_on_loopback() {
+        let (stack, env) = web_stack();
+        assert!(render_compose(&stack, &env).contains("\"127.0.0.1:8000:8000\""));
     }
 }
