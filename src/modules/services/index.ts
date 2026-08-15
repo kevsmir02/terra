@@ -1,3 +1,10 @@
 export { RuntimeCard } from "./RuntimeCard";
+export { ServiceRow, statusColor } from "./ServiceRow";
+export type { RowStatus } from "./ServiceRow";
+export { LogsDrawer } from "./LogsDrawer";
 export { probeRuntime, runtimeMessage } from "./lib/runtime";
 export type { RuntimeStatus } from "./lib/runtime";
+export { SERVICE_META, VOLUME_BY_ID } from "./lib/config";
+export type { ServicesConfig } from "./lib/config";
+export { generatePassword } from "./lib/connection";
+export type { ServiceId } from "./lib/connection";
