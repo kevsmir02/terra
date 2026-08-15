@@ -4,24 +4,26 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 
 export function LogsDrawer({ service }: { service: string }) {
   const [open, setOpen] = useState(false);
+  const runtime = usePreferencesStore((s) => s.services.runtime);
   const [logs, setLogs] = useState("");
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      setLogs(await invoke<string>("services_logs", { service }));
+      setLogs(await invoke<string>("services_logs", { runtime, service }));
     } catch (e) {
       setLogs(String(e));
     } finally {
       setBusy(false);
     }
-  }, [service]);
+  }, [runtime, service]);
 
   useEffect(() => {
     if (open) void refresh();

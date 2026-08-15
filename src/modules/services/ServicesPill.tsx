@@ -1,4 +1,5 @@
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { type JSX, useEffect, useState } from "react";
@@ -13,36 +14,52 @@ const POLL_MS = 5000;
 
 export function ServicesPill(): JSX.Element | null {
   const [statuses, setStatuses] = useState<ServiceStatus[]>([]);
+  const [servicesTabOpen, setServicesTabOpen] = useState(false);
   const [focused, setFocused] = useState(() =>
     typeof document === "undefined" ? true : document.hasFocus(),
   );
+  const runtime = usePreferencesStore((s) => s.services.runtime);
+  const hasRunning = statuses.some((status) => status.state === "running");
 
   useEffect(() => {
     let alive = true;
-    let unlisten: (() => void) | undefined;
+    let unlistenFocus: (() => void) | undefined;
+    let unlistenTab: (() => void) | undefined;
     const window = getCurrentWebviewWindow();
 
     void window
       .onFocusChanged(({ payload }) => setFocused(payload))
       .then((unsubscribe) => {
-        if (alive) unlisten = unsubscribe;
+        if (alive) unlistenFocus = unsubscribe;
+        else unsubscribe();
+      })
+      .catch(() => undefined);
+    void window
+      .listen<boolean>("terra:services-tab", ({ payload }) =>
+        setServicesTabOpen(payload),
+      )
+      .then((unsubscribe) => {
+        if (alive) unlistenTab = unsubscribe;
         else unsubscribe();
       })
       .catch(() => undefined);
 
     return () => {
       alive = false;
-      unlisten?.();
+      unlistenFocus?.();
+      unlistenTab?.();
     };
   }, []);
 
   useEffect(() => {
-    if (!focused) return;
+    if (!focused || (!servicesTabOpen && !hasRunning)) return;
     let alive = true;
 
     const poll = async () => {
       try {
-        const next = await invoke<ServiceStatus[]>("services_status");
+        const next = await invoke<ServiceStatus[]>("services_status", {
+          runtime,
+        });
         if (alive) setStatuses(next);
       } catch {
         // Runtime vanished mid-poll; keep the last known state.
@@ -55,12 +72,12 @@ export function ServicesPill(): JSX.Element | null {
       alive = false;
       clearInterval(timer);
     };
-  }, [focused]);
+  }, [focused, hasRunning, runtime, servicesTabOpen]);
 
   if (statuses.length === 0) return null;
 
-  const healthy = statuses.filter(
-    (status) => status.health === "healthy",
+  const running = statuses.filter(
+    (status) => status.state === "running",
   ).length;
 
   return (
@@ -71,9 +88,9 @@ export function ServicesPill(): JSX.Element | null {
       title="Open services settings"
     >
       <span
-        className={`size-1.5 rounded-full ${healthy > 0 ? "bg-status-ok" : "bg-muted"}`}
+        className={`size-1.5 rounded-full ${running > 0 ? "bg-status-ok" : "bg-muted"}`}
       />
-      <span>{healthy}</span>
+      <span>{running}</span>
     </button>
   );
 }

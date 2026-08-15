@@ -7,14 +7,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { WorkspaceEnv } from "@/modules/workspace";
 
 export type SiteRow = {
+  id: string;
   slug: string;
   spaceName: string;
   root: string;
   docroot: string;
   port: number;
   kind: "php" | "static";
+  env: WorkspaceEnv;
   /** false when detect_site fell through to its guess branch */
   confident: boolean;
   /** Windows only: root is on C: rather than inside WSL */
@@ -29,7 +32,7 @@ export function SitesTable({
 }: {
   rows: SiteRow[];
   webHealthy: boolean;
-  onDocrootChange: (slug: string, docroot: string) => void;
+  onDocrootChange: (id: string, docroot: string) => void;
   onOpen: (url: string) => void;
 }): React.JSX.Element {
   return (
@@ -70,7 +73,7 @@ export function SitesTable({
                       className="h-7 min-w-32 flex-1"
                       value={row.docroot}
                       onChange={(event) =>
-                        onDocrootChange(row.slug, event.target.value)
+                        onDocrootChange(row.id, event.target.value)
                       }
                     />
                     <Tooltip>

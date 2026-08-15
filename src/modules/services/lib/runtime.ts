@@ -8,6 +8,11 @@ export type RuntimeStatus =
   | { state: "unreachable"; runtime: RuntimeName }
   | { state: "ready"; runtime: RuntimeName; version: string };
 
+export type RuntimeProbeAll = {
+  docker: RuntimeStatus;
+  podman: RuntimeStatus;
+};
+
 const LABEL: Record<RuntimeName, string> = {
   docker: "Docker",
   podman: "Podman",
@@ -51,4 +56,8 @@ export function runtimeMessage(status: RuntimeStatus): RuntimeMessage {
 
 export function probeRuntime(): Promise<RuntimeStatus> {
   return invoke<RuntimeStatus>("services_runtime_probe");
+}
+
+export function probeRuntimeAll(): Promise<RuntimeProbeAll> {
+  return invoke<RuntimeProbeAll>("services_runtime_probe_all");
 }

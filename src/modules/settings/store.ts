@@ -262,7 +262,13 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorCustomFormatCommand: "",
   lspActivation: {},
   lspCustomServers: [],
-  services: { services: [], ports: {}, sites: [], dbPassword: "" },
+  services: {
+    services: [],
+    ports: {},
+    sites: [],
+    dbPassword: "",
+    runtime: null,
+  },
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });

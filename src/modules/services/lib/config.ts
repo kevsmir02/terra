@@ -1,16 +1,20 @@
+import type { WorkspaceEnv } from "@/modules/workspace";
 import type { ServiceId } from "@/modules/services/lib/connection";
 
 export type ServicesConfig = {
   services: string[];
   ports: Record<string, number>;
   sites: {
+    id: string;
     slug: string;
     root: string;
     docroot: string;
     port: number;
     kind: "php" | "static";
+    env: WorkspaceEnv;
   }[];
   dbPassword: string;
+  runtime: "docker" | "podman" | null;
 };
 
 export type ServiceMeta = {

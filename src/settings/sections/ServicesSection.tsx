@@ -7,12 +7,14 @@ import {
   generatePassword,
   LogsDrawer,
   nextSitePort,
+  probeRuntimeAll,
   RuntimeCard,
   SERVICE_META,
   ServiceRow,
   SitesTable,
   uniqueSlug,
   type RowStatus,
+  type RuntimeProbeAll,
   type RuntimeStatus,
   type ServiceId,
   type ServicesConfig,
@@ -20,6 +22,7 @@ import {
   VOLUME_BY_ID,
 } from "@/modules/services";
 import { invoke } from "@tauri-apps/api/core";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -30,6 +33,8 @@ type DetectedSite = {
   docroot: string;
   confident: boolean;
 };
+
+type StackSpec = Omit<ServicesConfig, "runtime">;
 
 const FALLBACK_SITE: DetectedSite = {
   kind: "static",
@@ -46,12 +51,48 @@ function toRowStatus(s: ServiceStatus | undefined): RowStatus {
   return "healthy";
 }
 
+function selectEffectiveStatus(
+  probes: RuntimeProbeAll | null,
+  override: ServicesConfig["runtime"],
+): RuntimeStatus | null {
+  if (!probes) return null;
+  if (override) return probes[override];
+  if (probes.docker.state === "ready") return probes.docker;
+  if (probes.podman.state === "ready") return probes.podman;
+
+  const rank = (status: RuntimeStatus) => {
+    switch (status.state) {
+      case "unreachable":
+        return 2;
+      case "no-compose":
+        return 1;
+      default:
+        return 0;
+    }
+  };
+  return rank(probes.podman) > rank(probes.docker)
+    ? probes.podman
+    : probes.docker;
+}
+
+function sameEnv(
+  left: SiteRow["env"] | undefined,
+  right: SiteRow["env"],
+): boolean {
+  return (
+    left?.kind === right.kind &&
+    (right.kind === "local" ||
+      (left?.kind === "wsl" && left.distro === right.distro))
+  );
+}
+
 export function ServicesSection() {
-  const [status, setStatus] = useState<RuntimeStatus | null>(null);
+  const [probes, setProbes] = useState<RuntimeProbeAll | null>(null);
+  const [probeBusy, setProbeBusy] = useState(false);
+  const [probeError, setProbeError] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<Record<string, ServiceStatus>>({});
   const [busyId, setBusyId] = useState<ServiceId | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ready = status?.state === "ready";
   const config = usePreferencesStore((s) => s.services);
   const preferencesHydrated = usePreferencesStore((s) => s.hydrated);
   const spaces = useSpaces((s) => s.spaces);
@@ -59,6 +100,37 @@ export function ServicesSection() {
   const [detections, setDetections] = useState<Record<string, DetectedSite>>(
     {},
   );
+  const status = selectEffectiveStatus(probes, config.runtime);
+  const ready = status?.state === "ready";
+
+  const refreshRuntime = useCallback(async () => {
+    setProbeBusy(true);
+    try {
+      setProbes(await probeRuntimeAll());
+      setProbeError(null);
+    } catch (e) {
+      setProbeError(String(e));
+    } finally {
+      setProbeBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRuntime();
+  }, [refreshRuntime]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void WebviewWindow.getByLabel("main").then((main) => {
+      if (!cancelled) void main?.emit("terra:services-tab", true);
+    });
+    return () => {
+      cancelled = true;
+      void WebviewWindow.getByLabel("main").then((main) => {
+        void main?.emit("terra:services-tab", false);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     if (spacesHydrated) return;
@@ -78,7 +150,10 @@ export function ServicesSection() {
         try {
           return [
             space.id,
-            await invoke<DetectedSite>("sites_detect", { root }),
+            await invoke<DetectedSite>("sites_detect", {
+              root,
+              env: space.env,
+            }),
           ];
         } catch {
           return [space.id, FALLBACK_SITE];
@@ -93,23 +168,25 @@ export function ServicesSection() {
   }, [spaces]);
 
   const siteRows = useMemo<SiteRow[]>(() => {
-    const saved = new Map(config.sites.map((site) => [site.slug, site]));
+    const saved = new Map(config.sites.map((site) => [site.id, site]));
     const taken = config.sites.map((site) => site.port);
     const used = new Set<string>();
     return spaces.map((space) => {
       const slug = uniqueSlug(space.name, used);
       used.add(slug);
-      const stored = saved.get(slug);
+      const stored = saved.get(space.id);
       const detected = detections[space.id] ?? FALLBACK_SITE;
       const port = stored?.port ?? nextSitePort(taken);
       if (!stored) taken.push(port);
       return {
+        id: space.id,
         slug,
         spaceName: space.name,
         root: space.root ?? "",
         docroot: stored?.docroot ?? detected.docroot,
         port,
         kind: detected.kind,
+        env: space.env,
         confident: detected.confident,
         slowMount: IS_WINDOWS && space.env.kind !== "wsl",
       };
@@ -118,39 +195,53 @@ export function ServicesSection() {
 
   useEffect(() => {
     if (!preferencesHydrated || !spacesHydrated) return;
-    const sites = siteRows.map(({ slug, root, docroot, port, kind }) => ({
-      slug,
-      root,
-      docroot,
-      port,
-      kind,
-    }));
+    const sites = siteRows.map(
+      ({ id, slug, root, docroot, port, kind, env }) => ({
+        id,
+        slug,
+        root,
+        docroot,
+        port,
+        kind,
+        env,
+      }),
+    );
     const unchanged =
       sites.length === config.sites.length &&
       sites.every((site, index) => {
         const current = config.sites[index];
         return (
-          current?.slug === site.slug &&
+          current?.id === site.id &&
+          current.slug === site.slug &&
           current.root === site.root &&
           current.docroot === site.docroot &&
           current.port === site.port &&
-          current.kind === site.kind
+          current.kind === site.kind &&
+          sameEnv(current.env, site.env)
         );
       });
     if (!unchanged) void setServicesConfig({ ...config, sites });
   }, [config, preferencesHydrated, siteRows, spacesHydrated]);
 
   const setDocroot = useCallback(
-    (slug: string, docroot: string) => {
-      const row = siteRows.find((site) => site.slug === slug);
+    (id: string, docroot: string) => {
+      const row = siteRows.find((site) => site.id === id);
       if (!row) return;
-      const sites = config.sites.some((site) => site.slug === slug)
+      const sites = config.sites.some((site) => site.id === id)
         ? config.sites.map((site) =>
-            site.slug === slug ? { ...site, docroot } : site,
+            site.id === id ? { ...site, docroot } : site,
           )
         : [
             ...config.sites,
-            { slug, root: row.root, docroot, port: row.port, kind: row.kind },
+            {
+              id,
+              slug: row.slug,
+              root: row.root,
+              docroot,
+              port: row.port,
+              kind: row.kind,
+              env: row.env,
+            },
           ];
       void setServicesConfig({ ...config, sites });
     },
@@ -165,12 +256,14 @@ export function ServicesSection() {
 
   const poll = useCallback(async () => {
     try {
-      const rows = await invoke<ServiceStatus[]>("services_status");
+      const rows = await invoke<ServiceStatus[]>("services_status", {
+        runtime: config.runtime,
+      });
       setStatuses(Object.fromEntries(rows.map((r) => [r.service, r])));
     } catch {
       // Runtime vanished mid-poll; keep the last known state.
     }
-  }, []);
+  }, [config.runtime]);
 
   useEffect(() => {
     if (!ready) return;
@@ -184,16 +277,26 @@ export function ServicesSection() {
       const enabled = next
         ? Array.from(new Set([...config.services, id]))
         : config.services.filter((s) => s !== id);
-      const spec: ServicesConfig = {
+      const nextConfig: ServicesConfig = {
         ...config,
         services: enabled,
         dbPassword: config.dbPassword || generatePassword(),
       };
-      await setServicesConfig(spec);
+      const spec: StackSpec = {
+        services: nextConfig.services,
+        ports: nextConfig.ports,
+        sites: nextConfig.sites,
+        dbPassword: nextConfig.dbPassword,
+      };
+      await setServicesConfig(nextConfig);
       setBusyId(id);
       setError(null);
       try {
-        await invoke(next ? "services_up" : "services_down", { spec });
+        await invoke(next ? "services_up" : "services_down", {
+          runtime: config.runtime,
+          spec,
+          targets: [id],
+        });
         await poll();
       } catch (e) {
         setError(String(e));
@@ -218,18 +321,55 @@ export function ServicesSection() {
     async (volume: string) => {
       setError(null);
       try {
-        await invoke("services_delete_data", { volume });
+        await invoke("services_delete_data", {
+          runtime: config.runtime,
+          volume,
+        });
         await poll();
       } catch (e) {
         setError(String(e));
       }
     },
-    [poll],
+    [config.runtime, poll],
   );
+
+  const bothReady =
+    probes?.docker.state === "ready" && probes.podman.state === "ready";
 
   return (
     <div className="space-y-4">
-      <RuntimeCard onStatus={setStatus} />
+      <RuntimeCard
+        status={status}
+        busy={probeBusy}
+        error={probeError}
+        onRefresh={() => void refreshRuntime()}
+      />
+      {bothReady && (
+        <div className="flex items-center gap-1 rounded-md border p-1">
+          {(
+            [
+              ["Auto", null],
+              ["Docker", "docker"],
+              ["Podman", "podman"],
+            ] as const
+          ).map(([label, value]) => (
+            <button
+              key={label}
+              type="button"
+              className={`flex-1 rounded px-2 py-1 text-xs transition-colors ${
+                config.runtime === value
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:bg-accent/(--emph-medium) hover:text-foreground"
+              }`}
+              onClick={() =>
+                void setServicesConfig({ ...config, runtime: value })
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {!ready && (
         <p className="text-muted-foreground text-xs">
           Services become available once a container runtime is ready.
@@ -241,8 +381,6 @@ export function ServicesSection() {
           {(Object.keys(SERVICE_META) as ServiceId[]).map((id) => {
             const meta = SERVICE_META[id];
             const port = config.ports[id] ?? meta.defaultPort;
-            // Mailpit and the web tier do not take a port override: mailpit
-            // publishes two fixed ports and web ports come from the site list.
             const portEditable = id !== "mailpit" && id !== "web";
             return (
               <div key={id} className="space-y-1.5">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  connectionDetails,
   connectionString,
   generatePassword,
 } from "@/modules/services/lib/connection";
@@ -21,6 +22,41 @@ describe("connectionString", () => {
   it("has no DSN for the web UIs", () => {
     expect(connectionString("mailpit", 8025, "secret")).toBeNull();
     expect(connectionString("adminer", 8026, "secret")).toBeNull();
+  });
+});
+
+describe("connectionDetails", () => {
+  it("returns labeled credentials for database engines", () => {
+    expect(connectionDetails("mariadb", 3306, "secret")).toEqual({
+      host: "127.0.0.1",
+      port: 3306,
+      user: "root",
+      password: "secret",
+      database: "terra",
+      dsn: "mysql://root:secret@127.0.0.1:3306/terra",
+    });
+    expect(connectionDetails("postgres", 5432, "secret")).toEqual({
+      host: "127.0.0.1",
+      port: 5432,
+      user: "terra",
+      password: "secret",
+      database: "terra",
+      dsn: "postgresql://terra:secret@127.0.0.1:5432/terra",
+    });
+    expect(connectionDetails("redis", 6379, "secret")).toEqual({
+      host: "127.0.0.1",
+      port: 6379,
+      user: null,
+      password: null,
+      database: null,
+      dsn: "redis://127.0.0.1:6379",
+    });
+  });
+
+  it("has no details for web UIs", () => {
+    expect(connectionDetails("mailpit", 8025, "secret")).toBeNull();
+    expect(connectionDetails("adminer", 8026, "secret")).toBeNull();
+    expect(connectionDetails("web", 8000, "secret")).toBeNull();
   });
 });
 

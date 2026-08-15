@@ -1,44 +1,31 @@
 import { Button } from "@/components/ui/button";
 import {
-  probeRuntime,
   runtimeMessage,
   type RuntimeStatus,
 } from "@/modules/services/lib/runtime";
-import { useCallback, useEffect, useState } from "react";
 
 export function RuntimeCard({
-  onStatus,
+  status,
+  busy,
+  error,
+  onRefresh,
 }: {
-  onStatus: (s: RuntimeStatus | null) => void;
+  status: RuntimeStatus | null;
+  busy: boolean;
+  error: string | null;
+  onRefresh: () => void;
 }) {
-  const [status, setStatus] = useState<RuntimeStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setBusy(true);
-    try {
-      const next = await probeRuntime();
-      setStatus(next);
-      setError(null);
-      onStatus(next);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  }, [onStatus]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
   if (error) {
     return (
       <div className="rounded-md border p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-destructive text-sm">{error}</p>
-          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={onRefresh}
+          >
             Check again
           </Button>
         </div>
@@ -69,7 +56,7 @@ export function RuntimeCard({
           </div>
           <p className="mt-1 text-muted-foreground text-xs">{msg.detail}</p>
         </div>
-        <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>
+        <Button size="sm" variant="outline" disabled={busy} onClick={onRefresh}>
           Check again
         </Button>
       </div>

@@ -6,6 +6,53 @@ export type ServiceId =
   | "adminer"
   | "web";
 
+export type ConnectionDetails = {
+  host: string;
+  port: number;
+  user: string | null;
+  password: string | null;
+  database: string | null;
+  dsn: string;
+};
+
+export function connectionDetails(
+  id: ServiceId,
+  port: number,
+  password: string,
+): ConnectionDetails | null {
+  switch (id) {
+    case "mariadb":
+      return {
+        host: "127.0.0.1",
+        port,
+        user: "root",
+        password,
+        database: "terra",
+        dsn: connectionString(id, port, password) ?? "",
+      };
+    case "postgres":
+      return {
+        host: "127.0.0.1",
+        port,
+        user: "terra",
+        password,
+        database: "terra",
+        dsn: connectionString(id, port, password) ?? "",
+      };
+    case "redis":
+      return {
+        host: "127.0.0.1",
+        port,
+        user: null,
+        password: null,
+        database: null,
+        dsn: connectionString(id, port, password) ?? "",
+      };
+    default:
+      return null;
+  }
+}
+
 export function connectionString(
   id: ServiceId,
   port: number,
