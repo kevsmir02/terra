@@ -19,7 +19,10 @@ export function ServicesPill(): JSX.Element | null {
     typeof document === "undefined" ? true : document.hasFocus(),
   );
   const runtime = usePreferencesStore((s) => s.services.runtime);
-  const hasRunning = statuses.some((status) => status.state === "running");
+  const running = statuses.filter(
+    (status) => status.state === "running",
+  ).length;
+  const hasRunning = running > 0;
 
   useEffect(() => {
     let alive = true;
@@ -74,11 +77,7 @@ export function ServicesPill(): JSX.Element | null {
     };
   }, [focused, hasRunning, runtime, servicesTabOpen]);
 
-  if (statuses.length === 0) return null;
-
-  const running = statuses.filter(
-    (status) => status.state === "running",
-  ).length;
+  if (running === 0) return null;
 
   return (
     <button

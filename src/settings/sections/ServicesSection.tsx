@@ -168,13 +168,18 @@ export function ServicesSection() {
   }, [spaces]);
 
   const siteRows = useMemo<SiteRow[]>(() => {
-    const saved = new Map(config.sites.map((site) => [site.id, site]));
+    const savedById = new Map<string, (typeof config.sites)[number]>();
+    const savedBySlug = new Map<string, (typeof config.sites)[number]>();
+    for (const site of config.sites) {
+      if (site.id) savedById.set(site.id, site);
+      savedBySlug.set(site.slug, site);
+    }
     const taken = config.sites.map((site) => site.port);
     const used = new Set<string>();
     return spaces.map((space) => {
       const slug = uniqueSlug(space.name, used);
       used.add(slug);
-      const stored = saved.get(space.id);
+      const stored = savedById.get(space.id) ?? savedBySlug.get(slug);
       const detected = detections[space.id] ?? FALLBACK_SITE;
       const port = stored?.port ?? nextSitePort(taken);
       if (!stored) taken.push(port);
@@ -252,6 +257,9 @@ export function ServicesSection() {
     void invoke("open_preview_tab", { url });
   }, []);
 
+  const anyDb = config.services.some(
+    (service) => service === "mariadb" || service === "postgres",
+  );
   const webHealthy = ready && toRowStatus(statuses.nginx) === "healthy";
 
   const poll = useCallback(async () => {
@@ -274,9 +282,15 @@ export function ServicesSection() {
 
   const toggle = useCallback(
     async (id: ServiceId, next: boolean) => {
-      const enabled = next
+      let enabled = next
         ? Array.from(new Set([...config.services, id]))
         : config.services.filter((s) => s !== id);
+      if (
+        enabled.includes("adminer") &&
+        !enabled.some((s) => s === "mariadb" || s === "postgres")
+      ) {
+        enabled = enabled.filter((s) => s !== "adminer");
+      }
       const nextConfig: ServicesConfig = {
         ...config,
         services: enabled,
@@ -391,6 +405,10 @@ export function ServicesSection() {
                   status={toRowStatus(statuses[meta.composeName])}
                   enabled={config.services.includes(id)}
                   busy={busyId === id}
+                  disabled={id === "adminer" && !anyDb}
+                  disabledReason={
+                    id === "adminer" && !anyDb ? "Needs a database" : undefined
+                  }
                   password={config.dbPassword}
                   onToggle={(next) => void toggle(id, next)}
                   onPortChange={

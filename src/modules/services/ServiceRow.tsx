@@ -51,6 +51,8 @@ export function ServiceRow({
   onPortChange,
   onOpen,
   onDeleteData,
+  disabled = false,
+  disabledReason,
 }: {
   id: ServiceId;
   label: string;
@@ -63,6 +65,8 @@ export function ServiceRow({
   onPortChange: (next: number) => void;
   onOpen: () => void;
   onDeleteData: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   const details = connectionDetails(id, port, password);
   const isWebUi = id === "mailpit" || id === "adminer";
@@ -70,7 +74,7 @@ export function ServiceRow({
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="flex items-center gap-3 rounded-md border px-3 py-2">
+    <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
       <span className={`size-2 rounded-full ${statusColor(status)}`} />
       <span className="min-w-28 font-medium text-sm">{label}</span>
       <Input
@@ -84,6 +88,9 @@ export function ServiceRow({
         <span className="text-muted-foreground text-xs">
           {id === "web" ? "Building PHP image, one time only" : "Working"}
         </span>
+      )}
+      {disabledReason && (
+        <span className="text-muted-foreground text-xs">{disabledReason}</span>
       )}
       {details && status === "healthy" && (
         <Collapsible className="basis-full">
@@ -168,7 +175,7 @@ export function ServiceRow({
       <Switch
         className="ml-auto"
         checked={enabled}
-        disabled={busy}
+        disabled={busy || disabled}
         onCheckedChange={onToggle}
       />
     </div>

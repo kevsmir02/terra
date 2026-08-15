@@ -338,11 +338,10 @@ pub async fn services_up(
 #[tauri::command]
 pub async fn services_down(
     runtime: Option<RuntimeKind>,
-    spec: StackSpec,
+    _spec: StackSpec,
     targets: Vec<ServiceId>,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
-    let _ = validate(spec)?;
     let runtime = resolve_runtime(runtime)?;
     let names: Vec<&str> = targets
         .iter()
