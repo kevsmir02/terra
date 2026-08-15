@@ -9,7 +9,7 @@ use super::runtime::{self, RuntimeKind, RuntimeStatus};
 use super::spec::{validate, SiteSpec, StackSpec, ValidStack};
 use crate::modules::fs::authorized_read;
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
-use super::state::ServicesState;
+use super::state::{InflightProc, ServicesState};
 use super::status::{parse_ps, ServiceStatus};
 use crate::modules::proc::hide_console;
 
@@ -150,6 +150,27 @@ pub async fn sites_detect(
     .map_err(|e| e.to_string())?
 }
 
+const OUTPUT_TAIL_CAP: usize = 256 * 1024;
+
+fn read_capped<R: std::io::Read>(mut r: R) -> String {
+    let mut tail: Vec<u8> = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        match r.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                tail.extend_from_slice(&chunk[..n]);
+                if tail.len() > OUTPUT_TAIL_CAP {
+                    let drop = tail.len() - OUTPUT_TAIL_CAP;
+                    tail.drain(..drop);
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    String::from_utf8_lossy(&tail).into_owned()
+}
+
 fn run_checked(
     state: &ServicesState,
     bin: &str,
@@ -164,34 +185,44 @@ fn run_checked(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     hide_console(&mut cmd);
+    #[cfg(unix)]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        cmd.pre_exec(|| {
+            libc::setpgid(0, 0);
+            Ok(())
+        });
+    }
 
     let mut child = cmd.spawn().map_err(|e| format!("{bin}: {e}"))?;
+
+    #[cfg(windows)]
+    let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
+        Ok(j) => Some(j),
+        Err(_) => None,
+    };
 
     // Take the pipes before handing the child to the registry: reading them
     // here is what lets the child stay registered (and therefore killable on
     // exit) for the whole invocation, instead of being owned by wait_with_output.
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
-    let id = state.register(child);
+    let id = state.register(InflightProc {
+        child,
+        #[cfg(windows)]
+        job,
+    });
 
     // Read both pipes concurrently so neither blocks the other: draining
     // stdout to EOF first deadlocks when stderr fills while the child runs.
     let mut out = String::new();
     let mut err = String::new();
-    let stdout_thread = stdout.take().map(|mut pipe| {
-        std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
-            String::from_utf8_lossy(&buf).to_string()
-        })
-    });
-    let stderr_thread = stderr.take().map(|mut pipe| {
-        std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
-            String::from_utf8_lossy(&buf).to_string()
-        })
-    });
+    let stdout_thread = stdout
+        .take()
+        .map(|pipe| std::thread::spawn(move || read_capped(pipe)));
+    let stderr_thread = stderr
+        .take()
+        .map(|pipe| std::thread::spawn(move || read_capped(pipe)));
     if let Some(handle) = stdout_thread {
         out = handle.join().unwrap_or_default();
     }
@@ -199,10 +230,10 @@ fn run_checked(
         err = handle.join().unwrap_or_default();
     }
 
-    let Some(mut child) = state.finish(id) else {
+    let Some(mut proc) = state.finish(id) else {
         return Err("invocation was cancelled".into());
     };
-    let status = child.wait().map_err(|e| e.to_string())?;
+    let status = proc.child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
         return Err(err.trim().to_string());
     }
@@ -227,7 +258,7 @@ fn compose(
 #[tauri::command]
 pub async fn services_up(
     spec: StackSpec,
-    state: State<'_, ServicesState>,
+    state: State<'_, std::sync::Arc<ServicesState>>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
     let stack = validate(spec)?;
@@ -245,18 +276,26 @@ pub async fn services_up(
 
     let env = RenderEnv { run_as, mounts };
     write_project(&stack, &env)?;
-    compose(&state, runtime, &["up", "-d", "--build"])?;
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        compose(&state, runtime, &["up", "-d", "--build"])
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn services_down(
     spec: StackSpec,
-    state: State<'_, ServicesState>,
+    state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
     let _ = validate(spec)?;
     let runtime = resolve_runtime()?;
-    compose(&state, runtime, &["down"])?;
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || compose(&state, runtime, &["down"]))
+        .await
+        .map_err(|e| e.to_string())??;
     Ok(())
 }
 
@@ -274,17 +313,22 @@ fn check_volume(name: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn services_status(
-    state: State<'_, ServicesState>,
+    state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<Vec<ServiceStatus>, String> {
     let runtime = resolve_runtime()?;
-    let out = compose(&state, runtime, &["ps", "--format", "json"])?;
+    let state = state.inner().clone();
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        compose(&state, runtime, &["ps", "--format", "json"])
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(parse_ps(&out))
 }
 
 #[tauri::command]
 pub async fn services_logs(
     service: String,
-    state: State<'_, ServicesState>,
+    state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<String, String> {
     let known = super::catalog::CATALOG
         .iter()
@@ -293,18 +337,29 @@ pub async fn services_logs(
         return Err(format!("unknown service: {service}"));
     }
     let runtime = resolve_runtime()?;
-    compose(&state, runtime, &["logs", "--tail", "200", "--no-color", &service])
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        compose(&state, runtime, &["logs", "--tail", "200", "--no-color", &service])
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn services_delete_data(
     volume: String,
-    state: State<'_, ServicesState>,
+    state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
     check_volume(&volume)?;
     let runtime = resolve_runtime()?;
-    compose(&state, runtime, &["down"])?;
-    run_checked(&state, runtime.bin(), &["volume", "rm", &volume], None)?;
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        compose(&state, runtime, &["down"])?;
+        run_checked(&state, runtime.bin(), &["volume", "rm", &volume], None)?;
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(())
 }
 
@@ -382,5 +437,17 @@ mod tests {
         assert!(check_volume("postgres_data").is_err());
         assert!(check_volume("terra_mariadb_data extra").is_err());
         assert!(check_volume("../etc").is_err());
+    }
+
+    #[test]
+    fn read_capped_keeps_only_the_output_tail() {
+        let mut input = vec![b'a'; OUTPUT_TAIL_CAP + 3];
+        input.extend_from_slice(b"xyz");
+
+        let output = read_capped(std::io::Cursor::new(input));
+
+        assert_eq!(output.len(), OUTPUT_TAIL_CAP);
+        assert!(output.starts_with(&"a".repeat(OUTPUT_TAIL_CAP - 3)));
+        assert!(output.ends_with("xyz"));
     }
 }

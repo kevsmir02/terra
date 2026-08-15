@@ -263,7 +263,7 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
-        .manage(services::state::ServicesState::default())
+        .manage(std::sync::Arc::new(services::state::ServicesState::default()))
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -391,7 +391,7 @@ pub fn run() {
                     }
                     // Containers are deliberately left running; only Terra's
                     // own in-flight compose invocations are killed.
-                    if let Some(state) = app.try_state::<services::state::ServicesState>() {
+                    if let Some(state) = app.try_state::<std::sync::Arc<services::state::ServicesState>>() {
                         state.kill_all();
                     }
                 }
