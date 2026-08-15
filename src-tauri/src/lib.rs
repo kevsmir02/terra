@@ -357,6 +357,7 @@ pub fn run() {
             device::commands::device_input_key,
             device::commands::device_screen_size,
             services::commands::services_runtime_probe,
+            services::commands::sites_detect,
             services::commands::services_up,
             services::commands::services_down,
             services::commands::services_status,

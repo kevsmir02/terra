@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use super::compose::{render_compose, RenderEnv};
+use super::dockerfile::{render_dev_ini, render_php_dockerfile};
 use super::spec::ValidStack;
+use super::vhost::render_vhosts;
 
 pub fn project_dir() -> Result<PathBuf, String> {
     let base = dirs::data_dir().ok_or("no data directory for this platform")?;
@@ -19,6 +21,19 @@ pub fn write_compose_to(dir: &Path, yaml: &str) -> Result<PathBuf, String> {
 pub fn write_project(stack: &ValidStack, env: &RenderEnv) -> Result<PathBuf, String> {
     let dir = project_dir()?;
     write_compose_to(&dir, &render_compose(stack, env))?;
+
+    let conf_d = dir.join("nginx").join("conf.d");
+    std::fs::create_dir_all(&conf_d).map_err(|e| format!("{}: {e}", conf_d.display()))?;
+    std::fs::write(conf_d.join("sites.conf"), render_vhosts(&stack.sites))
+        .map_err(|e| e.to_string())?;
+
+    let php = dir.join("php");
+    std::fs::create_dir_all(&php).map_err(|e| format!("{}: {e}", php.display()))?;
+    std::fs::write(php.join("Dockerfile"), render_php_dockerfile())
+        .map_err(|e| e.to_string())?;
+    std::fs::write(php.join("terra-dev.ini"), render_dev_ini())
+        .map_err(|e| e.to_string())?;
+
     Ok(dir)
 }
 

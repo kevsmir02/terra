@@ -1,9 +1,14 @@
+use std::collections::BTreeMap;
+
 use tauri::State;
 
 use super::compose::{port_of, RenderEnv};
+use super::detect::{detect_site, DetectedSite};
 use super::project::{port_free, project_dir, write_project};
 use super::runtime::{self, RuntimeKind, RuntimeStatus};
-use super::spec::{validate, StackSpec, ValidStack};
+use super::spec::{validate, SiteSpec, StackSpec, ValidStack};
+use crate::modules::fs::authorized_read;
+use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 use super::state::ServicesState;
 use super::status::{parse_ps, ServiceStatus};
 use crate::modules::proc::hide_console;
@@ -45,6 +50,104 @@ fn preflight(stack: &ValidStack) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+pub fn authorize_mounts(
+    registry: &WorkspaceRegistry,
+    sites: &[SiteSpec],
+) -> Result<BTreeMap<String, String>, String> {
+    let mut mounts = BTreeMap::new();
+    for site in sites {
+        let canonical = authorized_read(registry, &site.root, &WorkspaceEnv::Local)?;
+
+        let docroot = if site.docroot == "." {
+            canonical.clone()
+        } else {
+            canonical.join(&site.docroot)
+        };
+        let resolved = docroot
+            .canonicalize()
+            .map_err(|e| format!("{}: {e}", docroot.display()))?;
+        if !resolved.starts_with(&canonical) {
+            return Err(format!(
+                "docroot for {} resolves outside its space root",
+                site.slug
+            ));
+        }
+
+        mounts.insert(site.slug.clone(), canonical.to_string_lossy().into_owned());
+    }
+    Ok(mounts)
+}
+
+pub fn run_as_for(runtime: RuntimeKind, root: &std::path::Path) -> Option<(u32, u32)> {
+    #[cfg(target_os = "linux")]
+    {
+        if runtime == RuntimeKind::Docker {
+            use std::os::unix::fs::MetadataExt;
+            return std::fs::metadata(root).ok().map(|m| (m.uid(), m.gid()));
+        }
+        None
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (runtime, root);
+        None
+    }
+}
+
+fn shared_run_as(
+    per_site: &[Option<(u32, u32)>],
+    slugs: &[&str],
+) -> Result<Option<(u32, u32)>, String> {
+    let mut shared = None;
+    let mut first_slug = None;
+    for (index, owner) in per_site.iter().enumerate() {
+        let Some(owner) = owner else {
+            continue;
+        };
+        if let Some(existing) = shared {
+            if existing != *owner {
+                let first = first_slug.unwrap_or("unknown");
+                let second = slugs.get(index).copied().unwrap_or("unknown");
+                return Err(format!(
+                    "sites {first} and {second} have different owners; a single php container cannot serve mixed-ownership spaces"
+                ));
+            }
+        } else {
+            shared = Some(*owner);
+            first_slug = slugs.get(index).copied();
+        }
+    }
+    Ok(shared)
+}
+
+#[tauri::command]
+pub async fn sites_detect(
+    root: String,
+    registry: State<'_, WorkspaceRegistry>,
+) -> Result<DetectedSite, String> {
+    let path = authorized_read(&registry, &root, &WorkspaceEnv::Local)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut files = std::collections::BTreeSet::new();
+        let mut dirs = std::collections::BTreeSet::new();
+        let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            match entry.file_type() {
+                Ok(t) if t.is_dir() => {
+                    dirs.insert(name);
+                }
+                Ok(_) => {
+                    files.insert(name);
+                }
+                Err(_) => {}
+            }
+        }
+        Ok(detect_site(&files, &dirs))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn run_checked(
@@ -125,13 +228,24 @@ fn compose(
 pub async fn services_up(
     spec: StackSpec,
     state: State<'_, ServicesState>,
+    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
     let stack = validate(spec)?;
     let runtime = resolve_runtime()?;
     preflight(&stack)?;
-    let env = RenderEnv { run_as: None, mounts: Default::default() };
+
+    let mounts = authorize_mounts(&registry, &stack.sites)?;
+    let per_site: Vec<Option<(u32, u32)>> = stack
+        .sites
+        .iter()
+        .map(|s| mounts.get(&s.slug).and_then(|p| run_as_for(runtime, std::path::Path::new(p))))
+        .collect();
+    let slugs: Vec<&str> = stack.sites.iter().map(|s| s.slug.as_str()).collect();
+    let run_as = shared_run_as(&per_site, &slugs)?;
+
+    let env = RenderEnv { run_as, mounts };
     write_project(&stack, &env)?;
-    compose(&state, runtime, &["up", "-d"])?;
+    compose(&state, runtime, &["up", "-d", "--build"])?;
     Ok(())
 }
 
@@ -197,6 +311,67 @@ pub async fn services_delete_data(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::services::spec::{SiteKind, SiteSpec};
+    use crate::modules::workspace::WorkspaceRegistry;
+
+    fn site_at(root: &std::path::Path, docroot: &str) -> SiteSpec {
+        SiteSpec {
+            slug: "app".into(),
+            root: root.to_string_lossy().into_owned(),
+            docroot: docroot.into(),
+            port: 8000,
+            kind: SiteKind::Php,
+        }
+    }
+
+    #[test]
+    fn an_unauthorized_root_never_reaches_the_yaml() -> Result<(), String> {
+        let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let reg = WorkspaceRegistry::default();
+        let result = authorize_mounts(&reg, &[site_at(dir.path(), ".")]);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn the_string_checked_is_the_string_emitted() -> Result<(), String> {
+        let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+        std::fs::create_dir(dir.path().join("public")).map_err(|e| e.to_string())?;
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(dir.path()).map_err(|e| e.to_string())?;
+
+        let mounts = authorize_mounts(&reg, &[site_at(dir.path(), "public")])?;
+        let emitted = mounts.get("app").ok_or("app mount")?;
+        let canonical = dir.path().canonicalize().map_err(|e| e.to_string())?;
+        let expected = canonical.to_string_lossy().into_owned();
+        assert_eq!(emitted, &expected);
+        Ok(())
+    }
+
+    #[test]
+    fn a_docroot_outside_the_space_root_is_rejected() -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+            let reg = WorkspaceRegistry::default();
+            reg.authorize(dir.path()).map_err(|e| e.to_string())?;
+            let link = dir.path().join("out");
+            std::os::unix::fs::symlink("/etc", &link).map_err(|e| e.to_string())?;
+            assert!(authorize_mounts(&reg, &[site_at(dir.path(), "out")]).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn shared_run_as_requires_one_owner_for_all_sites() -> Result<(), String> {
+        assert_eq!(shared_run_as(&[None, None], &["a", "b"])?, None);
+        assert_eq!(
+            shared_run_as(&[Some((1000, 1000)), Some((1000, 1000))], &["a", "b"])?,
+            Some((1000, 1000))
+        );
+        assert!(shared_run_as(&[Some((1000, 1000)), Some((1001, 1001))], &["a", "b"]).is_err());
+        Ok(())
+    }
 
     #[test]
     fn only_terra_owned_volumes_can_be_deleted() {
