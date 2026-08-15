@@ -36,6 +36,16 @@ describe("uniqueSlug", () => {
     const taken = new Set(["site"]);
     expect(uniqueSlug("///", taken)).toBe("site-2");
   });
+
+  it("keeps colliding slugs within the 63 character limit", () => {
+    const name = "x".repeat(200);
+    const first = uniqueSlug(name, new Set());
+    const second = uniqueSlug(name, new Set([first]));
+
+    expect(first).toHaveLength(63);
+    expect(second).toBe(`${"x".repeat(61)}-2`);
+    expect(second).toHaveLength(63);
+  });
 });
 
 describe("nextSitePort", () => {

@@ -75,3 +75,21 @@ The Open button is enabled only when the nginx service reports healthy. Its URL 
 ### Commit
 
 - `fix(services): dedupe site slugs for same-named spaces`
+
+## Fix round 2
+
+### What changed
+
+- `src/modules/services/lib/sites.ts:19-33`: cap each deduplication suffix within the 63-character slug limit by truncating the base head before appending `-N` and stripping exposed trailing dashes.
+- `src/modules/services/lib/sites.test.ts:39-49`: added regression coverage for two 200-character names, asserting the first slug is 63 characters and the colliding `-2` slug remains 63 characters.
+
+### Covering tests
+
+- RED: `pnpm test src/modules/services/lib/sites.test.ts` failed before the implementation with 7 passing and 1 failing test; the received colliding slug exceeded the expected 63-character value.
+- `pnpm test src/modules/services/lib/sites.test.ts`: passed, 1 test file and 8 tests.
+- `pnpm test`: passed, 80 test files and 1191 tests.
+- `pnpm lint && pnpm check-types && pnpm knip`: passed; Biome checked 351 files with no fixes, TypeScript completed successfully, and Knip completed with the repository's existing 9 configuration hints.
+
+### Commit
+
+- `fix(services): cap deduped site slugs at 63 characters`

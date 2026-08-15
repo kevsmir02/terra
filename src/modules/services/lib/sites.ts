@@ -23,6 +23,11 @@ export function uniqueSlug(
   const base = slugFromName(name) || "site";
   if (!taken.has(base)) return base;
   let i = 2;
-  while (taken.has(`${base}-${i}`)) i++;
-  return `${base}-${i}`;
+  while (true) {
+    const suffix = `-${i}`;
+    const head = base.slice(0, 63 - suffix.length).replace(/-+$/, "");
+    const candidate = `${head}${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+    i++;
+  }
 }
