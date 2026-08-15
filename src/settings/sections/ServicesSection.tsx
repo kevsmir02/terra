@@ -76,7 +76,10 @@ export function ServicesSection() {
         const root = space.root ?? "";
         if (!root) return [space.id, FALLBACK_SITE];
         try {
-          return [space.id, await invoke<DetectedSite>("sites_detect", { root })];
+          return [
+            space.id,
+            await invoke<DetectedSite>("sites_detect", { root }),
+          ];
         } catch {
           return [space.id, FALLBACK_SITE];
         }

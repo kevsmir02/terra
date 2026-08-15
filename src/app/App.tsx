@@ -306,8 +306,10 @@ export default function App() {
     setActiveId,
     newTerminalInSpace: newTabInSpace,
     sidebarRef,
-    sidebarMinPct: Math.round((SIDEBAR_MIN_WIDTH / window.innerWidth) * 100) || 10,
-    sidebarMaxPct: Math.round((SIDEBAR_MAX_WIDTH / window.innerWidth) * 100) || 50,
+    sidebarMinPct:
+      Math.round((SIDEBAR_MIN_WIDTH / window.innerWidth) * 100) || 10,
+    sidebarMaxPct:
+      Math.round((SIDEBAR_MAX_WIDTH / window.innerWidth) * 100) || 50,
   });
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);

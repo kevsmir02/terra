@@ -59,7 +59,9 @@ export function ServicesPill(): JSX.Element | null {
 
   if (statuses.length === 0) return null;
 
-  const healthy = statuses.filter((status) => status.health === "healthy").length;
+  const healthy = statuses.filter(
+    (status) => status.health === "healthy",
+  ).length;
 
   return (
     <button

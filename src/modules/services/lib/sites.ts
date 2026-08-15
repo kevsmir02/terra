@@ -16,10 +16,7 @@ export function nextSitePort(taken: number[]): number {
   return port;
 }
 
-export function uniqueSlug(
-  name: string,
-  taken: ReadonlySet<string>,
-): string {
+export function uniqueSlug(name: string, taken: ReadonlySet<string>): string {
   const base = slugFromName(name) || "site";
   if (!taken.has(base)) return base;
   let i = 2;

@@ -29,7 +29,7 @@ describe("generatePassword", () => {
     for (let i = 0; i < 50; i++) {
       const pw = generatePassword();
       expect(pw).toMatch(/^[A-Za-z0-9_-]{24}$/);
-  }
+    }
   });
 });
 
