@@ -106,6 +106,9 @@ The official `php:<v>-fpm-alpine` image ships without `pdo_mysql`, `gd`, `zip` a
 - Extensions installed with a pinned `mlocati/php-extension-installer` copied in via `COPY --from`.
 - Fixed extension set: `pdo_mysql pdo_pgsql mbstring bcmath intl zip gd exif pcntl opcache redis`.
 - Composer via `COPY --from=composer:2`.
+- A rendered `terra-dev.ini` setting `opcache.validate_timestamps=1` and `opcache.revalidate_freq=0`, plus `display_errors=On` and a raised `upload_max_filesize`.
+
+That ini file is not optional polish. opcache's defaults revalidate on a timer, so without it a saved file can take seconds to appear in the browser, and some base images ship production-shaped opcache settings where it never appears at all. "I saved and nothing changed" would otherwise be the single most common report against this feature.
 
 Compose uses `build:` for these. The first enable pays a one-time build, surfaced as build progress in the UI rather than an unexplained wait; every later start is a cache hit.
 
@@ -210,6 +213,7 @@ The entire `src/modules/services/` frontend sits behind a lazy import, as the LS
 | Image pull slow on first start | Pull progress streamed into the service row |
 | Container exits unhealthy | Health dot plus the last log lines inline, not a toast that scrolls away |
 | Volume deletion | Confirmation naming the exact volume; never implied by stopping a service |
+| Open pressed while the site's stack is down | Open is disabled with the reason inline, rather than opening a preview tab onto a connection refused |
 
 ## Testing
 
@@ -221,6 +225,7 @@ This touches process spawn and workspace authorization, so TERRA.md requires tes
 - Every published port renders with a `127.0.0.1:` prefix. This is a regression test, not a nicety.
 - The nginx and PHP-FPM mount paths for a given site are byte-identical.
 - The mounted path is the space root and the nginx `root` is the space root joined with the docroot, so a Laravel `public` docroot still exposes `../vendor` to PHP.
+- The rendered dev ini sets `opcache.validate_timestamps=1` and `opcache.revalidate_freq=0`, so an edit is visible on the next request.
 - `detect_site` table tests over fixture listings, including the Laravel case where `artisan` must beat `package.json`.
 - `vhost::render` sanitization: `foo bar`, `../evil`, `a/b`, unicode, empty, and a 200-character name. Never emits a path fragment or a second server block.
 - Port assignment is stable across a rename and does not collide with a catalog port.
@@ -246,6 +251,7 @@ Ordered so each phase ships something usable, and the riskiest work (bind mounts
 - With the stack stopped, Terra's own RAM and CPU are unchanged from today.
 - Enabling MariaDB and connecting from an external client on `127.0.0.1:3306` works using the credentials shown in the tab, with nothing edited by hand.
 - A fresh Laravel project in a Terra space is reachable at its assigned `localhost` port after enabling nginx, PHP and MariaDB, with no file edited by hand.
+- Editing a `.php` file in Terra and reloading the preview tab shows the change on the next request, with no container restart.
 - On Linux, `composer install` run through the PHP container leaves files owned by the user, not root.
 - Quitting and relaunching Terra leaves services running and the UI reporting them accurately.
 - No file outside `dirs::data_dir()/terra/services/` and the user's own mounted project is written on any platform.
