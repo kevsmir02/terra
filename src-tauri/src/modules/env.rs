@@ -1,6 +1,7 @@
-//! GUI-launched apps get a bare PATH on macOS, and servers like
-//! typescript-language-server need the user's PATH themselves to find
-//! `node`. Capture the login shell env once, reuse for detect and spawn.
+//! GUI-launched apps get a bare PATH on macOS, so anything Terra shells out to
+//! has to be found the way the user's own terminal would find it: language
+//! servers need `node`, the services stack needs `docker` or `podman`. Capture
+//! the login shell env once, reuse it for both detection and spawn.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,7 +19,7 @@ pub fn server_env_overlay() -> &'static HashMap<String, String> {
             match capture_login_env() {
                 Some(env) => env,
                 None => {
-                    log::warn!("lsp: login shell env capture failed, using process env");
+                    log::warn!("env: login shell capture failed, using process env");
                     HashMap::new()
                 }
             }
@@ -62,7 +63,7 @@ fn capture_login_env() -> Option<HashMap<String, String>> {
     let mut stdout = child.take_stdout()?;
     let (tx, rx) = mpsc::channel();
     std::thread::Builder::new()
-        .name("terra-lsp-env-capture".into())
+        .name("terra-env-capture".into())
         .spawn(move || {
             let mut buf = Vec::with_capacity(8 * 1024);
             let _ = stdout.read_to_end(&mut buf);
@@ -76,7 +77,7 @@ fn capture_login_env() -> Option<HashMap<String, String>> {
             b
         }
         Err(_) => {
-            log::warn!("lsp: login shell env capture timed out after {CAPTURE_TIMEOUT:?}");
+            log::warn!("env: login shell capture timed out after {CAPTURE_TIMEOUT:?}");
             let _ = child.kill();
             let _ = child.wait();
             return None;

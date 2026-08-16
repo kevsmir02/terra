@@ -176,26 +176,30 @@ export function ServicesSection() {
     }
     const taken = config.sites.map((site) => site.port);
     const used = new Set<string>();
-    return spaces.map((space) => {
-      const slug = uniqueSlug(space.name, used);
-      used.add(slug);
-      const stored = savedById.get(space.id) ?? savedBySlug.get(slug);
-      const detected = detections[space.id] ?? FALLBACK_SITE;
-      const port = stored?.port ?? nextSitePort(taken);
-      if (!stored) taken.push(port);
-      return {
-        id: space.id,
-        slug,
-        spaceName: space.name,
-        root: space.root ?? "",
-        docroot: stored?.docroot ?? detected.docroot,
-        port,
-        kind: detected.kind,
-        env: space.env,
-        confident: detected.confident,
-        slowMount: IS_WINDOWS && space.env.kind !== "wsl",
-      };
-    });
+    // A space with no root has nothing to serve, and sending it as a site
+    // would fail the workspace gate for every service, not just the web tier.
+    return spaces
+      .filter((space) => Boolean(space.root))
+      .map((space) => {
+        const slug = uniqueSlug(space.name, used);
+        used.add(slug);
+        const stored = savedById.get(space.id) ?? savedBySlug.get(slug);
+        const detected = detections[space.id] ?? FALLBACK_SITE;
+        const port = stored?.port ?? nextSitePort(taken);
+        if (!stored) taken.push(port);
+        return {
+          id: space.id,
+          slug,
+          spaceName: space.name,
+          root: space.root ?? "",
+          docroot: stored?.docroot ?? detected.docroot,
+          port,
+          kind: detected.kind,
+          env: space.env,
+          confident: detected.confident,
+          slowMount: IS_WINDOWS && space.env.kind !== "wsl",
+        };
+      });
   }, [config.sites, detections, spaces]);
 
   useEffect(() => {
