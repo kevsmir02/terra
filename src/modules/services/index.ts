@@ -4,12 +4,16 @@ export type { RowStatus } from "./ServiceRow";
 export { LogsDrawer } from "./LogsDrawer";
 export { SitesTable } from "./SitesTable";
 export type { SiteRow } from "./SitesTable";
-export { probeRuntime, probeRuntimeAll, runtimeMessage } from "./lib/runtime";
+export {
+  probeRuntimeAll,
+  runtimeMessage,
+  shouldShowRuntimePicker,
+} from "./lib/runtime";
 export type { RuntimeProbeAll, RuntimeStatus } from "./lib/runtime";
 export { SERVICE_META, VOLUME_BY_ID } from "./lib/config";
 export type { ServicesConfig } from "./lib/config";
 export { connectionDetails, generatePassword } from "./lib/connection";
 export type { ConnectionDetails, ServiceId } from "./lib/connection";
-export { nextSitePort, slugFromName, uniqueSlug } from "./lib/sites";
+export { nextSitePort, resolveSiteKind, uniqueSlug } from "./lib/sites";
 export { ServicesPill } from "./ServicesPill";
 export { shouldMountPill } from "./lib/pillGate";

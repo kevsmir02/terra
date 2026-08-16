@@ -8,9 +8,11 @@ import {
   LogsDrawer,
   nextSitePort,
   probeRuntimeAll,
+  resolveSiteKind,
   RuntimeCard,
   SERVICE_META,
   ServiceRow,
+  shouldShowRuntimePicker,
   SitesTable,
   uniqueSlug,
   type RowStatus,
@@ -194,7 +196,7 @@ export function ServicesSection() {
           root: space.root ?? "",
           docroot: stored?.docroot ?? detected.docroot,
           port,
-          kind: detected.kind,
+          kind: resolveSiteKind(stored?.kind, detected),
           env: space.env,
           confident: detected.confident,
           slowMount: IS_WINDOWS && space.env.kind !== "wsl",
@@ -354,8 +356,7 @@ export function ServicesSection() {
     [config.runtime, poll],
   );
 
-  const bothReady =
-    probes?.docker.state === "ready" && probes.podman.state === "ready";
+  const showRuntimePicker = shouldShowRuntimePicker(probes, config.runtime);
 
   return (
     <div className="space-y-4">
@@ -365,7 +366,7 @@ export function ServicesSection() {
         error={probeError}
         onRefresh={() => void refreshRuntime()}
       />
-      {bothReady && (
+      {showRuntimePicker && (
         <div className="flex items-center gap-1 rounded-md border p-1">
           {(
             [

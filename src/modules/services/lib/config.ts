@@ -35,6 +35,20 @@ export const SERVICE_META: Record<ServiceId, ServiceMeta> = {
   web: { label: "Web", defaultPort: 8000, composeName: "nginx" },
 };
 
+export const MIN_PORT = 1025;
+export const MAX_PORT = 65535;
+
+/** `null` for anything the Rust validator would reject, so a half-typed or
+ * cleared field is never persisted. An empty input used to save port 0, and an
+ * out-of-range one overflowed `u16` and failed the whole start with a raw
+ * deserialization error instead of the friendly message. */
+export function parsePort(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const port = Number(trimmed);
+  return port >= MIN_PORT && port <= MAX_PORT ? port : null;
+}
+
 /** Only the databases own a named volume; every other service has nothing to delete. */
 export const VOLUME_BY_ID: Partial<Record<ServiceId, string>> = {
   mariadb: "terra_mariadb_data",

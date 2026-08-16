@@ -8,18 +8,11 @@ use super::detect::{detect_site, DetectedSite};
 use super::project::{port_free, project_dir, write_project};
 use super::runtime::{self, RuntimeKind, RuntimeStatus};
 use super::spec::{validate, SiteSpec, StackSpec, ValidStack};
-use crate::modules::fs::authorized_read;
+use crate::modules::fs::{authorized_read, to_canon};
 use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
 use super::state::{InflightProc, ServicesState};
 use super::status::{parse_ps, ServiceStatus};
 use crate::modules::proc::hide_console;
-
-#[tauri::command]
-pub async fn services_runtime_probe() -> RuntimeStatus {
-    tauri::async_runtime::spawn_blocking(runtime::detect)
-        .await
-        .unwrap_or(RuntimeStatus::NotFound)
-}
 
 #[derive(serde::Serialize)]
 pub struct RuntimeProbeReport {
@@ -69,6 +62,26 @@ async fn resolve_runtime_off_thread(forced: Option<RuntimeKind>) -> Result<Runti
     tauri::async_runtime::spawn_blocking(move || resolve_runtime(forced))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// The polling path. User-initiated actions stay uncached so a runtime the
+/// user just started is picked up immediately; only the pollers, which ask
+/// every few seconds, are allowed to reuse a recent answer.
+async fn resolve_runtime_cached(
+    state: &std::sync::Arc<ServicesState>,
+    forced: Option<RuntimeKind>,
+) -> Result<RuntimeKind, String> {
+    if let Some(hit) = state.cached_runtime(forced) {
+        return hit;
+    }
+    let cache = state.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = resolve_runtime(forced);
+        cache.cache_runtime(forced, result.clone());
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Only the services actually being started are checked. Checking the whole
@@ -122,7 +135,10 @@ pub fn authorize_mounts(
             ));
         }
 
-        mounts.insert(site.slug.clone(), canonical.to_string_lossy().into_owned());
+        // `to_canon`, not the raw canonical path: Windows canonicalization
+        // yields a `\\?\` verbatim prefix, and Compose's short volume syntax
+        // splits the source on `:`, so the mount would be rejected outright.
+        mounts.insert(site.slug.clone(), to_canon(&canonical));
     }
     Ok(mounts)
 }
@@ -233,6 +249,26 @@ fn read_capped<R: std::io::Read>(mut r: R) -> String {
     String::from_utf8_lossy(&tail).into_owned()
 }
 
+/// Never empty: stderr if the process said anything, else stdout, else the
+/// exit status itself.
+fn failure_message(
+    bin: &std::path::Path,
+    status: &std::process::ExitStatus,
+    out: &str,
+    err: &str,
+) -> String {
+    for stream in [err, out] {
+        let trimmed = stream.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    match status.code() {
+        Some(code) => format!("{} failed with exit code {code}", bin.display()),
+        None => format!("{} was terminated by a signal", bin.display()),
+    }
+}
+
 fn run_checked(
     state: &ServicesState,
     bin: &std::path::Path,
@@ -298,7 +334,10 @@ fn run_checked(
     };
     let status = proc.child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
-        return Err(err.trim().to_string());
+        // A compose failure that wrote nothing to stderr used to surface as an
+        // empty string, which the UI renders as no message at all: the toggle
+        // flips back and nothing explains why. Always say something.
+        return Err(failure_message(bin, &status, &out, &err));
     }
     Ok(out)
 }
@@ -398,16 +437,15 @@ pub async fn services_down(
     Ok(())
 }
 
-fn check_volume(name: &str) -> Result<(), String> {
-    let known = super::catalog::CATALOG
+/// Resolves a volume name arriving from IPC to the service that owns it. The
+/// catalog is the allowlist, so a name Terra does not own can never reach
+/// `volume rm`.
+fn service_for_volume(name: &str) -> Result<ServiceId, String> {
+    super::catalog::CATALOG
         .iter()
-        .filter_map(|d| d.volume)
-        .any(|v| v == name);
-    if known {
-        Ok(())
-    } else {
-        Err(format!("unknown volume: {name}"))
-    }
+        .find(|d| d.volume == Some(name))
+        .map(|d| d.id)
+        .ok_or_else(|| format!("unknown volume: {name}"))
 }
 
 #[tauri::command]
@@ -415,8 +453,8 @@ pub async fn services_status(
     runtime: Option<RuntimeKind>,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<Vec<ServiceStatus>, String> {
-    let runtime = resolve_runtime_off_thread(runtime).await?;
     let state = state.inner().clone();
+    let runtime = resolve_runtime_cached(&state, runtime).await?;
     let out = tauri::async_runtime::spawn_blocking(move || {
         compose(&state, runtime, &["ps", "--format", "json"])
     })
@@ -452,12 +490,17 @@ pub async fn services_delete_data(
     volume: String,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
-    check_volume(&volume)?;
+    let owner = service_for_volume(&volume)?;
     let runtime = resolve_runtime_off_thread(runtime).await?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let bin = runtime_bin(runtime)?;
-        compose(&state, runtime, &["down"])?;
+        // Only the service holding the volume comes down. `compose down` would
+        // take every other container in the project with it, which is not what
+        // "delete this database's data" asks for.
+        for name in compose_names(owner) {
+            compose(&state, runtime, &["rm", "--stop", "--force", name])?;
+        }
         run_checked(&state, &bin, &["volume", "rm", &volume], None)?;
         Ok::<(), String>(())
     })
@@ -612,13 +655,55 @@ mod tests {
 
     #[test]
     fn only_terra_owned_volumes_can_be_deleted() {
-        assert!(check_volume("terra_mariadb_data").is_ok());
-        assert!(check_volume("terra_postgres_data").is_ok());
+        assert_eq!(
+            service_for_volume("terra_mariadb_data"),
+            Ok(ServiceId::Mariadb)
+        );
+        assert_eq!(
+            service_for_volume("terra_postgres_data"),
+            Ok(ServiceId::Postgres)
+        );
         // A volume name arriving from IPC must not be able to name someone
         // else's data.
-        assert!(check_volume("postgres_data").is_err());
-        assert!(check_volume("terra_mariadb_data extra").is_err());
-        assert!(check_volume("../etc").is_err());
+        assert!(service_for_volume("postgres_data").is_err());
+        assert!(service_for_volume("terra_mariadb_data extra").is_err());
+        assert!(service_for_volume("../etc").is_err());
+    }
+
+    #[test]
+    fn deleting_data_only_removes_the_owning_service() -> Result<(), String> {
+        // `compose down` would take every other container in the project with
+        // it. The owner lookup is what keeps the blast radius to one service.
+        let owner = service_for_volume("terra_mariadb_data")?;
+        assert_eq!(compose_names(owner), &["mariadb"]);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_silent_failure_still_reports_something() {
+        let state = ServicesState::default();
+        let err = run_checked(&state, std::path::Path::new("/bin/sh"), &["-c", "exit 3"], None)
+            .expect_err("a non-zero exit must be an error");
+
+        // An empty message renders as no message at all in the UI.
+        assert!(!err.trim().is_empty());
+        assert!(err.contains('3'), "message lost the exit code: {err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failure_prefers_what_the_process_actually_said() {
+        let state = ServicesState::default();
+        let err = run_checked(
+            &state,
+            std::path::Path::new("/bin/sh"),
+            &["-c", "echo 'no configuration file provided' >&2; exit 1"],
+            None,
+        )
+        .expect_err("a non-zero exit must be an error");
+
+        assert_eq!(err, "no configuration file provided");
     }
 
     #[test]
