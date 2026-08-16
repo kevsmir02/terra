@@ -54,8 +54,16 @@ export function runtimeMessage(status: RuntimeStatus): RuntimeMessage {
   }
 }
 
-export function probeRuntime(): Promise<RuntimeStatus> {
-  return invoke<RuntimeStatus>("services_runtime_probe");
+/** A forced runtime always keeps its picker on screen. Showing it only when
+ * both runtimes are ready stranded anyone whose forced choice stopped working:
+ * the service list hid itself and the control to undo the choice went with
+ * it. */
+export function shouldShowRuntimePicker(
+  probes: RuntimeProbeAll | null,
+  override: RuntimeName | null,
+): boolean {
+  if (override !== null) return true;
+  return probes?.docker.state === "ready" && probes.podman.state === "ready";
 }
 
 export function probeRuntimeAll(): Promise<RuntimeProbeAll> {

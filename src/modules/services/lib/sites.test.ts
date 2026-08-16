@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   nextSitePort,
+  resolveSiteKind,
   slugFromName,
   uniqueSlug,
 } from "@/modules/services/lib/sites";
@@ -53,5 +54,27 @@ describe("nextSitePort", () => {
     expect(nextSitePort([])).toBe(8000);
     expect(nextSitePort([8000, 8001])).toBe(8002);
     expect(nextSitePort([8000, 8001, 8002, 8003, 8004])).toBe(8005);
+  });
+});
+
+describe("resolveSiteKind", () => {
+  it("lets a confident detection change a saved kind", () => {
+    expect(resolveSiteKind("static", { kind: "php", confident: true })).toBe(
+      "php",
+    );
+  });
+
+  it("never lets an unconfident guess downgrade a saved kind", () => {
+    // sites_detect falls back to unconfident "static" whenever it cannot read
+    // the directory, which used to be persisted over a working PHP site.
+    expect(resolveSiteKind("php", { kind: "static", confident: false })).toBe(
+      "php",
+    );
+  });
+
+  it("falls back to the guess when nothing is saved yet", () => {
+    expect(
+      resolveSiteKind(undefined, { kind: "static", confident: false }),
+    ).toBe("static");
   });
 });

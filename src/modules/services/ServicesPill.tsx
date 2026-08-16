@@ -1,3 +1,4 @@
+import { pollIntervalMs } from "@/modules/services/lib/pillGate";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
@@ -9,8 +10,6 @@ type ServiceStatus = {
   state: string;
   health: string | null;
 };
-
-const POLL_MS = 5000;
 
 export function ServicesPill(): JSX.Element | null {
   const [statuses, setStatuses] = useState<ServiceStatus[]>([]);
@@ -54,8 +53,10 @@ export function ServicesPill(): JSX.Element | null {
     };
   }, []);
 
+  const interval = pollIntervalMs({ focused, servicesTabOpen, hasRunning });
+
   useEffect(() => {
-    if (!focused || (!servicesTabOpen && !hasRunning)) return;
+    if (interval === null) return;
     let alive = true;
 
     const poll = async () => {
@@ -70,12 +71,12 @@ export function ServicesPill(): JSX.Element | null {
     };
 
     void poll();
-    const timer = setInterval(() => void poll(), POLL_MS);
+    const timer = setInterval(() => void poll(), interval);
     return () => {
       alive = false;
       clearInterval(timer);
     };
-  }, [focused, hasRunning, runtime, servicesTabOpen]);
+  }, [interval, runtime]);
 
   if (running === 0) return null;
 

@@ -1,5 +1,19 @@
 const RESERVED = new Set([1025, 3306, 5432, 6379, 8025, 8026]);
 
+export type SiteKind = "php" | "static";
+
+/** Only a confident detection may change a saved kind. `sites_detect` falls
+ * back to an unconfident "static" whenever it cannot read the directory, so
+ * letting detection always win silently downgraded a PHP site and persisted
+ * it, after which nginx stopped serving the site's index.php. */
+export function resolveSiteKind(
+  stored: SiteKind | undefined,
+  detected: { kind: SiteKind; confident: boolean },
+): SiteKind {
+  if (detected.confident) return detected.kind;
+  return stored ?? detected.kind;
+}
+
 export function slugFromName(name: string): string {
   return name
     .toLowerCase()

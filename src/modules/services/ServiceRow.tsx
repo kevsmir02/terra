@@ -21,8 +21,13 @@ import {
   connectionDetails,
   type ServiceId,
 } from "@/modules/services/lib/connection";
-import { VOLUME_BY_ID } from "@/modules/services/lib/config";
-import { useState } from "react";
+import {
+  MAX_PORT,
+  MIN_PORT,
+  parsePort,
+  VOLUME_BY_ID,
+} from "@/modules/services/lib/config";
+import { useEffect, useState } from "react";
 
 export type RowStatus = "stopped" | "starting" | "healthy" | "unhealthy";
 
@@ -73,6 +78,17 @@ export function ServiceRow({
   const volume = VOLUME_BY_ID[id];
   const [showPassword, setShowPassword] = useState(false);
 
+  // The field is edited as text and only committed once it parses. Writing
+  // every keystroke through persisted a 0 for a cleared field, and anything
+  // over 65535 failed the next start with a raw deserialization error.
+  const [draft, setDraft] = useState(String(port));
+  useEffect(() => setDraft(String(port)), [port]);
+  const commitPort = () => {
+    const parsed = parsePort(draft);
+    if (parsed === null) setDraft(String(port));
+    else if (parsed !== port) onPortChange(parsed);
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
       <span className={`size-2 rounded-full ${statusColor(status)}`} />
@@ -80,9 +96,16 @@ export function ServiceRow({
       <Input
         className="h-7 w-24"
         type="number"
-        value={port}
+        min={MIN_PORT}
+        max={MAX_PORT}
+        aria-label={`${label} port`}
+        value={draft}
         disabled={enabled}
-        onChange={(e) => onPortChange(Number(e.target.value))}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commitPort}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commitPort();
+        }}
       />
       {busy && (
         <span className="text-muted-foreground text-xs">
@@ -160,7 +183,8 @@ export function ServiceRow({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete {label} data?</AlertDialogTitle>
               <AlertDialogDescription>
-                Removes the {volume} volume. This cannot be undone.
+                Stops {label} and removes the {volume} volume. Other services
+                keep running. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
