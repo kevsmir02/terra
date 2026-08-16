@@ -1,5 +1,7 @@
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::modules::env::{resolve_binary, server_env_overlay};
 use crate::modules::proc::hide_console;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -65,9 +67,24 @@ pub fn select(docker: &Probe, podman: &Probe) -> RuntimeStatus {
     }
 }
 
-fn run(bin: &str, args: &[&str]) -> Option<String> {
+/// Absolute path to the runtime binary, resolved through the user's login
+/// shell PATH rather than the process PATH: a GUI-launched app inherits a bare
+/// PATH on macOS, which has neither Docker Desktop nor Podman on it.
+pub fn resolve_bin(runtime: RuntimeKind) -> Option<PathBuf> {
+    resolve_binary(runtime.bin())
+}
+
+/// The same login-shell environment the binary was resolved from. Carries
+/// `DOCKER_HOST` and friends, which rootless Podman and non-default Docker
+/// contexts set in the user's profile.
+pub fn apply_env(cmd: &mut Command) {
+    cmd.envs(server_env_overlay());
+}
+
+fn run(bin: &Path, args: &[&str]) -> Option<String> {
     let mut cmd = Command::new(bin);
     cmd.args(args);
+    apply_env(&mut cmd);
     hide_console(&mut cmd);
     let out = cmd.output().ok()?;
     if !out.status.success() {
@@ -77,14 +94,13 @@ fn run(bin: &str, args: &[&str]) -> Option<String> {
 }
 
 pub fn probe(runtime: RuntimeKind) -> Probe {
-    let bin = runtime.bin();
-    if which::which(bin).is_err() {
+    let Some(bin) = resolve_bin(runtime) else {
         return Probe::Missing;
-    }
-    let Some(version) = run(bin, &["compose", "version", "--short"]) else {
+    };
+    let Some(version) = run(&bin, &["compose", "version", "--short"]) else {
         return Probe::NoCompose;
     };
-    if run(bin, &["info", "--format", "{{.ServerVersion}}"]).is_none() {
+    if run(&bin, &["info", "--format", "{{.ServerVersion}}"]).is_none() {
         return Probe::Unreachable;
     }
     Probe::Ready { version }

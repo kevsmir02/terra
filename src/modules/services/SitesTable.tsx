@@ -46,7 +46,7 @@ export function SitesTable({
         </div>
         {rows.length === 0 ? (
           <p className="rounded-md border border-dashed px-3 py-4 text-muted-foreground text-xs">
-            Add a Terra space to configure a site.
+            Add a Terra space with a root folder to configure a site.
           </p>
         ) : (
           <div className="space-y-2">

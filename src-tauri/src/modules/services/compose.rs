@@ -47,9 +47,14 @@ pub fn render_compose(stack: &ValidStack, env: &RenderEnv) -> String {
             let _ = writeln!(out, "    restart: unless-stopped");
             let _ = writeln!(out, "    depends_on:");
             let _ = writeln!(out, "      - php");
-            let _ = writeln!(out, "    ports:");
-            for site in &stack.sites {
-                publish(&mut out, site.port, site.port);
+            // A key with no list items renders as null, which Compose rejects.
+            // The web tier is toggleable before any space has a root, so the
+            // empty case is reachable and must stay valid YAML.
+            if !stack.sites.is_empty() {
+                let _ = writeln!(out, "    ports:");
+                for site in &stack.sites {
+                    publish(&mut out, site.port, site.port);
+                }
             }
             let _ = writeln!(out, "    volumes:");
             let _ = writeln!(out, "      - ./nginx/conf.d:/etc/nginx/conf.d:ro");
@@ -64,9 +69,11 @@ pub fn render_compose(stack: &ValidStack, env: &RenderEnv) -> String {
             if let Some((uid, gid)) = env.run_as {
                 let _ = writeln!(out, "    user: \"{uid}:{gid}\"");
             }
-            let _ = writeln!(out, "    volumes:");
-            for (slug, host) in &env.mounts {
-                let _ = writeln!(out, "      - {host}:/sites/{slug}");
+            if !env.mounts.is_empty() {
+                let _ = writeln!(out, "    volumes:");
+                for (slug, host) in &env.mounts {
+                    let _ = writeln!(out, "      - {host}:/sites/{slug}");
+                }
             }
             out.push('\n');
             continue;
@@ -253,5 +260,20 @@ mod tests {
     fn publishes_each_site_port_on_loopback() {
         let (stack, env) = web_stack();
         assert!(render_compose(&stack, &env).contains("\"127.0.0.1:8000:8000\""));
+    }
+
+    #[test]
+    fn the_web_tier_without_sites_emits_no_empty_keys() {
+        // `ports:` or `volumes:` with no items under them is YAML null, which
+        // Compose rejects outright. The web toggle is reachable before any
+        // space has a root, so this has to stay a valid file.
+        let out = render_compose(&stack(vec![ServiceId::Web]), &plain());
+        assert!(!out.contains("ports:"), "dangling ports key:\n{out}");
+        assert!(
+            out.contains("  php:\n    build: ./php\n    restart: unless-stopped\n\n"),
+            "dangling volumes key on php:\n{out}"
+        );
+        // nginx keeps its config mount, so that key still has an item.
+        assert!(out.contains("      - ./nginx/conf.d:/etc/nginx/conf.d:ro"));
     }
 }

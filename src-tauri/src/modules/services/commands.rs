@@ -63,8 +63,20 @@ fn resolve_runtime(forced: Option<RuntimeKind>) -> Result<RuntimeKind, String> {
     }
 }
 
-fn preflight(stack: &ValidStack) -> Result<(), String> {
-    for id in &stack.services {
+/// Probing shells out (`compose version`, `info`) and may capture the login
+/// shell environment on first use, so it never runs on an async worker thread.
+async fn resolve_runtime_off_thread(forced: Option<RuntimeKind>) -> Result<RuntimeKind, String> {
+    tauri::async_runtime::spawn_blocking(move || resolve_runtime(forced))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Only the services actually being started are checked. Checking the whole
+/// enabled set fails the moment one service is already up: its own published
+/// port is bound, so every later toggle would be rejected. Site ports belong
+/// to the web tier, so they are only checked when it is the one starting.
+fn preflight(stack: &ValidStack, targets: &[ServiceId]) -> Result<(), String> {
+    for id in targets {
         for (i, _) in super::catalog::def(*id).ports.iter().enumerate() {
             let p = port_of(stack, *id, i);
             if !port_free(p) {
@@ -73,10 +85,15 @@ fn preflight(stack: &ValidStack) -> Result<(), String> {
                 ));
             }
         }
-    }
-    for site in &stack.sites {
-        if !port_free(site.port) {
-            return Err(format!("port {} for site {} is already in use", site.port, site.slug));
+        if *id == ServiceId::Web {
+            for site in &stack.sites {
+                if !port_free(site.port) {
+                    return Err(format!(
+                        "port {} for site {} is already in use",
+                        site.port, site.slug
+                    ));
+                }
+            }
         }
     }
     Ok(())
@@ -108,6 +125,19 @@ pub fn authorize_mounts(
         mounts.insert(site.slug.clone(), canonical.to_string_lossy().into_owned());
     }
     Ok(mounts)
+}
+
+/// Sites are only rendered under the web tier, so a stack without it never
+/// needs their roots authorized. Starting Redis must not fail because some
+/// unrelated space sits outside the workspace registry.
+pub fn mounts_for(
+    registry: &WorkspaceRegistry,
+    stack: &ValidStack,
+) -> Result<BTreeMap<String, String>, String> {
+    if !stack.services.contains(&ServiceId::Web) {
+        return Ok(BTreeMap::new());
+    }
+    authorize_mounts(registry, &stack.sites)
 }
 
 pub fn run_as_for(runtime: RuntimeKind, root: &std::path::Path) -> Option<(u32, u32)> {
@@ -205,7 +235,7 @@ fn read_capped<R: std::io::Read>(mut r: R) -> String {
 
 fn run_checked(
     state: &ServicesState,
-    bin: &str,
+    bin: &std::path::Path,
     args: &[&str],
     dir: Option<&std::path::Path>,
 ) -> Result<String, String> {
@@ -216,6 +246,7 @@ fn run_checked(
     cmd.args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    runtime::apply_env(&mut cmd);
     hide_console(&mut cmd);
     #[cfg(unix)]
     unsafe {
@@ -226,7 +257,7 @@ fn run_checked(
         });
     }
 
-    let mut child = cmd.spawn().map_err(|e| format!("{bin}: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| format!("{}: {e}", bin.display()))?;
 
     #[cfg(windows)]
     let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
@@ -278,13 +309,18 @@ fn compose(
     args: &[&str],
 ) -> Result<String, String> {
     let dir = project_dir()?;
+    let bin = runtime_bin(runtime)?;
     let mut argv = vec![
         "compose",
         "--project-directory",
         dir.to_str().ok_or("project directory is not valid utf-8")?,
     ];
     argv.extend_from_slice(args);
-    run_checked(state, runtime.bin(), &argv, Some(&dir))
+    run_checked(state, &bin, &argv, Some(&dir))
+}
+
+fn runtime_bin(runtime: RuntimeKind) -> Result<std::path::PathBuf, String> {
+    runtime::resolve_bin(runtime).ok_or_else(|| format!("{} not found", runtime.bin()))
 }
 
 fn compose_names(id: ServiceId) -> &'static [&'static str] {
@@ -307,10 +343,15 @@ pub async fn services_up(
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
     let stack = validate(spec)?;
-    let runtime = resolve_runtime(runtime)?;
-    preflight(&stack)?;
+    for id in &targets {
+        if !stack.services.contains(id) {
+            return Err(format!("{id:?} is not enabled in this stack"));
+        }
+    }
+    let runtime = resolve_runtime_off_thread(runtime).await?;
+    preflight(&stack, &targets)?;
 
-    let mounts = authorize_mounts(&registry, &stack.sites)?;
+    let mounts = mounts_for(&registry, &stack)?;
     let per_site: Vec<Option<(u32, u32)>> = stack
         .sites
         .iter()
@@ -342,7 +383,7 @@ pub async fn services_down(
     targets: Vec<ServiceId>,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
-    let runtime = resolve_runtime(runtime)?;
+    let runtime = resolve_runtime_off_thread(runtime).await?;
     let names: Vec<&str> = targets
         .iter()
         .flat_map(|id| compose_names(*id))
@@ -374,7 +415,7 @@ pub async fn services_status(
     runtime: Option<RuntimeKind>,
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<Vec<ServiceStatus>, String> {
-    let runtime = resolve_runtime(runtime)?;
+    let runtime = resolve_runtime_off_thread(runtime).await?;
     let state = state.inner().clone();
     let out = tauri::async_runtime::spawn_blocking(move || {
         compose(&state, runtime, &["ps", "--format", "json"])
@@ -396,7 +437,7 @@ pub async fn services_logs(
     if !known && service != "nginx" && service != "php" {
         return Err(format!("unknown service: {service}"));
     }
-    let runtime = resolve_runtime(runtime)?;
+    let runtime = resolve_runtime_off_thread(runtime).await?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         compose(&state, runtime, &["logs", "--tail", "200", "--no-color", &service])
@@ -412,11 +453,12 @@ pub async fn services_delete_data(
     state: State<'_, std::sync::Arc<ServicesState>>,
 ) -> Result<(), String> {
     check_volume(&volume)?;
-    let runtime = resolve_runtime(runtime)?;
+    let runtime = resolve_runtime_off_thread(runtime).await?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let bin = runtime_bin(runtime)?;
         compose(&state, runtime, &["down"])?;
-        run_checked(&state, runtime.bin(), &["volume", "rm", &volume], None)?;
+        run_checked(&state, &bin, &["volume", "rm", &volume], None)?;
         Ok::<(), String>(())
     })
     .await
@@ -439,6 +481,84 @@ mod tests {
             kind: SiteKind::Php,
             env: WorkspaceEnv::Local,
         }
+    }
+
+    fn busy_port() -> Result<(std::net::TcpListener, u16), String> {
+        let listener =
+            std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
+        let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+        Ok((listener, port))
+    }
+
+    fn free_port() -> Result<u16, String> {
+        let (listener, port) = busy_port()?;
+        drop(listener);
+        Ok(port)
+    }
+
+    fn stack_of(
+        services: Vec<ServiceId>,
+        ports: Vec<(ServiceId, u16)>,
+        sites: Vec<SiteSpec>,
+    ) -> Result<ValidStack, String> {
+        let mut spec = StackSpec {
+            services,
+            ports: Default::default(),
+            sites,
+            db_password: "sixteencharacters".into(),
+        };
+        for (id, port) in ports {
+            spec.ports.insert(id, port);
+        }
+        validate(spec)
+    }
+
+    #[test]
+    fn preflight_ignores_the_services_it_is_not_starting() -> Result<(), String> {
+        let (_held, busy) = busy_port()?;
+        let stack = stack_of(
+            vec![ServiceId::Mariadb, ServiceId::Redis],
+            vec![(ServiceId::Mariadb, busy), (ServiceId::Redis, free_port()?)],
+            vec![],
+        )?;
+
+        // Enabling a second service used to fail here: the first service's own
+        // published port is bound, so the whole stack never got past one.
+        preflight(&stack, &[ServiceId::Redis])?;
+        assert!(preflight(&stack, &[ServiceId::Mariadb]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn preflight_checks_site_ports_only_for_the_web_tier() -> Result<(), String> {
+        let (_held, busy) = busy_port()?;
+        let mut site = site_at(std::path::Path::new("/tmp/terra-test"), ".");
+        site.port = busy;
+        let stack = stack_of(
+            vec![ServiceId::Web, ServiceId::Redis],
+            vec![(ServiceId::Redis, free_port()?)],
+            vec![site],
+        )?;
+
+        preflight(&stack, &[ServiceId::Redis])?;
+        assert!(preflight(&stack, &[ServiceId::Web]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn a_stack_without_the_web_tier_never_authorizes_site_roots() -> Result<(), String> {
+        let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let reg = WorkspaceRegistry::default();
+        let sites = vec![site_at(dir.path(), ".")];
+
+        // Nothing is authorized, so the web tier would refuse this root. A
+        // stack without it must not consult the sites at all.
+        let without_web = stack_of(vec![ServiceId::Redis], vec![], sites.clone())?;
+        assert!(mounts_for(&reg, &without_web)?.is_empty());
+
+        let with_web = stack_of(vec![ServiceId::Web], vec![], sites)?;
+        assert!(mounts_for(&reg, &with_web).is_err());
+        Ok(())
     }
 
     #[test]

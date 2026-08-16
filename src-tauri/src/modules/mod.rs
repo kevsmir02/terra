@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod device;
+pub mod env;
 pub mod fs;
 pub mod git;
 pub mod history;

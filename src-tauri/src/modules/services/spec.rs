@@ -121,6 +121,12 @@ pub fn validate(spec: StackSpec) -> Result<ValidStack, String> {
         if !slugs.insert(site.slug.clone()) {
             return Err(format!("duplicate site name: {}", site.slug));
         }
+        // A space the user never pointed anywhere has nothing to serve, and an
+        // empty root would reach the authorization gate as a canonicalize
+        // failure that names no space.
+        if site.root.trim().is_empty() {
+            return Err(format!("site {} has no root directory", site.slug));
+        }
         if !valid_docroot(&site.docroot) {
             return Err(format!("invalid docroot for {}: {:?}", site.slug, site.docroot));
         }
@@ -271,6 +277,23 @@ mod tests {
         let mut s = base();
         s.ports.insert(ServiceId::Mariadb, 3307);
         assert!(validate(s).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_site_without_a_root() {
+        let s = StackSpec {
+            services: vec![ServiceId::Web],
+            sites: vec![SiteSpec {
+                slug: "app".into(),
+                root: "  ".into(),
+                docroot: ".".into(),
+                port: 8000,
+                kind: SiteKind::Php,
+                env: Default::default(),
+            }],
+            ..base()
+        };
+        assert!(validate(s).unwrap_err().contains("no root"));
     }
 
     #[test]
