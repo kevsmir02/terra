@@ -3,9 +3,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { DEVICE_KEYCODE } from "./controlBridge";
+import { deviceDisplayName } from "./device";
 import { DeviceKeyBar } from "./DeviceKeyBar";
 import { type DeviceSession, openDeviceSession, type SessionStatus } from "./deviceSession";
 import { AdbMissing, NoDevices, ServerFailed, UnauthorizedDevice } from "./emptyStates";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 
 // The states with no frame behind them. `connecting` and `disconnected` keep
 // the video mounted and are drawn as overlays instead.
@@ -66,12 +68,18 @@ export function DisconnectedOverlay({
 // effect cleanup closes its session first; the new instance's start() waits
 // out that close (deviceSession.ts) before opening the same serial again, so
 // a fast remount never races the backend's own close teardown.
-export function DevicePreviewPane({ serial, label }: { serial: string; label?: string }) {
+export function DevicePreviewPane({
+  device,
+  label,
+}: {
+  device: DeviceEntry;
+  label?: string;
+}) {
   const [attempt, setAttempt] = useState(0);
   return (
     <SessionPane
       key={attempt}
-      serial={serial}
+      device={device}
       label={label}
       onRetry={() => setAttempt((n) => n + 1)}
     />
@@ -79,14 +87,15 @@ export function DevicePreviewPane({ serial, label }: { serial: string; label?: s
 }
 
 function SessionPane({
-  serial,
+  device,
   label,
   onRetry,
 }: {
-  serial: string;
+  device: DeviceEntry;
   label?: string;
   onRetry: () => void;
 }) {
+  const { serial } = device;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<DeviceSession | null>(null);
   const [status, setStatus] = useState<SessionStatus>({ kind: "connecting" });
@@ -152,7 +161,9 @@ function SessionPane({
           onPointerCancel={(e) => sessionRef.current?.bridge?.handlePointerCancel(e)}
           onWheel={(e) => sessionRef.current?.bridge?.handleWheel(e)}
         />
-        {status.kind === "connecting" && <ConnectingOverlay label={label ?? serial} />}
+        {status.kind === "connecting" && (
+          <ConnectingOverlay label={label ?? deviceDisplayName(device)} />
+        )}
         {status.kind === "disconnected" && (
           <DisconnectedOverlay message={status.message} onReconnect={onRetry} />
         )}

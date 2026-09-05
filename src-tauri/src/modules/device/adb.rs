@@ -25,6 +25,15 @@ pub const GPU_MODES: &[&str] = &[
 pub const GPU_FALLBACK: &str = "swiftshader_indirect";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(
+    test,
+    ts(
+        export,
+        export_to = "../../src/modules/device/generated/DeviceEntry.ts",
+        optional_fields
+    )
+)]
 pub struct DeviceEntry {
     pub serial: String,
     pub state: String,

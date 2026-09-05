@@ -2,11 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
+import { deviceDisplayName } from "./device";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
 
-type DeviceEntry = { serial: string; state: string; product?: string; model?: string };
-
-export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void }) {
+export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => void }) {
   const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -76,11 +76,11 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
                   <button
                     type="button"
                     disabled={d.state !== "device"}
-                    onClick={() => onPick(d.serial)}
+                    onClick={() => onPick(d)}
                     className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/(--emph-medium) disabled:opacity-50"
                     title={d.state === "device" ? "Open device preview" : `state: ${d.state}`}
                   >
-                    <span className="truncate">{d.model ?? d.serial}</span>
+                    <span className="truncate">{deviceDisplayName(d)}</span>
                     <span className="shrink-0 whitespace-nowrap text-muted-foreground">
                       {d.serial}
                     </span>
@@ -100,21 +100,21 @@ export function DeviceDropdown({ onPick }: { onPick: (serial: string) => void })
                 // reported as "device" yet (e.g. still "offline" right after
                 // boot) has no live session, so picking it must be a no-op
                 // rather than a silent dead click.
-                const deviceReady = runningSerial
-                  ? devices?.some((d) => d.serial === runningSerial && d.state === "device")
-                  : false;
+                const readyDevice = runningSerial
+                  ? devices?.find((d) => d.serial === runningSerial && d.state === "device")
+                  : undefined;
                 return (
                   <div key={avd.name} className="flex items-center gap-1">
                     <button
                       type="button"
-                      disabled={runningSerial ? !deviceReady : busy}
+                      disabled={runningSerial ? !readyDevice : busy}
                       onClick={() =>
-                        runningSerial ? onPick(runningSerial) : void launch(avd.name)
+                        readyDevice ? onPick(readyDevice) : void launch(avd.name)
                       }
                       className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/(--emph-strong) bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/(--emph-strong) disabled:opacity-50"
                       title={
                         runningSerial
-                          ? deviceReady
+                          ? readyDevice
                             ? "Open device preview"
                             : "Device not ready yet"
                           : "Launch headless and stream here"

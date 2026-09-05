@@ -106,4 +106,14 @@ describe("the dock is the only device surface", () => {
     ).trim();
     expect(hits).toBe("");
   });
+
+  // The IPC shape has exactly one declaration (the ts-rs generated
+  // DeviceEntry); a hand-rolled copy anywhere else can silently drift from it.
+  it("has no hand-written copy of the device IPC shape", () => {
+    const hits = execSync(
+      "grep -rn 'serial: string; state: string' src/modules/device --exclude=useDeviceDock.test.ts || true",
+      { cwd: repoRoot, encoding: "utf8" },
+    ).trim();
+    expect(hits).toBe("");
+  });
 });

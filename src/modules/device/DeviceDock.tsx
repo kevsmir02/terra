@@ -1,9 +1,11 @@
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { deviceDisplayName } from "./device";
 import { DevicePreviewPane } from "./DevicePreviewPane";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 
 type Props = {
-  serial: string;
+  device: DeviceEntry;
   onStop: () => void;
 };
 
@@ -16,13 +18,21 @@ type Props = {
  * on the panel element, so without it the video would spill over the workspace
  * while the dock is collapsed to zero width.
  */
-export function DeviceDock({ serial, onStop }: Props) {
+export function DeviceDock({ device, onStop }: Props) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border/(--emph-strong) bg-card">
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/(--emph-strong) px-2">
-        <span className="truncate text-[11px] font-medium text-foreground" title={serial}>
-          {serial}
-        </span>
+        <div className="flex min-w-0 flex-col justify-center">
+          <span
+            className="truncate text-[11px] font-medium text-foreground"
+            title={device.serial}
+          >
+            {deviceDisplayName(device)}
+          </span>
+          {device.model && (
+            <span className="truncate text-[10px] text-muted-foreground">{device.serial}</span>
+          )}
+        </div>
         <button
           type="button"
           onClick={onStop}
@@ -37,7 +47,7 @@ export function DeviceDock({ serial, onStop }: Props) {
       <div className="min-h-0 flex-1">
         {/* Keyed on serial so switching devices mounts a fresh pane instead
             of reusing one that may be stuck in another device's error state. */}
-        <DevicePreviewPane key={serial} serial={serial} />
+        <DevicePreviewPane key={device.serial} device={device} />
       </div>
     </div>
   );

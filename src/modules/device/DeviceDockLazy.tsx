@@ -1,13 +1,14 @@
 import { lazy, Suspense } from "react";
 import type { ComponentProps } from "react";
 import type { DeviceDock as DeviceDockType } from "./DeviceDock";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 
 const DeviceDockInner = lazy(() =>
   import("./DeviceDock").then((m) => ({ default: m.DeviceDock })),
 );
 
-type Props = Omit<ComponentProps<typeof DeviceDockType>, "serial"> & {
-  serial: string | null;
+type Props = Omit<ComponentProps<typeof DeviceDockType>, "device"> & {
+  device: DeviceEntry | null;
 };
 
 /**
@@ -16,12 +17,12 @@ type Props = Omit<ComponentProps<typeof DeviceDockType>, "serial"> & {
  * MSE player and control bridge out of the startup graph until a device is
  * actually picked. Moving this guard inward would load them at first paint.
  */
-export function DeviceDock({ serial, ...rest }: Props) {
-  if (!serial) return null;
+export function DeviceDock({ device, ...rest }: Props) {
+  if (!device) return null;
 
   return (
     <Suspense fallback={null}>
-      <DeviceDockInner serial={serial} {...rest} />
+      <DeviceDockInner device={device} {...rest} />
     </Suspense>
   );
 }

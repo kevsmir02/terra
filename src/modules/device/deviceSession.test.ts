@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceControlBridge } from "./controlBridge";
 import { exitMessage, openDeviceSession, splitFrame, type SessionStatus } from "./deviceSession";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 
 type FakePlayer = {
   video: unknown;
@@ -33,12 +34,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-type Device = { serial: string; state: string };
-
 const SERIAL = "emulator-5554";
 const HANDLE = 7;
 
-function mockBackend(devices: Device[], open: () => Promise<number> = () => Promise.resolve(HANDLE)) {
+function mockBackend(
+  devices: DeviceEntry[],
+  open: () => Promise<number> = () => Promise.resolve(HANDLE),
+) {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "device_list") return devices;
     if (cmd === "device_open") return open();

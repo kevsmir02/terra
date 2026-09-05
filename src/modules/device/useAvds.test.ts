@@ -56,6 +56,6 @@ describe("emulator lifecycle affordances", () => {
 
   it("attaches to an already-running AVD instead of relaunching it", () => {
     // Relaunching a booted AVD fails on its lock file.
-    expect(dropdownSrc).toMatch(/runningSerial \? onPick\(runningSerial\)/);
+    expect(dropdownSrc).toMatch(/readyDevice \? onPick\(readyDevice\)/);
   });
 });

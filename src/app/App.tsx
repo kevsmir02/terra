@@ -293,7 +293,7 @@ export default function App() {
 
   const {
     dockRef,
-    serial: dockedSerial,
+    device: dockedDevice,
     dockDevice,
     stopDevice,
     persistDockWidth,
@@ -1155,7 +1155,7 @@ export default function App() {
                         onNavigateToPath={cdInNewTab}
                       />
                     ) : (
-                      <DeviceDropdown onPick={(serial) => dockDevice(serial)} />
+                      <DeviceDropdown onPick={dockDevice} />
                     )}
                   </div>
                   <SidebarRail
@@ -1202,9 +1202,9 @@ export default function App() {
               <ResizablePanel
                 id="device-dock"
                 panelRef={dockRef}
-                // The docked serial is deliberately never persisted (see
-                // useDeviceDock), so there is never a device to restore into —
-                // the dock panel must always start collapsed.
+                // The docked device is deliberately never persisted (see
+                // useDeviceDock), so there is never a device to restore into,
+                // and the dock panel must always start collapsed.
                 defaultSize="0px"
                 minSize={`${DOCK_MIN_WIDTH}px`}
                 maxSize={`${DOCK_MAX_WIDTH}px`}
@@ -1214,7 +1214,7 @@ export default function App() {
                   if (size.inPixels > 0) persistDockWidth(size.inPixels);
                 }}
               >
-                <DeviceDock serial={dockedSerial} onStop={stopDevice} />
+                <DeviceDock device={dockedDevice} onStop={stopDevice} />
               </ResizablePanel>
             </ResizablePanelGroup>
           </main>

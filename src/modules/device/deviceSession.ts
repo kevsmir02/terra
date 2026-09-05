@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { DeviceControlBridge } from "./controlBridge";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 import { MsePlayer } from "./MsePlayer";
 
 export type SessionStatus =
@@ -176,7 +177,7 @@ export function openDeviceSession(opts: {
   const start = async () => {
     try {
       // Pre-flight: ensure devices list contains our serial and is authorized.
-      const devices = await invoke<{ serial: string; state: string }[]>("device_list");
+      const devices = await invoke<DeviceEntry[]>("device_list");
       if (!alive) return;
       const match = devices.find((d) => d.serial === serial);
       if (!match) {
