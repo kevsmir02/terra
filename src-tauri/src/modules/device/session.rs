@@ -144,7 +144,7 @@ impl ShutdownOps for Teardown {
 pub struct DeviceSession {
     pub id: u32,
     pub serial: String,
-    pub control_tx: mpsc::Sender<ControlMessage>,
+    control_tx: Option<mpsc::Sender<ControlMessage>>,
     stopping: Arc<AtomicBool>,
     teardown: Option<Teardown>,
 }
@@ -201,7 +201,7 @@ impl DeviceSession {
         Ok(Self {
             id,
             serial: serial.clone(),
-            control_tx: tx,
+            control_tx: Some(tx),
             stopping,
             teardown: Some(Teardown {
                 adb,
@@ -222,14 +222,22 @@ impl DeviceSession {
         Self {
             id,
             serial: serial.to_string(),
-            control_tx,
+            control_tx: Some(control_tx),
             stopping: Arc::new(AtomicBool::new(false)),
             teardown: None,
         }
     }
 
+    /// `None` once the session has been shut down: the sender is dropped
+    /// first thing in `shutdown`, which is also what unblocks a control loop
+    /// parked in `blocking_recv`.
+    pub fn control_tx(&self) -> Option<&mpsc::Sender<ControlMessage>> {
+        self.control_tx.as_ref()
+    }
+
     pub fn shutdown(&mut self) {
         self.stopping.store(true, Ordering::Relaxed);
+        self.control_tx = None;
         let Some(mut teardown) = self.teardown.take() else { return };
         drive_shutdown(&mut teardown, SHUTDOWN_BUDGET, SHUTDOWN_POLL);
         teardown.reservation.release();
@@ -385,15 +393,14 @@ fn run_control_loop(
         }
     };
 
-    while !stopping.load(Ordering::Relaxed) {
-        if let Ok(msg) = rx.try_recv() {
-            let bytes = serialize_control_message(&msg);
-            if stream.write_all(&bytes).is_err() {
-                log::warn!("[device] control_loop write failed");
-                break;
-            }
-        } else {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+    while let Some(msg) = rx.blocking_recv() {
+        if stopping.load(Ordering::Relaxed) {
+            break;
+        }
+        let bytes = serialize_control_message(&msg);
+        if stream.write_all(&bytes).is_err() {
+            log::warn!("[device] control_loop write failed");
+            break;
         }
     }
 }
@@ -543,6 +550,20 @@ mod tests {
         assert!(state.reserve_serial("emulator-5554").is_ok(), "a failed spawn must release the serial");
     }
 
+    /// Bounds a wait on a thread that is expected to unblock (a control loop
+    /// exiting, a `blocking_recv` waking) so a regression that brings back a
+    /// stuck receiver fails the test instead of hanging the suite.
+    fn join_within<T>(handle: std::thread::JoinHandle<T>, budget: Duration) -> T {
+        let deadline = Instant::now() + budget;
+        while !handle.is_finished() {
+            if Instant::now() >= deadline {
+                panic!("thread did not finish within {budget:?}");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        handle.join().expect("thread panicked")
+    }
+
     #[test]
     fn run_control_loop_sends_messages_over_tcp() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -578,7 +599,38 @@ mod tests {
         assert_eq!(buf[0], 2); // TYPE_INJECT_TOUCH = 2
         assert_eq!(buf[1], 0); // Action = Down = 0
 
-        stopping.store(true, Ordering::Relaxed);
-        handle.join().unwrap();
+        drop(tx);
+        join_within(handle, Duration::from_secs(2));
+    }
+
+    #[test]
+    fn control_loop_exits_when_every_sender_is_dropped() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
+        let stopping = Arc::new(AtomicBool::new(false));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let _ = ready_tx.send(());
+
+        let handle = std::thread::spawn(move || {
+            run_control_loop(port, &mut rx, stopping, ready_rx, &SocketRegistry::default());
+        });
+
+        let (_socket, _) = listener.accept().unwrap();
+        drop(tx);
+
+        join_within(handle, Duration::from_secs(2));
+    }
+
+    #[test]
+    fn shutdown_drops_the_control_sender() {
+        let (tx, mut rx) = mpsc::channel::<ControlMessage>(1);
+        let mut session = DeviceSession::stub(1, "emulator-5554", tx);
+
+        session.shutdown();
+
+        let handle = std::thread::spawn(move || rx.blocking_recv());
+        assert_eq!(join_within(handle, Duration::from_secs(2)), None);
     }
 }

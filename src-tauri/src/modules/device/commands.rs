@@ -374,7 +374,10 @@ pub(crate) async fn device_send_touch_impl(
     let serial = {
         let sessions = state.sessions.read_or_recover();
         let session = sessions.get(&handle).ok_or("session not found")?;
-        if session.control_tx.try_send(msg).is_ok() {
+        let Some(tx) = session.control_tx() else {
+            return Err("session closed".into());
+        };
+        if tx.try_send(msg).is_ok() {
             return Ok(());
         }
         session.serial.clone()
@@ -438,7 +441,10 @@ pub(crate) async fn device_send_key_impl(
     let serial = {
         let sessions = state.sessions.read_or_recover();
         let session = sessions.get(&handle).ok_or("session not found")?;
-        if session.control_tx.try_send(msg).is_ok() {
+        let Some(tx) = session.control_tx() else {
+            return Err("session closed".into());
+        };
+        if tx.try_send(msg).is_ok() {
             return Ok(());
         }
         session.serial.clone()
@@ -487,7 +493,10 @@ pub(crate) async fn device_send_scroll_impl(
     {
         let sessions = state.sessions.read_or_recover();
         let session = sessions.get(&handle).ok_or("session not found")?;
-        if session.control_tx.try_send(msg).is_ok() {
+        let Some(tx) = session.control_tx() else {
+            return Err("session closed".into());
+        };
+        if tx.try_send(msg).is_ok() {
             return Ok(());
         }
     }
