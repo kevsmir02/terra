@@ -12,7 +12,6 @@ import {
 } from "@codemirror/search";
 import { Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { vim } from "@replit/codemirror-vim";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { MediaPreview, mediaKindFor } from "./MediaPreview";
 import {
@@ -35,23 +34,13 @@ import {
   indentExtension,
   languageCompartment,
   lspCompartment,
-  vimCompartment,
   wrapCompartment,
 } from "./lib/extensions";
-import {
-  applyFormattedContent,
-  readFileText,
-  resolveFormatter,
-  runExternalFormatter,
-} from "./lib/externalFormat";
 import { detectIndentUnit } from "./lib/indent";
 import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
 import type { DiskState } from "./lib/diskState";
 import { FORCE_READ_LIMIT, useDocument } from "./lib/useDocument";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
-import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
-
-initVimGlobals();
 
 export type EditorPaneHandle = {
   setQuery: (q: string) => void;
@@ -142,7 +131,6 @@ export const EditorPane = memo(
       reload,
       discardAndReload,
       recreateOnDisk,
-      adoptDiskText,
       openAnyway,
     } = useDocument({
       path,
@@ -150,11 +138,8 @@ export const EditorPane = memo(
     });
     const reloadRef = useRef(reload);
     reloadRef.current = reload;
-    const adoptDiskTextRef = useRef(adoptDiskText);
-    adoptDiskTextRef.current = adoptDiskText;
     const cmRef = useRef<ReactCodeMirrorRef>(null);
     const themeExt = useEditorThemeExt();
-    const vimMode = usePreferencesStore((s) => s.vimMode);
     const editorWordWrap = usePreferencesStore((s) => s.editorWordWrap);
     const languageRef = useRef<string | null>(null);
     const [langId, setLangId] = useState<string | null>(null);
@@ -175,8 +160,7 @@ export const EditorPane = memo(
     const performSave = useCallback(async () => {
       const view = cmRef.current?.view;
       const prefs = usePreferencesStore.getState();
-      const formatter = resolveFormatter(languageRef.current, prefs);
-      if (prefs.editorFormatOnSave && formatter === "lsp" && view) {
+      if (prefs.editorFormatOnSave && view) {
         if (lspActiveRef.current) {
           let res: "done" | "unsupported" = "done";
           try {
@@ -190,40 +174,19 @@ export const EditorPane = memo(
             warnedNoFormatRef.current = true;
             toast.warning("Format on save skipped", {
               description:
-                "The active language server has no formatter. Pick an external one in Settings (Ruff for Python, Prettier, rustfmt, ...).",
+                "The active language server has no formatter.",
             });
           }
         } else if (!warnedNoLspRef.current) {
           warnedNoLspRef.current = true;
           toast.warning("Format on save skipped", {
             description:
-              "No active language server for this file. Enable one in the statusbar, or pick an external formatter in Settings.",
+              "No active language server for this file. Enable one in the statusbar.",
           });
         }
       }
-      // Snapshot before save: edits typed during the formatter round-trip
-      // must not be clobbered by the disk read-back.
-      const docAtSave = view?.state.doc;
       const saved = await saveRef.current();
       if (!saved) return;
-      if (prefs.editorFormatOnSave && formatter !== "lsp") {
-        const error = await runExternalFormatter(
-          formatter,
-          pathRef.current,
-          prefs.editorCustomFormatCommand,
-        );
-        if (error) {
-          toast.error(`${formatter} format failed`, { description: error });
-        } else {
-          const readBack = await readFileText(pathRef.current);
-          if (readBack !== null && view && view.state.doc === docAtSave) {
-            applyFormattedContent(
-              view,
-              adoptDiskTextRef.current(readBack.text, readBack.mtime),
-            );
-          }
-        }
-      }
       onSavedRef.current?.();
     }, []);
     const performSaveRef = useRef(performSave);
@@ -256,22 +219,11 @@ export const EditorPane = memo(
 
     const extensions = useMemo(
       () => [
-        // basicSetup is added before user extensions by @uiw/react-codemirror,
-        // so we must elevate vim's precedence to win the keymap.
-        vimCompartment.of(
-          usePreferencesStore.getState().vimMode ? Prec.highest(vim()) : [],
-        ),
         wrapCompartment.of(
           usePreferencesStore.getState().editorWordWrap
             ? EditorView.lineWrapping
             : [],
         ),
-        vimHandlersExtension(() => ({
-          save: () => {
-            void performSaveRef.current();
-          },
-          close: () => onCloseRef.current?.(),
-        })),
         ...buildSharedExtensions(),
         indentCompartment.of(DEFAULT_INDENT),
         languageCompartment.of([]),
@@ -292,14 +244,6 @@ export const EditorPane = memo(
       ],
       [],
     );
-
-    useEffect(() => {
-      const view = cmRef.current?.view;
-      if (!view) return;
-      view.dispatch({
-        effects: vimCompartment.reconfigure(vimMode ? Prec.highest(vim()) : []),
-      });
-    }, [vimMode]);
 
     useEffect(() => {
       const view = cmRef.current?.view;

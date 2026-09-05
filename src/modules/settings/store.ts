@@ -106,7 +106,6 @@ export type Preferences = {
   editorFontSize: number;
   autostart: boolean;
   restoreWindowState: boolean;
-  vimMode: boolean;
   editorWordWrap: boolean;
   showHidden: boolean;
   explorerGitDecorations: boolean;
@@ -127,26 +126,9 @@ export type Preferences = {
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
   editorFormatOnSave: boolean;
-  editorFormatter: EditorFormatter;
-  /** languageResolver id -> formatter, overriding the global default. */
-  editorFormatterByLang: Record<string, EditorFormatter>;
-  /** Shell template for the "custom" formatter; {file} is the quoted path. */
-  editorCustomFormatCommand: string;
   lspActivation: Record<string, LspActivation>;
   lspCustomServers: LspCustomServer[];
 };
-
-export type EditorFormatter =
-  | "lsp"
-  | "biome"
-  | "prettier"
-  | "ruff"
-  | "rustfmt"
-  | "gofmt"
-  | "clang-format"
-  | "shfmt"
-  | "zigfmt"
-  | "custom";
 
 export type LspActivation = "enabled" | "dismissed";
 
@@ -172,7 +154,6 @@ const KEY_EDITOR_FONT_SIZE = "editorFontSize";
 const KEY_AUTOSTART = "autostart";
 const KEY_RESTORE_WINDOW = "restoreWindowState";
 
-const KEY_VIM_MODE = "vimMode";
 const KEY_EDITOR_WORD_WRAP = "editorWordWrap";
 const KEY_SHOW_HIDDEN = "showHidden";
 const LEGACY_KEY_SHOW_HIDDEN_DIRS = "showHiddenDirectories";
@@ -194,9 +175,6 @@ const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
 const KEY_EDITOR_FORMAT_ON_SAVE = "editorFormatOnSave";
-const KEY_EDITOR_FORMATTER = "editorFormatter";
-const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
-const KEY_EDITOR_CUSTOM_FORMAT_COMMAND = "editorCustomFormatCommand";
 const KEY_LSP_ACTIVATION = "lspActivation";
 const KEY_LSP_CUSTOM_SERVERS = "lspCustomServers";
 
@@ -233,7 +211,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorFontSize: EDITOR_FONT_SIZE_DEFAULT,
   autostart: false,
   restoreWindowState: true,
-  vimMode: false,
   editorWordWrap: false,
   showHidden: false,
   explorerGitDecorations: true,
@@ -254,9 +231,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
   editorFormatOnSave: false,
-  editorFormatter: "lsp",
-  editorFormatterByLang: {},
-  editorCustomFormatCommand: "",
   lspActivation: {},
   lspCustomServers: [],
 };
@@ -308,7 +282,6 @@ export async function loadPreferences(): Promise<Preferences> {
     restoreWindowState:
       get<boolean>(KEY_RESTORE_WINDOW) ??
       DEFAULT_PREFERENCES.restoreWindowState,
-    vimMode: get<boolean>(KEY_VIM_MODE) ?? DEFAULT_PREFERENCES.vimMode,
     editorWordWrap:
       get<boolean>(KEY_EDITOR_WORD_WRAP) ?? DEFAULT_PREFERENCES.editorWordWrap,
     showHidden:
@@ -368,15 +341,6 @@ export async function loadPreferences(): Promise<Preferences> {
     editorFormatOnSave:
       get<boolean>(KEY_EDITOR_FORMAT_ON_SAVE) ??
       DEFAULT_PREFERENCES.editorFormatOnSave,
-    editorFormatter:
-      get<EditorFormatter>(KEY_EDITOR_FORMATTER) ??
-      DEFAULT_PREFERENCES.editorFormatter,
-    editorFormatterByLang:
-      get<Record<string, EditorFormatter>>(KEY_EDITOR_FORMATTER_BY_LANG) ??
-      DEFAULT_PREFERENCES.editorFormatterByLang,
-    editorCustomFormatCommand:
-      get<string>(KEY_EDITOR_CUSTOM_FORMAT_COMMAND) ??
-      DEFAULT_PREFERENCES.editorCustomFormatCommand,
     lspActivation:
       get<Record<string, LspActivation>>(KEY_LSP_ACTIVATION) ??
       DEFAULT_PREFERENCES.lspActivation,
@@ -467,10 +431,6 @@ export async function setAutostart(value: boolean): Promise<void> {
 
 export async function setRestoreWindowState(value: boolean): Promise<void> {
   await writePref(KEY_RESTORE_WINDOW, value);
-}
-
-export async function setVimMode(value: boolean): Promise<void> {
-  await writePref(KEY_VIM_MODE, value);
 }
 
 export async function setEditorWordWrap(value: boolean): Promise<void> {
@@ -576,24 +536,6 @@ export async function setEditorFormatOnSave(value: boolean): Promise<void> {
   await writePref(KEY_EDITOR_FORMAT_ON_SAVE, value);
 }
 
-export async function setEditorFormatter(
-  value: EditorFormatter,
-): Promise<void> {
-  await writePref(KEY_EDITOR_FORMATTER, value);
-}
-
-export async function setEditorFormatterByLang(
-  value: Record<string, EditorFormatter>,
-): Promise<void> {
-  await writePref(KEY_EDITOR_FORMATTER_BY_LANG, value);
-}
-
-export async function setEditorCustomFormatCommand(
-  value: string,
-): Promise<void> {
-  await writePref(KEY_EDITOR_CUSTOM_FORMAT_COMMAND, value);
-}
-
 export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
 }
@@ -629,7 +571,6 @@ export async function onPreferencesChange(
     [KEY_EDITOR_FONT_SIZE]: "editorFontSize",
     [KEY_AUTOSTART]: "autostart",
     [KEY_RESTORE_WINDOW]: "restoreWindowState",
-    [KEY_VIM_MODE]: "vimMode",
     [KEY_EDITOR_WORD_WRAP]: "editorWordWrap",
     [KEY_SHOW_HIDDEN]: "showHidden",
     [KEY_EXPLORER_GIT_DECORATIONS]: "explorerGitDecorations",
@@ -650,9 +591,6 @@ export async function onPreferencesChange(
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
     [KEY_EDITOR_FORMAT_ON_SAVE]: "editorFormatOnSave",
-    [KEY_EDITOR_FORMATTER]: "editorFormatter",
-    [KEY_EDITOR_FORMATTER_BY_LANG]: "editorFormatterByLang",
-    [KEY_EDITOR_CUSTOM_FORMAT_COMMAND]: "editorCustomFormatCommand",
     [KEY_LSP_ACTIVATION]: "lspActivation",
     [KEY_LSP_CUSTOM_SERVERS]: "lspCustomServers",
   };

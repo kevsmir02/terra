@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, lsp, migrate, pty, shell, updater, workspace};
+use modules::{agent, device, fs, git, lsp, migrate, pty, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -341,7 +341,6 @@ pub fn run() {
             get_launch_files,
             open_settings_window,
             open_preview_tab,
-            shell::shell_run_command,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
             device::commands::device_list,
