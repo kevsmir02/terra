@@ -102,15 +102,17 @@ pub fn spawn_server(
     control_port: u16,
 ) -> Result<std::process::Child, String> {
     let scid = generate_scid();
-    push_jar_and_forward(adb, jar, serial, video_port, control_port, scid)?;
-    let mut cmd = build_server_command(adb, jar, serial, scid);
-    cmd.stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped());
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
+    let mut child = match push_and_launch(adb, jar, serial, video_port, control_port, scid) {
+        Ok(child) => child,
         Err(e) => {
+            // Every error from here on happens after `push_and_launch` may
+            // already have created one or both forwards (the video forward
+            // can succeed before the control forward fails, or the process
+            // spawn itself can fail after both succeeded); a forward that was
+            // never created is harmless to "remove", so one cleanup call
+            // covers every case.
             remove_forwards(adb, serial, video_port, control_port);
-            return Err(format!("scrcpy spawn failed: {e}"));
+            return Err(e);
         }
     };
 
@@ -126,6 +128,21 @@ pub fn spawn_server(
         });
     }
     Ok(child)
+}
+
+fn push_and_launch(
+    adb: &Path,
+    jar: &Path,
+    serial: &str,
+    video_port: u16,
+    control_port: u16,
+    scid: u32,
+) -> Result<std::process::Child, String> {
+    push_jar_and_forward(adb, jar, serial, video_port, control_port, scid)?;
+    let mut cmd = build_server_command(adb, jar, serial, scid);
+    cmd.stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped());
+    cmd.spawn().map_err(|e| format!("scrcpy spawn failed: {e}"))
 }
 
 #[cfg(test)]
@@ -157,5 +174,52 @@ mod tests {
     fn abstract_socket_name_formats_scid_as_lowercase_hex() {
         assert_eq!(abstract_socket_name(42), "scrcpy_0000002a");
         assert_eq!(abstract_socket_name(0), "scrcpy_00000000");
+    }
+
+    // Regression: the control forward is created after the video forward, so
+    // a control-forward failure used to return early from
+    // `push_jar_and_forward` with the video forward still standing; nothing
+    // downstream ever removed it. A fake `adb` script (in the spirit of
+    // adb::tests::launch_omits_gpu_flag_unless_explicitly_requested) lets this
+    // be pinned without a real device: it succeeds for `push` and the video
+    // `forward`, fails the control `forward`, and logs every `forward
+    // --remove` it sees so the test can see both ports were cleaned up.
+    #[test]
+    #[cfg(unix)]
+    fn spawn_server_removes_both_forwards_when_the_control_forward_fails() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir();
+        let script = dir.join("terra-test-fake-adb-partial-forward.sh");
+        let remove_log = dir.join("terra-test-fake-adb-partial-forward-removes.log");
+        let _ = std::fs::remove_file(&remove_log);
+
+        let video_port: u16 = 41000;
+        let control_port: u16 = 41001;
+
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 if [ \"$3\" = push ]; then exit 0; fi\n\
+                 if [ \"$3\" = forward ]; then\n\
+                 if [ \"$4\" = --remove ]; then printf '%s\\n' \"$5\" >> {log}; exit 0; fi\n\
+                 if [ \"$4\" = tcp:{control_port} ]; then exit 1; fi\n\
+                 exit 0\n\
+                 fi\n\
+                 exit 0\n",
+                log = remove_log.display(),
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let jar = PathBuf::from("/tmp/terra-test-irrelevant.jar");
+        let result = spawn_server(&script, &jar, "emulator-5554", video_port, control_port);
+        assert!(result.is_err(), "a failed control forward must surface as an error");
+
+        let removed = std::fs::read_to_string(&remove_log).unwrap_or_default();
+        assert!(removed.contains(&format!("tcp:{video_port}")), "video forward must be removed: {removed}");
+        assert!(removed.contains(&format!("tcp:{control_port}")), "control forward must be removed too: {removed}");
     }
 }
