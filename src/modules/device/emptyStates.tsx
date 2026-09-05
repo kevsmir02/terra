@@ -1,8 +1,8 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
-import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { BOOT_PHASE_LABEL, listSystemImages, useAvds, type SystemImage } from "./useAvds";
+import { CreateAvd } from "./CreateAvd";
+import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
 
 function Shell({
   title,
@@ -46,64 +46,6 @@ export function AdbMissing({ narrow }: { narrow?: boolean }) {
       <code>winget install Google.PlatformTools</code>). Terra shells out to{" "}
       <code>adb</code> but does not bundle it.
     </Shell>
-  );
-}
-
-/// Offered only when no AVD exists at all. Creation is limited to system images
-/// already on disk — downloading one needs sdkmanager, license acceptance and a
-/// progress UI, which belongs in Android Studio rather than here.
-function CreateAvd({ onCreate, busy }: { onCreate: (name: string, pkg: string) => void; busy: boolean }) {
-  const [images, setImages] = useState<SystemImage[] | null>(null);
-  const [name, setName] = useState("Terra_Device");
-  const [pkg, setPkg] = useState("");
-
-  useEffect(() => {
-    void listSystemImages().then((list) => {
-      setImages(list);
-      if (list.length > 0) setPkg(list[0].package);
-    });
-  }, []);
-
-  if (!images) return <p className="mt-2">Checking for installed system images…</p>;
-  if (images.length === 0) {
-    return (
-      <p className="mt-2">
-        No AVDs and no system images installed. Install one from Android Studio&apos;s SDK Manager
-        (or <code>sdkmanager</code>), then click Refresh.
-      </p>
-    );
-  }
-
-  return (
-    <div className="mt-2 flex flex-col gap-1.5">
-      <div className="font-medium text-foreground">Create an emulator</div>
-      <input
-        aria-label="AVD name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="rounded-md border border-border/(--emph-strong) bg-card px-2 py-1 text-xs text-foreground"
-      />
-      <select
-        aria-label="System image"
-        value={pkg}
-        onChange={(e) => setPkg(e.target.value)}
-        className="rounded-md border border-border/(--emph-strong) bg-card px-2 py-1 text-xs text-foreground"
-      >
-        {images.map((img) => (
-          <option key={img.package} value={img.package}>
-            {img.apiLevel} · {img.tag} · {img.abi}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        disabled={busy || !name.trim() || !pkg}
-        onClick={() => onCreate(name.trim(), pkg)}
-        className="rounded-md border border-border/(--emph-strong) bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent/(--emph-strong) disabled:opacity-50"
-      >
-        {busy ? "Creating…" : "Create AVD"}
-      </button>
-    </div>
   );
 }
 
@@ -152,7 +94,7 @@ export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: 
           })}
         </div>
       ) : avds ? (
-        <CreateAvd busy={busy} onCreate={(name, pkg) => void create(name, pkg)} />
+        <CreateAvd busy={busy} onCreate={create} />
       ) : null}
 
       <button

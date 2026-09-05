@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
+import { CreateAvd } from "./CreateAvd";
 import { deviceDisplayName } from "./device";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
@@ -10,6 +11,7 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
   const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
 
   const refreshDevices = () => {
     setError(null);
@@ -29,6 +31,7 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
     refresh: refreshAvds,
     launch,
     stop,
+    create,
   } = useAvds(() => refreshDevices());
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only device probe; refreshDevices is re-created each render and would re-fetch forever
@@ -90,9 +93,23 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
             </ul>
           )}
 
-          {avds && avds.length > 0 && (
+          {avds && (
             <div className="flex flex-col gap-1 border-t border-border/(--emph-soft) px-3 py-2">
-              <div className="text-[11px] font-medium text-foreground">Emulators</div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-foreground">Emulators</span>
+                <button
+                  type="button"
+                  onClick={() => setShowCreate((v) => !v)}
+                  disabled={busy && showCreate}
+                  className="rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
+                  title={showCreate ? "Cancel creating an emulator" : "Create a new emulator"}
+                >
+                  {showCreate ? "Cancel" : "Create"}
+                </button>
+              </div>
+              {avds.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">No emulators yet</p>
+              )}
               {avds.map((avd) => {
                 const booting = boot?.name === avd.name;
                 const runningSerial = avd.serial;
@@ -143,12 +160,15 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                   </div>
                 );
               })}
+              {showCreate && (
+                <CreateAvd busy={busy} onCreate={create} onCreated={() => setShowCreate(false)} />
+              )}
             </div>
           )}
 
-          {devices.length === 0 && (!avds || avds.length === 0) && (
+          {devices.length === 0 && avds === null && (
             <div className="px-3 py-2 text-[11px] text-muted-foreground">
-              No devices or emulators. Connect a device via USB, or create an AVD.
+              No devices connected.
             </div>
           )}
         </>
