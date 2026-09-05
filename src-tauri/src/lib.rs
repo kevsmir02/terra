@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, lsp, migrate, pty, updater, workspace};
+use modules::{agent, device, fs, git, lsp, pty, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -194,10 +194,6 @@ pub fn run() {
             std::process::exit(0);
         }
     }
-
-    // Must precede the builder: the store and webview open their
-    // identifier-scoped trees during plugin init.
-    migrate::migrate_legacy_app_dirs();
 
     let launch = parse_launch_target();
     let cli_dir = launch.dir.clone();
