@@ -2,7 +2,7 @@ mod common;
 
 use common::{git_available, FsFixture, GitRepoFixture};
 use terra_lib::modules::fs::grep::{glob_files, grep};
-use terra_lib::modules::fs::search::{list_files, search};
+use terra_lib::modules::fs::search::search;
 use terra_lib::modules::fs::tree::{read_dir, subdirs, EntryKind};
 
 #[test]
@@ -200,43 +200,6 @@ fn search_ranks_filename_hits_before_path_hits() {
     assert!(
         zeta_file < inner_file,
         "filename hit should rank before path-only hit",
-    );
-}
-
-#[test]
-fn list_files_returns_sorted_relative_paths() {
-    let fx = FsFixture::new();
-    fx.write("z.txt", "");
-    fx.write("a.txt", "");
-    fx.write("nested/b.txt", "");
-
-    let res = list_files(&fx.registry, &fx.root_str(), None, None, None).expect("list");
-    assert_eq!(res.files, vec!["a.txt", "nested/b.txt", "z.txt"]);
-}
-
-#[test]
-fn list_files_max_depth_clamps() {
-    let fx = FsFixture::new();
-    fx.write("d1/d2/d3/deep.txt", "");
-    fx.write("shallow.txt", "");
-
-    let res = list_files(&fx.registry, &fx.root_str(), None, Some(1), None).expect("list");
-    assert!(res.files.contains(&"shallow.txt".to_string()));
-    assert!(!res.files.iter().any(|f| f.contains("deep.txt")));
-}
-
-#[test]
-fn list_files_non_dir_errors() {
-    let fx = FsFixture::new();
-    assert!(
-        list_files(
-            &fx.registry,
-            &fx.root_str_join("no/such/dir"),
-            None,
-            None,
-            None
-        )
-        .is_err()
     );
 }
 

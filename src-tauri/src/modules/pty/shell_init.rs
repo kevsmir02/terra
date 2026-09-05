@@ -33,11 +33,6 @@ fn sanitize_shell_override(shell: Option<String>) -> Option<String> {
     }
 }
 
-pub fn detect_shell_name() -> String {
-    let (_, path) = unix::Shell::detect();
-    path.rsplit('/').next().unwrap_or("").to_string()
-}
-
 #[derive(serde::Serialize)]
 pub struct ShellInfo {
     pub name: String,

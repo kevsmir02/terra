@@ -260,11 +260,6 @@ pub fn pty_close_all(state: tauri::State<PtyState>) -> Result<usize, String> {
 }
 
 #[tauri::command]
-pub fn pty_shell_name() -> String {
-    shell_init::detect_shell_name()
-}
-
-#[tauri::command]
 pub fn pty_list_shells() -> Vec<shell_init::ShellInfo> {
     shell_init::list_shells()
 }

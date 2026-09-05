@@ -1,8 +1,8 @@
 [package]
 name = "terra"
 version = "0.9.1"
-description = "Terra -- an open-source terminal IDE"
-authors = ["crynta"]
+description = "Terra, a terminal-first IDE for agent harnesses"
+authors = ["kevsmir02"]
 license = "Apache-2.0"
 edition = "2021"
 

@@ -5,9 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug. Please fill in the fields below — it makes triage much faster.
-
-        For **security issues**, do NOT open an issue. See [SECURITY.md](https://github.com/crynta/Terra-AI/blob/main/SECURITY.md).
+        Fill in the fields below; it makes triage much faster.
 
   - type: input
     id: version

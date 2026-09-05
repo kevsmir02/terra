@@ -37,9 +37,9 @@
     "targets": ["deb", "rpm", "appimage"],
     "resources": ["resources/scrcpy-server-*.jar"],
     "createUpdaterArtifacts": true,
-    "copyright": "Copyright 2026 Crynta",
+    "copyright": "Copyright 2026 kevsmir02",
     "license": "Apache-2.0",
-    "publisher": "Crynta",
+    "publisher": "kevsmir02",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -64,8 +64,8 @@
       }
     },
     "category": "DeveloperTool",
-    "shortDescription": "AI-native terminal emulator",
-    "longDescription": "Terra — an open-source AI-native terminal emulator with multi-tab, file explorer, code editor, web preview, voice input, and AI agents.",
+    "shortDescription": "Terminal-first IDE for agent harnesses",
+    "longDescription": "Terra is a terminal-first IDE for developers who work in agent harnesses: tabs and split panes over a native PTY, a file explorer, a CodeMirror editor, markdown and dev-server previews, source control, and Android device mirroring.",
     "fileAssociations": [
       {
         "name": "Terra Document",
