@@ -1,13 +1,14 @@
 // Ported from ws-scrcpy's MsePlayer pattern (Apache-2.0). The MediaSource
 // SourceBuffer is fed fMP4 init segment (kind=0) and moof+mdat fragments
-// (kind=1) emitted from the Rust read loop. We do not parse NALs here — Rust
+// (kind=1) emitted from the Rust read loop. We do not parse NALs here, Rust
 // already did. We append bytes to the SourceBuffer when it can accept more.
 
-// A remove(start, end) is extended by the browser to the next keyframe at or
-// after `end`, and scrcpy's default keyframe interval is 10 s, so keeping less
-// than one GOP behind the playhead would evict the GOP currently on screen.
-export const TRIM_KEEP_SECONDS = 12;
-export const TRIM_THRESHOLD_SECONDS = TRIM_KEEP_SECONDS * 2;
+import {
+  type BufferedRange,
+  PLAYBACK_POLICY,
+  type PlaybackPolicy,
+  playbackPolicy,
+} from "./playbackPolicy";
 
 export type MseErrorHandler = (message: string) => void;
 
@@ -71,11 +72,7 @@ export class MsePlayer {
     }
   }
 
-  private onUpdateEnd = () => {
-    const afterTrim = this.trimPending;
-    if (afterTrim) this.healPlayheadAfterTrim();
-    this.flushPending();
-  };
+  private onUpdateEnd = () => this.flushPending();
 
   /** kind: 0 = init segment (carries the codec string in-band),
    *        1 = media fragment bytes. `payload` is a view, never copied. */
@@ -109,11 +106,9 @@ export class MsePlayer {
     if (this.ended || !sb || sb.updating) return;
     const next = this.pending[0];
     if (next === undefined) return;
-    // At most one trim per append, so a remove that did not shrink the backlog
-    // can never starve the queue by re-issuing itself on every updateend.
-    if (!this.trimPending && this.trimBehindPlayhead(TRIM_KEEP_SECONDS, TRIM_THRESHOLD_SECONDS)) {
-      return;
-    }
+    // A seek never blocks the append; only an evict does (it waits on
+    // updateend), so only an issued evict returns early here.
+    if (this.applyPolicy(sb, PLAYBACK_POLICY)) return;
     try {
       sb.appendBuffer(next);
       this.pending.shift();
@@ -128,69 +123,57 @@ export class MsePlayer {
         return;
       }
       // The fragment stays at the head of the queue; updateend after the
-      // trim re-enters flushPending and retries it exactly once.
+      // evict re-enters flushPending and retries it exactly once.
       if (!this.quotaRetryArmed) {
         this.quotaRetryArmed = true;
-        if (this.trimBehindPlayhead(0, 0)) return;
+        if (this.applyPolicy(sb, { ...PLAYBACK_POLICY, keepBehindSeconds: 0, evictThresholdSeconds: 0 })) {
+          return;
+        }
       }
       this.fail("Video buffer is full and nothing behind the playhead could be reclaimed");
     }
   }
 
-  // Returns true when a remove was issued; appending resumes on updateend.
-  private trimBehindPlayhead(keepSeconds: number, thresholdSeconds: number): boolean {
-    const sb = this.sourceBuffer;
-    if (!sb) return false;
-    let start: number;
+  private bufferedRanges(sb: SourceBuffer): BufferedRange[] {
     try {
       const buffered = sb.buffered;
-      if (buffered.length === 0) return false;
-      start = buffered.start(0);
+      const ranges: BufferedRange[] = [];
+      for (let i = 0; i < buffered.length; i++) {
+        ranges.push({ start: buffered.start(i), end: buffered.end(i) });
+      }
+      return ranges;
     } catch {
-      return false;
+      return [];
     }
-    const now = this.video.currentTime;
-    const end = now - keepSeconds;
-    if (now - start <= thresholdSeconds || end <= start) return false;
+  }
+
+  // Returns true when an evict (remove) was issued; appending resumes on
+  // updateend. A seek is applied unconditionally and does not gate the return.
+  private applyPolicy(sb: SourceBuffer, policy: PlaybackPolicy): boolean {
+    const currentTime = this.video.currentTime;
+    const buffered = this.bufferedRanges(sb);
+    const intent = playbackPolicy({ currentTime, buffered }, policy);
+
+    if (intent.seekTo !== undefined) {
+      this.video.currentTime = intent.seekTo;
+      // Only warn for the rare case where the playhead was orphaned outside
+      // every buffered range: a live-catch-up seek from within a continuous
+      // range is routine (e.g. every stream start) and not worth logging.
+      const outsideEveryRange = buffered.length > 0 && !buffered.some((r) => currentTime >= r.start && currentTime <= r.end);
+      if (outsideEveryRange && !this.warnedPlayheadDrift) {
+        this.warnedPlayheadDrift = true;
+        console.warn("[device] MSE: playhead fell outside the buffered ranges, seeking to", intent.seekTo);
+      }
+    }
+
+    if (intent.evictBefore === undefined || this.trimPending) return false;
     try {
-      sb.remove(0, end);
+      sb.remove(0, intent.evictBefore);
       this.trimPending = true;
       return true;
     } catch (e) {
       console.warn("[device] MSE: remove failed:", e);
       return false;
-    }
-  }
-
-  // The trim math assumes a remove is extended to the next keyframe at or
-  // after `end`, never past the playhead. If the real keyframe interval is
-  // longer than assumed, the browser can extend the remove past the
-  // playhead's own range; reclaim it by seeking into whatever survived.
-  private healPlayheadAfterTrim() {
-    const sb = this.sourceBuffer;
-    if (!sb) return;
-    let buffered: TimeRanges;
-    try {
-      buffered = sb.buffered;
-    } catch {
-      return;
-    }
-    const now = this.video.currentTime;
-    let nextStart: number | null = null;
-    let lastStart: number | null = null;
-    for (let i = 0; i < buffered.length; i++) {
-      const start = buffered.start(i);
-      const end = buffered.end(i);
-      if (now >= start && now < end) return;
-      if (start > now && (nextStart === null || start < nextStart)) nextStart = start;
-      lastStart = start;
-    }
-    const target = nextStart ?? lastStart;
-    if (target === null) return;
-    this.video.currentTime = target;
-    if (!this.warnedPlayheadDrift) {
-      this.warnedPlayheadDrift = true;
-      console.warn("[device] MSE: playhead fell outside the buffered ranges after a trim, seeking to", target);
     }
   }
 

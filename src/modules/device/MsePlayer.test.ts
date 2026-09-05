@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MsePlayer, TRIM_KEEP_SECONDS, TRIM_THRESHOLD_SECONDS } from "./MsePlayer";
+import { MsePlayer } from "./MsePlayer";
+import { PLAYBACK_POLICY } from "./playbackPolicy";
+
+const KEEP = PLAYBACK_POLICY.keepBehindSeconds;
+const EVICT_THRESHOLD = PLAYBACK_POLICY.evictThresholdSeconds;
 
 type Range = [number, number];
 
@@ -217,8 +221,8 @@ describe("MsePlayer init segment validation", () => {
 describe("MsePlayer buffer trimming", () => {
   it("does not trim while the backlog behind the playhead is under the threshold", () => {
     const { player, sb, video } = setup();
-    sb.ranges = [[0, TRIM_THRESHOLD_SECONDS]];
-    video.currentTime = TRIM_THRESHOLD_SECONDS;
+    sb.ranges = [[0, EVICT_THRESHOLD]];
+    video.currentTime = EVICT_THRESHOLD;
 
     player.pushData(1, fragment(1));
 
@@ -228,12 +232,12 @@ describe("MsePlayer buffer trimming", () => {
 
   it("trims behind the playhead once the backlog crosses the threshold, then resumes appending", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
 
     player.pushData(1, fragment(1));
-    expect(sb.removed).toEqual([[0, now - TRIM_KEEP_SECONDS]]);
+    expect(sb.removed).toEqual([[0, now - KEEP]]);
     expect(sb.appended).toHaveLength(1);
 
     sb.finish();
@@ -245,33 +249,37 @@ describe("MsePlayer buffer trimming", () => {
     expect(sb.appended).toHaveLength(3);
   });
 
-  it("seeks into the surviving range and warns once when a trim evicts the playhead", () => {
+  it("heals the playhead into the next range when an evict strands it in a gap (rule 3)", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     player.pushData(1, fragment(1));
-    expect(sb.removed).toEqual([[0, now - TRIM_KEEP_SECONDS]]);
-    // The browser extends the remove to the next keyframe, evicting further
-    // than requested and leaving the playhead stranded ahead of what survives.
-    sb.ranges = [[now + 5, now + 30]];
+    expect(sb.removed).toEqual([[0, now - KEEP]]);
+    // The browser extends the remove to the next keyframe, landing the
+    // playhead in a gap. It stays within the live-lag threshold of the new
+    // live edge, so this is a heal (rule 3), not a live-catch-up seek (rule 2).
+    sb.ranges = [
+      [now - 5, now - 0.5],
+      [now + 0.3, now + 0.9],
+    ];
     sb.finish();
 
-    expect(video.currentTime).toBe(now + 5);
+    expect(video.currentTime).toBe(now + 0.3);
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it("does not seek or warn when the playhead's range survives a trim", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     player.pushData(1, fragment(1));
-    sb.ranges = [[now - TRIM_KEEP_SECONDS, now + 1]];
+    sb.ranges = [[now - KEEP, now + 1]];
     sb.finish();
 
     expect(video.currentTime).toBe(now);
@@ -280,7 +288,7 @@ describe("MsePlayer buffer trimming", () => {
 
   it("never issues two trims without an append in between", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
 
@@ -292,6 +300,31 @@ describe("MsePlayer buffer trimming", () => {
 
     expect(sb.removed).toHaveLength(1);
     expect(sb.appended).toHaveLength(2);
+  });
+});
+
+describe("MsePlayer live catch-up (rule 2)", () => {
+  it("seeks the video to just behind live without blocking the append", () => {
+    const { player, sb, video } = setup();
+    sb.ranges = [[0, 10]];
+    video.currentTime = 2;
+
+    player.pushData(1, fragment(1));
+
+    expect(video.currentTime).toBe(10 - PLAYBACK_POLICY.liveTargetOffsetSeconds);
+    // The seek does not gate the append: it lands in the same tick.
+    expect(bytes(sb.appended)).toEqual([[9, 9], [1, 1, 1]]);
+  });
+
+  it("does not warn for a routine live catch-up from within a continuous range", () => {
+    const { player, sb, video } = setup();
+    sb.ranges = [[0, 10]];
+    video.currentTime = 2;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    player.pushData(1, fragment(1));
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -329,10 +362,10 @@ describe("MsePlayer append failures", () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
-  it("is terminal on a quota error when nothing behind the playhead can be trimmed", () => {
-    const { onError, player, sb, video } = setup();
-    sb.ranges = [[0, 4]];
-    video.currentTime = 0;
+  it("is terminal on a quota error when nothing behind the playhead can be reclaimed", () => {
+    // Nothing buffered yet (setup()'s default), so the policy is a no-op on
+    // both the normal and the zeroed quota-retry pass.
+    const { onError, player, sb } = setup();
     sb.failNext.push(quotaError());
 
     player.pushData(1, fragment(1));
