@@ -13,7 +13,7 @@ use std::thread;
 use portable_pty::PtySize;
 use tauri::ipc::{Channel, Response};
 
-use crate::modules::workspace::{user_spawn_cwd_or_home, WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::{user_spawn_cwd_or_home, WorkspaceRegistry};
 use session::Session;
 use crate::modules::sync::{MutexExt, RwLockExt};
 
@@ -48,16 +48,14 @@ pub async fn pty_open(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
-    workspace: Option<WorkspaceEnv>,
     shell: Option<String>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<u32, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let cwd = user_spawn_cwd_or_home(&registry, cwd.as_deref(), &workspace);
+    let cwd = user_spawn_cwd_or_home(&registry, cwd.as_deref());
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
     let session = tauri::async_runtime::spawn_blocking(move || {
-        session::spawn(id, app, cols, rows, cwd, workspace, shell, on_data, on_exit)
+        session::spawn(id, app, cols, rows, cwd, shell, on_data, on_exit)
             .map(|(s, _)| s)
     })
     .await

@@ -5,11 +5,10 @@ use std::process::Command;
 
 use tempfile::TempDir;
 use terra_lib::modules::fs::to_canon;
-use terra_lib::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use terra_lib::modules::workspace::WorkspaceRegistry;
 
 pub struct GitRepoFixture {
     pub registry: WorkspaceRegistry,
-    pub workspace: WorkspaceEnv,
     pub repo_path: PathBuf,
     _tmp: TempDir,
 }
@@ -30,7 +29,6 @@ impl GitRepoFixture {
 
         Self {
             registry,
-            workspace: WorkspaceEnv::Local,
             repo_path: canonical,
             _tmp: tmp,
         }
@@ -79,7 +77,6 @@ pub struct FsFixture {
     /// The fs commands are gated on this, so the fixture root is authorized
     /// exactly as a real workspace root would be.
     pub registry: WorkspaceRegistry,
-    pub workspace: WorkspaceEnv,
     _tmp: TempDir,
 }
 
@@ -92,7 +89,6 @@ impl FsFixture {
         Self {
             root,
             registry,
-            workspace: WorkspaceEnv::Local,
             _tmp: tmp,
         }
     }

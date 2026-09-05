@@ -9,7 +9,7 @@ use tempfile::NamedTempFile;
 use tauri::{Manager, State};
 
 use super::{authorized_entry, authorized_new, authorized_read};
-use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 
 const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 /// Ceiling for explicit "open anyway"; mirrored as FORCE_READ_LIMIT in useDocument.ts.
@@ -60,12 +60,10 @@ fn mtime_millis(meta: &fs::Metadata) -> u64 {
 #[tauri::command]
 pub async fn fs_read_file(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     force: Option<bool>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<ReadResult, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let p = authorized_read(&registry, &path, &workspace)?;
+    let p = authorized_read(&registry, &path)?;
     read_file_sync(&p, force.unwrap_or(false))
 }
 
@@ -133,15 +131,13 @@ fn write_atomic(target: &Path, content: &[u8]) -> std::io::Result<()> {
 pub async fn fs_write_file(
     path: String,
     content: String,
-    workspace: Option<WorkspaceEnv>,
     source: Option<String>,
     app: tauri::AppHandle,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<u64, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
     // `authorized_new` covers both cases a save hits: an existing file, and a
     // first save into an already-authorized directory.
-    let target = authorized_new(&registry, &path, &workspace)?;
+    let target = authorized_new(&registry, &path)?;
     let original_permissions = fs::metadata(&target).ok().map(|m| m.permissions());
     write_atomic(&target, content.as_bytes()).map_err(|e| {
         log::warn!("fs_write_file({}) failed: {e}", target.display());
@@ -172,12 +168,10 @@ pub async fn fs_write_file(
 #[tauri::command]
 pub async fn fs_allow_asset(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     app: tauri::AppHandle,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let canonical = authorized_read(&registry, &path, &workspace)?;
+    let canonical = authorized_read(&registry, &path)?;
     if !canonical.is_file() {
         return Err(format!("not a file: {}", canonical.display()));
     }
@@ -190,23 +184,19 @@ pub async fn fs_allow_asset(
 #[tauri::command]
 pub async fn fs_canonicalize(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let canon = authorized_read(&registry, &path, &workspace)?;
+    let canon = authorized_read(&registry, &path)?;
     Ok(super::to_canon(&canon))
 }
 
 #[tauri::command]
 pub async fn fs_stat(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<FileStat, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
     // Not `authorized_read`: reporting `Symlink` requires the entry itself.
-    let p = authorized_entry(&registry, &path, &workspace)?;
+    let p = authorized_entry(&registry, &path)?;
     let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
     // fs::metadata follows symlinks, so the link check needs symlink_metadata.
     let kind = if std::fs::symlink_metadata(&p)

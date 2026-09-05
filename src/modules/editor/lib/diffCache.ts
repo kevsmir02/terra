@@ -1,5 +1,4 @@
 import { type GitDiffContentResult, native } from "@/lib/native";
-import { currentWorkspaceScopeKey } from "@/modules/workspace";
 
 const DIFF_CACHE_LIMIT = 6;
 const inflight = new Map<string, Promise<GitDiffContentResult>>();
@@ -29,7 +28,7 @@ export function invalidateDiff(key: string): void {
 }
 
 export function invalidateRepoDiffs(repoRoot: string): void {
-  const prefix = `${currentWorkspaceScopeKey()}|${repoRoot}|`;
+  const prefix = `${repoRoot}|`;
   for (const k of [...cache.keys()]) {
     if (k.startsWith(prefix)) cache.delete(k);
   }
@@ -40,7 +39,7 @@ export function workingDiffKey(
   path: string,
   mode: "-" | "+",
 ): string {
-  return `${currentWorkspaceScopeKey()}|${repoRoot}|w|${mode}|${path}`;
+  return `${repoRoot}|w|${mode}|${path}`;
 }
 
 export function commitDiffKey(
@@ -48,7 +47,7 @@ export function commitDiffKey(
   sha: string,
   path: string,
 ): string {
-  return `${currentWorkspaceScopeKey()}|${repoRoot}|c|${sha}|${path}`;
+  return `${repoRoot}|c|${sha}|${path}`;
 }
 
 export async function fetchWorkingDiff(

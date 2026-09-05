@@ -17,18 +17,17 @@ use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream,
     ResolvedGitDirectory,
 };
-use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 
 pub fn resolve_repo(
     registry: &WorkspaceRegistry,
     cwd: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<Option<GitRepoInfo>> {
-    let cwd = canonical_dir(registry, cwd, workspace)?;
+    let cwd = canonical_dir(registry, cwd)?;
     if !registry.is_authorized(&cwd.local_path) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
-    ensure_git_available(&cwd.workspace)?;
+    ensure_git_available()?;
     resolve_repo_in_authorized(registry, &cwd)
 }
 
@@ -37,18 +36,16 @@ fn resolve_repo_in_authorized(
     cwd: &ResolvedGitDirectory,
 ) -> Result<Option<GitRepoInfo>> {
     let Some(root_line) = git_stdout_line_opt(
-        &cwd.workspace,
         &cwd.git_path,
         ["rev-parse", "--show-toplevel"],
     )?
     else {
         return Ok(None);
     };
-    let canonical_root = canonical_dir(registry, &root_line, &cwd.workspace)?;
+    let canonical_root = canonical_dir(registry, &root_line)?;
     let _ = registry.authorize(&canonical_root.local_path);
 
     let head = match git_stdout_lines(
-        &canonical_root.workspace,
         &canonical_root.git_path,
         ["rev-parse", "--abbrev-ref", "HEAD"],
     )?
@@ -57,7 +54,6 @@ fn resolve_repo_in_authorized(
     {
         Some(h) => h,
         None => git_stdout_line_opt(
-            &canonical_root.workspace,
             &canonical_root.git_path,
             ["symbolic-ref", "--short", "HEAD"],
         )?
@@ -68,7 +64,6 @@ fn resolve_repo_in_authorized(
     };
 
     let upstream = git_stdout_line_opt(
-        &canonical_root.workspace,
         &canonical_root.git_path,
         ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
     )?;
@@ -84,15 +79,13 @@ fn resolve_repo_in_authorized(
 pub fn panel_snapshot(
     registry: &WorkspaceRegistry,
     cwd: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitPanelSnapshot> {
-    let cwd = canonical_dir(registry, cwd, workspace)?;
+    let cwd = canonical_dir(registry, cwd)?;
     if !registry.is_authorized(&cwd.local_path) {
         return Err(GitError::PathOutsideWorkspace(cwd.local_path));
     }
-    ensure_git_available(&cwd.workspace)?;
+    ensure_git_available()?;
     let Some(root_line) = git_stdout_line_opt(
-        &cwd.workspace,
         &cwd.git_path,
         ["rev-parse", "--show-toplevel"],
     )?
@@ -102,7 +95,7 @@ pub fn panel_snapshot(
             status: None,
         });
     };
-    let canonical_root = canonical_dir(registry, &root_line, &cwd.workspace)?;
+    let canonical_root = canonical_dir(registry, &root_line)?;
     let _ = registry.authorize(&canonical_root.local_path);
 
     let status = status_inner(&canonical_root)?;
@@ -121,16 +114,14 @@ pub fn panel_snapshot(
 pub fn status(
     registry: &WorkspaceRegistry,
     repo_root: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitStatusSnapshot> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     status_inner(&repo_root)
 }
 
 fn status_inner(repo_root: &ResolvedGitDirectory) -> Result<GitStatusSnapshot> {
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         [
             "status",
@@ -163,10 +154,9 @@ pub fn diff(
     repo_root: &str,
     path: Option<&str>,
     staged: bool,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitDiffResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     diff_inner(&repo_root, path, staged)
 }
 
@@ -188,7 +178,6 @@ fn diff_inner(
         args.push(spec.clone().into());
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         args,
         DEFAULT_TIMEOUT_SECS,
@@ -211,10 +200,9 @@ pub fn diff_content(
     path: &str,
     staged: bool,
     original_path: Option<&str>,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitDiffContentResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     let worktree_path = resolve_within_repo(&repo_root.local_path, path)?;
     let rel_path = pathspec(&repo_root.local_path, &worktree_path);
 
@@ -229,20 +217,17 @@ pub fn diff_content(
     let original = if staged {
         let spec = original_rel.as_deref().unwrap_or(&rel_path);
         git_show_text(
-            &repo_root.workspace,
             &repo_root.git_path,
             &format!("HEAD:{spec}"),
         )?
     } else {
         git_show_text(
-            &repo_root.workspace,
             &repo_root.git_path,
             &format!(":{rel_path}"),
         )?
     };
     let modified = if staged {
         git_show_text(
-            &repo_root.workspace,
             &repo_root.git_path,
             &format!(":{rel_path}"),
         )?
@@ -266,10 +251,9 @@ pub fn stage(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     paths: &[String],
-    workspace: &WorkspaceEnv,
 ) -> Result<()> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if paths.is_empty() {
         return Ok(());
     }
@@ -279,7 +263,6 @@ pub fn stage(
         args.push(p.clone().into());
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         args,
         DEFAULT_TIMEOUT_SECS,
@@ -291,10 +274,9 @@ pub fn unstage(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     paths: &[String],
-    workspace: &WorkspaceEnv,
 ) -> Result<()> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if paths.is_empty() {
         return Ok(());
     }
@@ -304,7 +286,6 @@ pub fn unstage(
         reset_args.push(p.clone().into());
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         reset_args,
         DEFAULT_TIMEOUT_SECS,
@@ -325,7 +306,6 @@ pub fn unstage(
         rm_args.push(p.clone().into());
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         rm_args,
         DEFAULT_TIMEOUT_SECS,
@@ -345,10 +325,9 @@ pub fn discard(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     entries: &[DiscardEntry],
-    workspace: &WorkspaceEnv,
 ) -> Result<()> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if entries.is_empty() {
         return Ok(());
     }
@@ -370,7 +349,6 @@ pub fn discard(
             args.push(p.clone().into());
         }
         let output = run_git(
-            &repo_root.workspace,
             Some(&repo_root.git_path),
             args,
             DEFAULT_TIMEOUT_SECS,
@@ -384,7 +362,6 @@ pub fn discard(
             args.push(p.clone().into());
         }
         let output = run_git(
-            &repo_root.workspace,
             Some(&repo_root.git_path),
             args,
             DEFAULT_TIMEOUT_SECS,
@@ -399,17 +376,15 @@ pub fn commit(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     message: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitCommitResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     let trimmed = message.trim();
     if trimmed.is_empty() {
         return Err(GitError::EmptyCommitMessage);
     }
 
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         [OsStr::new("commit"), OsStr::new("-m"), OsStr::new(trimmed)],
         DEFAULT_TIMEOUT_SECS,
@@ -420,7 +395,6 @@ pub fn commit(
     ensure_success(&output, "git commit failed")?;
 
     let combined = git_stdout_lines(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["show", "-s", "--format=%H%n%s", "HEAD"],
     )?;
@@ -439,13 +413,11 @@ pub fn commit(
 pub fn push(
     registry: &WorkspaceRegistry,
     repo_root: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitPushResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
 
     let upstream = git_stdout_line_opt(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
     )?;
@@ -454,7 +426,6 @@ pub fn push(
     }
 
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         ["push"],
         NETWORK_TIMEOUT_SECS,
@@ -478,10 +449,9 @@ pub fn log(
     repo_root: &str,
     limit: u32,
     before_sha: Option<&str>,
-    workspace: &WorkspaceEnv,
 ) -> Result<Vec<GitLogEntry>> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     let bounded = limit.clamp(1, MAX_LOG_LIMIT);
     let count_arg = format!("--max-count={bounded}");
     let format_arg = format!("--format={LOG_FORMAT}");
@@ -505,7 +475,6 @@ pub fn log(
         args.push(OsStr::new(spec));
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         args,
         DEFAULT_TIMEOUT_SECS,
@@ -584,15 +553,13 @@ pub fn show_commit_diff(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     sha: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitDiffResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if !sha_is_safe(sha) {
         return Err(GitError::command("git show", "invalid commit identifier"));
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         [
             OsStr::new("show"),
@@ -650,16 +617,14 @@ pub fn commit_files(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     sha: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<Vec<GitCommitFileChange>> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if !sha_is_safe(sha) {
         return Err(GitError::command("git diff-tree", "invalid commit sha"));
     }
 
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         [
             OsStr::new("diff-tree"),
@@ -710,10 +675,9 @@ pub fn commit_file_diff(
     sha: &str,
     path: &str,
     original_path: Option<&str>,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitDiffContentResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if !sha_is_safe(sha) {
         return Err(GitError::command("git show", "invalid commit sha"));
     }
@@ -735,20 +699,17 @@ pub fn commit_file_diff(
     };
 
     let parent = git_stdout_line_opt(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["rev-parse", &format!("{sha}^")],
     )?;
     let original = match parent.as_deref() {
         Some(p) => git_show_text(
-            &repo_root.workspace,
             &repo_root.git_path,
             &format!("{p}:{original_rel}"),
         )?,
         None => TextSource::Missing,
     };
     let modified = git_show_text(
-        &repo_root.workspace,
         &repo_root.git_path,
         &format!("{sha}:{rel}"),
     )?;
@@ -768,7 +729,6 @@ pub fn commit_file_diff(
         diff_args.push(original_rel.clone().into());
     }
     let patch_output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         diff_args,
         DEFAULT_TIMEOUT_SECS,
@@ -795,15 +755,13 @@ pub fn remote_url(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     name: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<Option<String>> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if name.is_empty() || name.len() > 64 || !name.chars().all(is_remote_name_char) {
         return Ok(None);
     }
     git_stdout_line_opt(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["config", "--get", &format!("remote.{name}.url")],
     )
@@ -923,12 +881,10 @@ fn status_label_for(c: char) -> String {
 pub fn fetch(
     registry: &WorkspaceRegistry,
     repo_root: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<()> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         ["fetch", "--prune"],
         NETWORK_TIMEOUT_SECS,
@@ -939,12 +895,10 @@ pub fn fetch(
 pub fn pull_ff_only(
     registry: &WorkspaceRegistry,
     repo_root: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<()> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         ["pull", "--ff-only"],
         NETWORK_TIMEOUT_SECS,
@@ -981,15 +935,13 @@ fn pathspec(repo_root: &Path, absolute: &Path) -> String {
 pub fn list_branches(
     registry: &WorkspaceRegistry,
     repo_root: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<GitBranchListResult> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
 
     let mut branches: Vec<GitBranchEntry> = Vec::new();
 
     let current_branch = git_stdout_line_opt(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["rev-parse", "--abbrev-ref", "HEAD"],
     )
@@ -998,7 +950,6 @@ pub fn list_branches(
     let is_detached_head = current_branch.as_deref() == Some("HEAD");
 
     if let Ok(lines) = git_stdout_lines(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["branch", "--format=%(refname:short)%00%(HEAD)"],
     ) {
@@ -1020,7 +971,6 @@ pub fn list_branches(
     }
 
     if let Ok(lines) = git_stdout_lines(
-        &repo_root.workspace,
         &repo_root.git_path,
         ["worktree", "list", "--porcelain"],
     ) {
@@ -1131,15 +1081,13 @@ pub fn checkout_branch(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     branch_name: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<()> {
-    let repo_root = authorized_repo_root(registry, repo_root, workspace)?;
-    ensure_git_available(&repo_root.workspace)?;
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
     if branch_name.starts_with('-') || branch_name.is_empty() {
         return Err(GitError::InvalidPath(branch_name.into()));
     }
     let output = run_git(
-        &repo_root.workspace,
         Some(&repo_root.git_path),
         ["checkout", branch_name],
         DEFAULT_TIMEOUT_SECS,

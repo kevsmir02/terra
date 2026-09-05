@@ -1,4 +1,3 @@
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appConfigDir, join } from "@tauri-apps/api/path";
@@ -32,18 +31,16 @@ export async function themeFilePath(id: string): Promise<string> {
 
 export async function writeThemeFile(theme: Theme): Promise<string> {
   const dir = await themesDir();
-  const ws = currentWorkspaceEnv();
-  const dirExists = await invoke("fs_stat", { path: dir, workspace: ws })
+  const dirExists = await invoke("fs_stat", { path: dir })
     .then(() => true)
     .catch(() => false);
   if (!dirExists) {
-    await invoke("fs_create_dir", { path: dir, workspace: ws });
+    await invoke("fs_create_dir", { path: dir });
   }
   const path = await join(dir, `${theme.id}${THEME_FILE_EXT}`);
   await invoke("fs_write_file", {
     path,
     content: JSON.stringify(theme, null, 2),
-    workspace: ws,
     source: "theme",
   });
   return path;
@@ -52,7 +49,7 @@ export async function writeThemeFile(theme: Theme): Promise<string> {
 export async function deleteThemeFile(id: string): Promise<void> {
   try {
     const path = await themeFilePath(id);
-    await invoke("fs_delete", { path, workspace: currentWorkspaceEnv() });
+    await invoke("fs_delete", { path });
   } catch {
     /* file may not exist yet — nothing to clean up */
   }

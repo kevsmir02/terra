@@ -4,19 +4,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { LspStatusPill } from "@/modules/lsp";
-import type { WorkspaceEnv } from "@/modules/workspace";
 import { IncognitoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { DiagnosticsBadge } from "./DiagnosticsBadge";
-import { WorkspaceEnvSelector } from "./WorkspaceEnvSelector";
 
 type Props = {
   cwd: string | null;
   filePath?: string | null;
   home: string | null;
   onCd: (path: string) => void;
-  onWorkspaceChange: (env: WorkspaceEnv) => void;
   privateActive: boolean;
 };
 
@@ -25,13 +22,11 @@ export function StatusBar({
   filePath,
   home,
   onCd,
-  onWorkspaceChange,
   privateActive,
 }: Props) {
   return (
     <footer className="terra-chrome flex h-9 shrink-0 items-center justify-between gap-3 border-t border-border/(--emph-strong) bg-card/(--emph-strong) pl-3 pr-4 text-[11px]">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
         <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
         <LspStatusPill filePath={filePath ?? null} />
         <DiagnosticsBadge filePath={filePath ?? null} />

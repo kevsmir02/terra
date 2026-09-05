@@ -6,7 +6,7 @@ use terra_lib::modules::fs::to_canon;
 use terra_lib::modules::git::errors::GitError;
 use terra_lib::modules::git::operations;
 use terra_lib::modules::git::types::DiscardEntry;
-use terra_lib::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use terra_lib::modules::workspace::WorkspaceRegistry;
 
 fn skip_if_no_git() -> bool {
     if !git_available() {
@@ -26,7 +26,7 @@ fn resolve_repo_returns_none_outside_repo() {
     let registry = WorkspaceRegistry::default();
     registry.authorize(&canonical).unwrap();
 
-    let info = operations::resolve_repo(&registry, &to_canon(&canonical), &WorkspaceEnv::Local)
+    let info = operations::resolve_repo(&registry, &to_canon(&canonical))
         .expect("resolve_repo");
     assert!(info.is_none());
 }
@@ -41,7 +41,7 @@ fn resolve_repo_returns_branch_for_real_repo() {
     fx.run_git(&["add", "seed.txt"]);
     fx.run_git(&["commit", "-q", "-m", "seed"]);
 
-    let info = operations::resolve_repo(&fx.registry, &fx.repo_str(), &fx.workspace)
+    let info = operations::resolve_repo(&fx.registry, &fx.repo_str())
         .expect("resolve_repo")
         .expect("repo present");
     assert_eq!(info.branch, "main");
@@ -55,7 +55,7 @@ fn resolve_repo_returns_branch_for_unborn_head() {
         return;
     }
     let fx = GitRepoFixture::new();
-    let info = operations::resolve_repo(&fx.registry, &fx.repo_str(), &fx.workspace)
+    let info = operations::resolve_repo(&fx.registry, &fx.repo_str())
         .expect("resolve_repo")
         .expect("repo present even without commits");
     assert_eq!(info.branch, "main");
@@ -69,7 +69,7 @@ fn status_on_empty_repo_has_no_files() {
         return;
     }
     let fx = GitRepoFixture::new();
-    let snap = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).expect("status");
+    let snap = operations::status(&fx.registry, &fx.repo_str()).expect("status");
     assert_eq!(snap.branch, "main");
     assert!(snap.changed_files.is_empty());
     assert_eq!(snap.ahead, 0);
@@ -83,7 +83,7 @@ fn status_lists_untracked_file() {
     }
     let fx = GitRepoFixture::new();
     fx.write_file("hello.txt", "hi\n");
-    let snap = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).expect("status");
+    let snap = operations::status(&fx.registry, &fx.repo_str()).expect("status");
     let entry = snap
         .changed_files
         .iter()
@@ -104,11 +104,10 @@ fn stage_then_commit_produces_log_entry() {
         &fx.registry,
         &fx.repo_str(),
         &["a.txt".into()],
-        &fx.workspace,
     )
     .expect("stage");
 
-    let snap = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    let snap = operations::status(&fx.registry, &fx.repo_str()).unwrap();
     let entry = snap
         .changed_files
         .iter()
@@ -117,12 +116,12 @@ fn stage_then_commit_produces_log_entry() {
     assert!(entry.staged);
     assert!(!entry.untracked);
 
-    let commit = operations::commit(&fx.registry, &fx.repo_str(), "add a", &fx.workspace)
+    let commit = operations::commit(&fx.registry, &fx.repo_str(), "add a")
         .expect("commit");
     assert_eq!(commit.summary, "add a");
     assert_eq!(commit.commit_sha.len(), 40);
 
-    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace)
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None)
         .expect("log");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].sha, commit.commit_sha);
@@ -143,7 +142,6 @@ fn unstage_clears_index_entry() {
         &fx.registry,
         &fx.repo_str(),
         &["a.txt".into()],
-        &fx.workspace,
     )
     .unwrap();
 
@@ -151,11 +149,10 @@ fn unstage_clears_index_entry() {
         &fx.registry,
         &fx.repo_str(),
         &["a.txt".into()],
-        &fx.workspace,
     )
     .expect("unstage");
 
-    let snap = operations::status(&fx.registry, &fx.repo_str(), &fx.workspace).unwrap();
+    let snap = operations::status(&fx.registry, &fx.repo_str()).unwrap();
     let entry = snap
         .changed_files
         .iter()
@@ -174,7 +171,7 @@ fn commit_with_empty_message_is_rejected() {
     fx.write_file("a.txt", "alpha\n");
     fx.run_git(&["add", "a.txt"]);
 
-    match operations::commit(&fx.registry, &fx.repo_str(), "   ", &fx.workspace) {
+    match operations::commit(&fx.registry, &fx.repo_str(), "   ") {
         Err(GitError::EmptyCommitMessage) => {}
         Err(other) => panic!("expected EmptyCommitMessage, got {other}"),
         Ok(_) => panic!("expected error for empty message"),
@@ -188,7 +185,7 @@ fn log_on_empty_repo_returns_empty_list() {
     }
     let fx = GitRepoFixture::new();
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).expect("log");
+        operations::log(&fx.registry, &fx.repo_str(), 10, None).expect("log");
     assert!(entries.is_empty());
 }
 
@@ -203,7 +200,7 @@ fn diff_shows_worktree_change() {
     fx.run_git(&["commit", "-q", "-m", "init"]);
     fx.write_file("a.txt", "alpha\nbeta\n");
 
-    let diff = operations::diff(&fx.registry, &fx.repo_str(), None, false, &fx.workspace)
+    let diff = operations::diff(&fx.registry, &fx.repo_str(), None, false)
         .expect("diff");
     assert!(diff.diff_text.contains("+beta"));
 }
@@ -221,7 +218,7 @@ fn diff_staged_only_shows_index_change() {
     fx.run_git(&["add", "a.txt"]);
     fx.write_file("a.txt", "alpha\nbeta\ngamma\n");
 
-    let staged = operations::diff(&fx.registry, &fx.repo_str(), None, true, &fx.workspace)
+    let staged = operations::diff(&fx.registry, &fx.repo_str(), None, true)
         .expect("staged diff");
     assert!(staged.diff_text.contains("+beta"));
     assert!(!staged.diff_text.contains("+gamma"));
@@ -245,7 +242,6 @@ fn discard_tracked_restores_worktree() {
             path: "a.txt".into(),
             untracked: false,
         }],
-        &fx.workspace,
     )
     .expect("discard");
 
@@ -268,7 +264,6 @@ fn discard_untracked_removes_file() {
             path: "garbage.txt".into(),
             untracked: true,
         }],
-        &fx.workspace,
     )
     .expect("discard");
 
@@ -286,7 +281,7 @@ fn panel_snapshot_returns_repo_and_status_after_commit() {
     fx.run_git(&["commit", "-q", "-m", "seed"]);
     fx.write_file("b.txt", "beta\n");
 
-    let snap = operations::panel_snapshot(&fx.registry, &fx.repo_str(), &fx.workspace)
+    let snap = operations::panel_snapshot(&fx.registry, &fx.repo_str())
         .expect("panel_snapshot");
     let repo = snap.repo.expect("repo present");
     assert_eq!(repo.branch, "main");
@@ -305,7 +300,7 @@ fn panel_snapshot_outside_repo_is_empty() {
     registry.authorize(&canonical).unwrap();
 
     let snap =
-        operations::panel_snapshot(&registry, &to_canon(&canonical), &WorkspaceEnv::Local)
+        operations::panel_snapshot(&registry, &to_canon(&canonical))
             .expect("panel_snapshot");
     assert!(snap.repo.is_none());
     assert!(snap.status.is_none());
@@ -322,10 +317,10 @@ fn show_commit_diff_returns_patch_for_known_sha() {
     fx.run_git(&["commit", "-q", "-m", "seed"]);
 
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 10, None).unwrap();
     let sha = &entries[0].sha;
 
-    let diff = operations::show_commit_diff(&fx.registry, &fx.repo_str(), sha, &fx.workspace)
+    let diff = operations::show_commit_diff(&fx.registry, &fx.repo_str(), sha)
         .expect("show_commit_diff");
     assert!(diff.diff_text.contains("a.txt"));
     assert!(diff.diff_text.contains("+alpha"));
@@ -341,7 +336,6 @@ fn show_commit_diff_rejects_invalid_sha() {
         &fx.registry,
         &fx.repo_str(),
         "not-a-sha",
-        &fx.workspace,
     ) {
         Err(GitError::CommandFailed { .. }) => {}
         Err(other) => panic!("expected CommandFailed, got {other}"),
@@ -362,7 +356,7 @@ fn log_paginates_with_before_sha_cursor() {
     }
 
     let first_page =
-        operations::log(&fx.registry, &fx.repo_str(), 1, None, &fx.workspace).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 1, None).unwrap();
     assert_eq!(first_page.len(), 1);
     let cursor = first_page[0].sha.clone();
 
@@ -371,7 +365,6 @@ fn log_paginates_with_before_sha_cursor() {
         &fx.repo_str(),
         10,
         Some(&cursor),
-        &fx.workspace,
     )
     .unwrap();
     assert!(second_page.iter().all(|e| e.sha != cursor));
@@ -393,7 +386,6 @@ fn log_with_invalid_cursor_sha_errors() {
         &fx.repo_str(),
         10,
         Some("not-hex"),
-        &fx.workspace,
     ) {
         Err(GitError::CommandFailed { .. }) => {}
         Err(other) => panic!("expected CommandFailed, got {other}"),
@@ -416,11 +408,11 @@ fn commit_files_reports_added_and_modified() {
     fx.run_git(&["commit", "-q", "-m", "modify"]);
 
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 10, None).unwrap();
     let head = &entries[0].sha;
 
     let files =
-        operations::commit_files(&fx.registry, &fx.repo_str(), head, &fx.workspace).unwrap();
+        operations::commit_files(&fx.registry, &fx.repo_str(), head).unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, "a.txt");
     assert_eq!(files[0].status, "M");
@@ -441,11 +433,11 @@ fn commit_file_diff_returns_original_and_modified_text() {
     fx.run_git(&["commit", "-q", "-m", "v2"]);
 
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None, &fx.workspace).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 10, None).unwrap();
     let head = &entries[0].sha;
 
     let diff =
-        operations::commit_file_diff(&fx.registry, &fx.repo_str(), head, "a.txt", None, &fx.workspace)
+        operations::commit_file_diff(&fx.registry, &fx.repo_str(), head, "a.txt", None)
             .unwrap();
     assert_eq!(diff.original_content, "v1\n");
     assert_eq!(diff.modified_content, "v2\n");
@@ -458,7 +450,7 @@ fn remote_url_returns_none_for_missing_remote() {
         return;
     }
     let fx = GitRepoFixture::new();
-    let url = operations::remote_url(&fx.registry, &fx.repo_str(), "origin", &fx.workspace)
+    let url = operations::remote_url(&fx.registry, &fx.repo_str(), "origin")
         .unwrap();
     assert!(url.is_none());
 }
@@ -476,7 +468,7 @@ fn remote_url_returns_configured_url() {
         "https://example.com/x.git",
     ]);
 
-    let url = operations::remote_url(&fx.registry, &fx.repo_str(), "origin", &fx.workspace)
+    let url = operations::remote_url(&fx.registry, &fx.repo_str(), "origin")
         .unwrap();
     assert_eq!(url.as_deref(), Some("https://example.com/x.git"));
 }
@@ -491,7 +483,6 @@ fn remote_url_rejects_unsafe_remote_name() {
         &fx.registry,
         &fx.repo_str(),
         "name with space",
-        &fx.workspace,
     )
     .unwrap();
     assert!(url.is_none());
@@ -506,7 +497,7 @@ fn unauthorized_path_is_rejected() {
     let canonical = std::fs::canonicalize(tmp.path()).unwrap();
     let registry = WorkspaceRegistry::default();
 
-    match operations::status(&registry, &to_canon(&canonical), &WorkspaceEnv::Local) {
+    match operations::status(&registry, &to_canon(&canonical)) {
         Err(GitError::PathOutsideWorkspace(_)) => {}
         Err(other) => panic!("expected PathOutsideWorkspace, got {other}"),
         Ok(_) => panic!("expected error for unauthorized dir"),
@@ -520,13 +511,13 @@ fn checkout_branch_rejects_unsafe_names() {
     }
     let fx = GitRepoFixture::new();
     
-    let err_empty = operations::checkout_branch(&fx.registry, &fx.repo_str(), "", &fx.workspace).unwrap_err();
+    let err_empty = operations::checkout_branch(&fx.registry, &fx.repo_str(), "").unwrap_err();
     assert!(matches!(err_empty, GitError::InvalidPath(p) if p.is_empty()));
 
-    let err_dash = operations::checkout_branch(&fx.registry, &fx.repo_str(), "-f", &fx.workspace).unwrap_err();
+    let err_dash = operations::checkout_branch(&fx.registry, &fx.repo_str(), "-f").unwrap_err();
     assert!(matches!(err_dash, GitError::InvalidPath(p) if p == "-f"));
 
-    let err_dash_long = operations::checkout_branch(&fx.registry, &fx.repo_str(), "--detach", &fx.workspace).unwrap_err();
+    let err_dash_long = operations::checkout_branch(&fx.registry, &fx.repo_str(), "--detach").unwrap_err();
     assert!(matches!(err_dash_long, GitError::InvalidPath(p) if p == "--detach"));
 }
 
@@ -545,7 +536,7 @@ fn list_branches_keeps_current_branch_local_and_surfaces_worktrees() {
     let wt_path = wt.path().join("linked");
     fx.run_git(&["worktree", "add", "-q", wt_path.to_str().unwrap(), "feature"]);
 
-    let result = operations::list_branches(&fx.registry, &fx.repo_str(), &fx.workspace)
+    let result = operations::list_branches(&fx.registry, &fx.repo_str())
         .expect("list_branches");
 
     // current branch stays local+head despite the main worktree being listed

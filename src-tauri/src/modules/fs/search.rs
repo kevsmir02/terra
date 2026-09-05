@@ -7,7 +7,7 @@ use super::to_canon;
 use tauri::State;
 
 use super::authorized_read;
-use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 
 #[derive(Serialize, Clone)]
 pub struct SearchHit {
@@ -52,11 +52,10 @@ pub fn fs_search(
     root: String,
     query: String,
     limit: Option<usize>,
-    workspace: Option<WorkspaceEnv>,
     show_hidden: Option<bool>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<SearchResult, String> {
-    search(&registry, &root, &query, limit, &WorkspaceEnv::from_option(workspace), show_hidden)
+    search(&registry, &root, &query, limit, show_hidden)
 }
 
 pub fn search(
@@ -64,7 +63,6 @@ pub fn search(
     root: &str,
     query: &str,
     limit: Option<usize>,
-    workspace: &WorkspaceEnv,
     show_hidden: Option<bool>,
 ) -> Result<SearchResult, String> {
     let q = query.trim();
@@ -76,7 +74,7 @@ pub fn search(
     }
     let cap = limit.unwrap_or(200).min(1000);
     let show_hidden = show_hidden.unwrap_or(false);
-    let root_path = authorized_read(registry, root, workspace)?;
+    let root_path = authorized_read(registry, root)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
@@ -172,11 +170,10 @@ pub fn fs_list_files(
     root: String,
     limit: Option<usize>,
     max_depth: Option<usize>,
-    workspace: Option<WorkspaceEnv>,
     show_hidden: Option<bool>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<ListFilesResult, String> {
-    list_files(&registry, &root, limit, max_depth, &WorkspaceEnv::from_option(workspace), show_hidden)
+    list_files(&registry, &root, limit, max_depth, show_hidden)
 }
 
 pub fn list_files(
@@ -184,7 +181,6 @@ pub fn list_files(
     root: &str,
     limit: Option<usize>,
     max_depth: Option<usize>,
-    workspace: &WorkspaceEnv,
     show_hidden: Option<bool>,
 ) -> Result<ListFilesResult, String> {
     const DEFAULT_LIMIT: usize = 2_000;
@@ -195,7 +191,7 @@ pub fn list_files(
     let cap = limit.unwrap_or(DEFAULT_LIMIT).clamp(1, HARD_LIMIT);
     let depth = max_depth.unwrap_or(DEFAULT_DEPTH).clamp(1, HARD_DEPTH);
     let show_hidden = show_hidden.unwrap_or(false);
-    let root_path = authorized_read(registry, root, workspace)?;
+    let root_path = authorized_read(registry, root)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }

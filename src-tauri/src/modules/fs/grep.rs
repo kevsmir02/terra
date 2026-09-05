@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use super::to_canon;
 use super::authorized_read;
-use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 use crate::modules::sync::MutexExt;
 
 const FILE_SIZE_CAP: u64 = 5 * 1024 * 1024;
@@ -173,10 +173,9 @@ pub fn fs_grep(
     glob: Option<Vec<String>>,
     case_insensitive: Option<bool>,
     max_results: Option<usize>,
-    workspace: Option<WorkspaceEnv>,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<GrepResponse, String> {
-    grep(&registry, &pattern, &root, glob, case_insensitive, max_results, &WorkspaceEnv::from_option(workspace))
+    grep(&registry, &pattern, &root, glob, case_insensitive, max_results)
 }
 
 pub fn grep(
@@ -186,12 +185,11 @@ pub fn grep(
     glob: Option<Vec<String>>,
     case_insensitive: Option<bool>,
     max_results: Option<usize>,
-    workspace: &WorkspaceEnv,
 ) -> Result<GrepResponse, String> {
     if pattern.is_empty() {
         return Err("empty pattern".into());
     }
-    let root_path = authorized_read(registry, root, workspace)?;
+    let root_path = authorized_read(registry, root)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
@@ -222,7 +220,6 @@ pub fn fs_grep_interactive(
     pattern: String,
     root: String,
     max_results: Option<usize>,
-    workspace: Option<WorkspaceEnv>,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<GrepResponse, String> {
     if pattern.trim().is_empty() {
@@ -230,8 +227,7 @@ pub fn fs_grep_interactive(
     }
     let my_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
 
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let root_path = authorized_read(&registry, &root, &workspace)?;
+    let root_path = authorized_read(&registry, &root)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
@@ -270,10 +266,9 @@ pub fn fs_glob(
     pattern: String,
     root: String,
     max_results: Option<usize>,
-    workspace: Option<WorkspaceEnv>,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<GlobResponse, String> {
-    glob_files(&registry, &pattern, &root, max_results, &WorkspaceEnv::from_option(workspace))
+    glob_files(&registry, &pattern, &root, max_results)
 }
 
 pub fn glob_files(
@@ -281,12 +276,11 @@ pub fn glob_files(
     pattern: &str,
     root: &str,
     max_results: Option<usize>,
-    workspace: &WorkspaceEnv,
 ) -> Result<GlobResponse, String> {
     if pattern.is_empty() {
         return Err("empty pattern".into());
     }
-    let root_path = authorized_read(registry, root, workspace)?;
+    let root_path = authorized_read(registry, root)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }

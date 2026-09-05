@@ -8,7 +8,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { File02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -71,7 +70,6 @@ export function NewEditorDialog({
     try {
       await invoke("fs_create_file", {
         path,
-        workspace: currentWorkspaceEnv(),
       });
       onCreated(path);
       onOpenChange(false);

@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { listenFsChanged, watchAdd, watchRemove } from "./watch";
 
@@ -133,7 +132,6 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         path,
         showHidden: showHiddenRef.current,
         gitDecorations: gitDecorationsRef.current,
-        workspace: currentWorkspaceEnv(),
       });
 
       const prev = nodesRef.current[path];
@@ -339,7 +337,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
       const cmd =
         pendingCreate.kind === "dir" ? "fs_create_dir" : "fs_create_file";
       try {
-        await invoke(cmd, { path, workspace: currentWorkspaceEnv() });
+        await invoke(cmd, { path });
         await fetchChildren(pendingCreate.parentPath);
       } catch (e) {
         console.error(`${cmd} failed:`, e);
@@ -372,7 +370,6 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         await invoke("fs_rename", {
           from: renaming,
           to,
-          workspace: currentWorkspaceEnv(),
         });
         options?.onPathRenamed?.(renaming, to);
         await fetchChildren(parent);
@@ -388,7 +385,7 @@ export function useFileTree(rootPath: string | null, options?: Options) {
   const deletePath = useCallback(
     async (path: string) => {
       try {
-        await invoke("fs_delete", { path, workspace: currentWorkspaceEnv() });
+        await invoke("fs_delete", { path });
         options?.onPathDeleted?.(path);
         await fetchChildren(dirname(path));
       } catch (e) {
@@ -415,7 +412,6 @@ export function useFileTree(rootPath: string | null, options?: Options) {
         await invoke("fs_rename", {
           from,
           to,
-          workspace: currentWorkspaceEnv(),
         });
         options?.onPathRenamed?.(from, to);
         await Promise.all([fetchChildren(dirname(from)), fetchChildren(toDir)]);

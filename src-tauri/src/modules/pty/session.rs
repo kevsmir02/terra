@@ -12,7 +12,6 @@ use super::agent_detect::AgentDetector;
 use super::da_filter::DaFilter;
 use super::shell_init;
 use super::url_detect::{DevServerSignal, UrlDetector};
-use crate::modules::workspace::WorkspaceEnv;
 use crate::modules::sync::MutexExt;
 
 const AGENT_EVENT: &str = "terra:agent-signal";
@@ -93,7 +92,6 @@ pub fn spawn(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
-    workspace: WorkspaceEnv,
     shell: Option<String>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
@@ -108,7 +106,7 @@ pub fn spawn(
     };
     let pair = pty_system.openpty(size).map_err(|e| e.to_string())?;
 
-    let cmd = shell_init::build_command(cwd, workspace, shell)?;
+    let cmd = shell_init::build_command(cwd, shell)?;
     let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     drop(pair.slave);
 

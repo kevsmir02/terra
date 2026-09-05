@@ -1,6 +1,5 @@
 import { notifyDocumentSaved } from "@/modules/lsp";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -85,7 +84,6 @@ export function useDocument({ path, onDirtyChange }: Options) {
     const mtime = await invoke<number>("fs_write_file", {
       path,
       content: restoreEol(content, eolRef.current),
-      workspace: currentWorkspaceEnv(),
       source: "editor",
     });
     diskMtimeRef.current = mtime;
@@ -106,7 +104,6 @@ export function useDocument({ path, onDirtyChange }: Options) {
     if (known !== null) {
       const stat = await invoke<FileStat>("fs_stat", {
         path,
-        workspace: currentWorkspaceEnv(),
       }).catch(() => null);
       if (stat && stat.mtime !== known) {
         const name = path.split(/[\\/]/).pop() ?? path;
@@ -157,7 +154,6 @@ export function useDocument({ path, onDirtyChange }: Options) {
     (force: boolean) =>
       invoke<ReadResult>("fs_read_file", {
         path,
-        workspace: currentWorkspaceEnv(),
         force,
       }),
     [path],
@@ -204,7 +200,6 @@ export function useDocument({ path, onDirtyChange }: Options) {
       missingTimerRef.current = null;
       void invoke<FileStat>("fs_stat", {
         path,
-        workspace: currentWorkspaceEnv(),
       })
         .then(() => dispatchDisk({ kind: "reload-succeeded" }))
         .catch(() => dispatchDisk({ kind: "confirmed-missing" }));

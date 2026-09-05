@@ -1,6 +1,5 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -32,7 +31,6 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
     setStatus({ kind: "loading" });
     invoke<ReadResult>("fs_read_file", {
       path,
-      workspace: currentWorkspaceEnv(),
     })
       .then((res) => {
         if (cancelled) return;

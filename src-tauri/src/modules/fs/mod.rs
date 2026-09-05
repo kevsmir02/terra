@@ -7,7 +7,7 @@ pub mod watch;
 
 use std::path::{Path, PathBuf};
 
-use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 
 fn outside(p: &Path) -> String {
     format!("path is outside the authorized workspace: {}", p.display())
@@ -22,9 +22,8 @@ fn outside(p: &Path) -> String {
 pub fn authorized_read(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<PathBuf, String> {
-    let resolved = resolve_path(path, workspace);
+    let resolved = PathBuf::from(path);
     let canonical = registry
         .canonicalize_cached(&resolved)
         .map_err(|e| format!("{}: {e}", resolved.display()))?;
@@ -39,9 +38,8 @@ pub fn authorized_read(
 pub fn authorized_write(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<PathBuf, String> {
-    let resolved = resolve_path(path, workspace);
+    let resolved = PathBuf::from(path);
     let canonical =
         std::fs::canonicalize(&resolved).map_err(|e| format!("{}: {e}", resolved.display()))?;
     if !registry.is_authorized(&canonical) {
@@ -57,9 +55,8 @@ pub fn authorized_write(
 pub fn authorized_entry(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<PathBuf, String> {
-    let resolved = resolve_path(path, workspace);
+    let resolved = PathBuf::from(path);
     let (Some(name), Some(parent)) = (resolved.file_name(), resolved.parent()) else {
         return Err(format!("invalid path: {}", resolved.display()));
     };
@@ -78,9 +75,8 @@ pub fn authorized_entry(
 pub fn authorized_new(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<PathBuf, String> {
-    let resolved = resolve_path(path, workspace);
+    let resolved = PathBuf::from(path);
     let mut tail: Vec<std::ffi::OsString> = Vec::new();
     let mut cursor = resolved.as_path();
     while !cursor.exists() {
@@ -129,7 +125,7 @@ mod authorization_tests {
         let (inside, _outside, reg) = fixture();
         let f = inside.path().join("a.txt");
         std::fs::write(&f, b"x").unwrap();
-        assert!(authorized_read(&reg, &s(f), &WorkspaceEnv::Local).is_ok());
+        assert!(authorized_read(&reg, &s(f)).is_ok());
     }
 
     #[test]
@@ -139,10 +135,10 @@ mod authorization_tests {
         std::fs::write(&f, b"secret").unwrap();
         let p = s(f);
         for err in [
-            authorized_read(&reg, &p, &WorkspaceEnv::Local).unwrap_err(),
-            authorized_write(&reg, &p, &WorkspaceEnv::Local).unwrap_err(),
-            authorized_entry(&reg, &p, &WorkspaceEnv::Local).unwrap_err(),
-            authorized_new(&reg, &p, &WorkspaceEnv::Local).unwrap_err(),
+            authorized_read(&reg, &p).unwrap_err(),
+            authorized_write(&reg, &p).unwrap_err(),
+            authorized_entry(&reg, &p).unwrap_err(),
+            authorized_new(&reg, &p).unwrap_err(),
         ] {
             assert!(err.contains("outside the authorized workspace"), "got: {err}");
         }
@@ -157,7 +153,7 @@ mod authorization_tests {
                 .file_name()
                 .expect("tempdir has a final component"),
         );
-        let err = authorized_read(&reg, &s(escape), &WorkspaceEnv::Local).unwrap_err();
+        let err = authorized_read(&reg, &s(escape)).unwrap_err();
         assert!(err.contains("outside the authorized workspace"), "got: {err}");
     }
 
@@ -171,7 +167,7 @@ mod authorization_tests {
         let link = inside.path().join("link.txt");
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
-        let err = authorized_read(&reg, &s(link), &WorkspaceEnv::Local).unwrap_err();
+        let err = authorized_read(&reg, &s(link)).unwrap_err();
         assert!(err.contains("outside the authorized workspace"), "got: {err}");
     }
 
@@ -185,7 +181,7 @@ mod authorization_tests {
         let link = inside.path().join("link.txt");
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
-        let got = authorized_entry(&reg, &s(link.clone()), &WorkspaceEnv::Local)
+        let got = authorized_entry(&reg, &s(link.clone()))
             .expect("the link lives inside the root");
         assert_eq!(got.file_name(), link.file_name());
         assert!(
@@ -197,12 +193,12 @@ mod authorization_tests {
     #[test]
     fn new_paths_are_allowed_inside_and_refused_outside() {
         let (inside, outside, reg) = fixture();
-        let ok = authorized_new(&reg, &s(inside.path().join("a/b/c.txt")), &WorkspaceEnv::Local)
+        let ok = authorized_new(&reg, &s(inside.path().join("a/b/c.txt")))
             .expect("nested create under an authorized root");
         assert!(ok.starts_with(std::fs::canonicalize(inside.path()).unwrap()));
 
         assert!(
-            authorized_new(&reg, &s(outside.path().join("x.txt")), &WorkspaceEnv::Local).is_err()
+            authorized_new(&reg, &s(outside.path().join("x.txt"))).is_err()
         );
     }
 
@@ -215,7 +211,7 @@ mod authorization_tests {
         std::fs::write(&sibling, b"no").unwrap();
         reg.authorize(&dropped).expect("authorize the dropped file");
 
-        assert!(authorized_read(&reg, &s(dropped), &WorkspaceEnv::Local).is_ok());
-        assert!(authorized_read(&reg, &s(sibling), &WorkspaceEnv::Local).is_err());
+        assert!(authorized_read(&reg, &s(dropped)).is_ok());
+        assert!(authorized_read(&reg, &s(sibling)).is_err());
     }
 }

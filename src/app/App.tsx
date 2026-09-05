@@ -82,7 +82,6 @@ import {
   useTerminalFileDrop,
 } from "@/modules/terminal";
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
-import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -91,7 +90,7 @@ import { CloseDialogs } from "./components/CloseDialogs";
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
 import { useAppCloseGuard } from "./hooks/useAppCloseGuard";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
-import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
+import { useWorkspaceHome } from "./hooks/useWorkspaceHome";
 
 export default function App() {
   const {
@@ -128,7 +127,6 @@ export default function App() {
     splitActivePane,
     closeActivePane,
     closePaneByLeaf,
-    resetWorkspace,
   } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
@@ -162,44 +160,11 @@ export default function App() {
   // split/unsplit re-mount components but the leaf is still live.
   const liveLeavesRef = useRef<Set<number>>(new Set());
 
-  const clearWorkspaceState = useCallback(() => {
-    for (const id of liveLeavesRef.current) disposeSession(id);
-    searchAddons.current.clear();
-    terminalRefs.current.clear();
-    editorRefs.current.clear();
-    previewRefs.current.clear();
-    setActiveSearchAddon(null);
-    setActiveEditorHandle(null);
-  }, []);
-
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const setWorkspaceEnv = useWorkspaceEnvStore((s) => s.setEnv);
-  const {
-    home,
-    launchCwd,
-    launchCwdResolved,
-    switchWorkspace,
-    adoptWorkspaceEnv,
-  } = useWorkspaceSwitcher({
-    tabsRef,
-    workspaceEnv,
-    setWorkspaceEnv,
-    resetWorkspace,
-    clearWorkspaceState,
-  });
+  const { home, launchCwd, launchCwdResolved, adoptWorkspaceHome } =
+    useWorkspaceHome();
 
   const activeSpaceId = useSpaces((s) => s.activeId);
   const spacesHydrated = useSpaces((s) => s.hydrated);
-
-  const handleWorkspaceChange = useCallback(
-    async (env: WorkspaceEnv) => {
-      const switched = await switchWorkspace(env);
-      if (switched && activeSpaceId) {
-        useSpaces.getState().setEnv(activeSpaceId, env);
-      }
-    },
-    [switchWorkspace, activeSpaceId],
-  );
 
   // Hydrate preferences for the whole main window, unconditionally.
   // init() both loads the persisted values and subscribes to
@@ -222,7 +187,7 @@ export default function App() {
     replaceTabs,
     markBooted,
     setActiveSpaceForNewTabs,
-    adoptWorkspaceEnv,
+    adoptWorkspaceHome,
   });
 
   const activeSidebarPctRef = useRef<number | undefined>(undefined);
@@ -248,7 +213,7 @@ export default function App() {
     const meta = useSpaces
       .getState()
       .spaces.find((s) => s.id === activeSpaceId);
-    if (meta) void adoptWorkspaceEnv(meta.env);
+    if (meta) void adoptWorkspaceHome();
     const inSpace = tabsRef.current.filter((t) => t.spaceId === activeSpaceId);
     if (inSpace.length === 0) return;
     // Keep the active tab if it already belongs to the newly active space (a
@@ -261,7 +226,7 @@ export default function App() {
     spacesHydrated,
     setActiveSpaceForNewTabs,
     setActiveId,
-    adoptWorkspaceEnv,
+    adoptWorkspaceHome,
   ]);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -889,13 +854,12 @@ export default function App() {
     const meta = create({
       name: `Space ${spaces.length + 1}`,
       root: activeCwd ?? home ?? null,
-      env: workspaceEnv,
     });
     setActiveSpaceForNewTabs(meta.id);
     newTab(activeCwd ?? undefined);
     setActive(meta.id);
     return meta.id;
-  }, [activeCwd, home, workspaceEnv, newTab, setActiveSpaceForNewTabs]);
+  }, [activeCwd, home, newTab, setActiveSpaceForNewTabs]);
 
   const handleDeleteSpace = useCallback(
     (id: string) => {
@@ -1179,7 +1143,6 @@ export default function App() {
               filePath={activeFilePath}
               home={home}
               onCd={sendCd}
-              onWorkspaceChange={handleWorkspaceChange}
               privateActive={
                 activeTab?.kind === "terminal" && activeTab.private === true
               }

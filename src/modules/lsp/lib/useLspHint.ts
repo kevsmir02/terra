@@ -1,6 +1,5 @@
 import { resolveLanguage } from "@/modules/editor/lib/languageResolver";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
 import { useEffect, useState } from "react";
 import { detectBinary } from "./detect";
 import { type LspPreset, serverForLanguage } from "./presets";
@@ -14,7 +13,6 @@ export type LspHint =
 
 export function useLspHint(filePath: string | null): LspHint | null {
   const [langId, setLangId] = useState<string | null>(null);
-  const envKind = useWorkspaceEnvStore((s) => s.env.kind);
 
   useEffect(() => {
     if (!filePath) {
@@ -49,12 +47,12 @@ export function useLspHint(filePath: string | null): LspHint | null {
   );
 
   useEffect(() => {
-    if (preset && envKind === "local" && activation === undefined) {
+    if (preset && activation === undefined) {
       void detectBinary(preset.command);
     }
-  }, [preset, envKind, activation]);
+  }, [preset, activation]);
 
-  if (!preset || envKind !== "local") return null;
+  if (!preset) return null;
   if (activation === "dismissed") return null;
   if (activation === "enabled") {
     if (session) return { kind: "active", preset, status: session.status };

@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use serde::Deserialize;
 use crate::modules::sync::MutexExt;
 
 // Short TTL keeps the auth-check TOCTOU window tight while still coalescing the
@@ -76,12 +75,11 @@ impl WorkspaceRegistry {
 pub fn authorize_spawn_cwd(
     registry: &WorkspaceRegistry,
     cwd: Option<&str>,
-    workspace: &WorkspaceEnv,
 ) -> Result<Option<PathBuf>, String> {
     let Some(cwd) = cwd.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(None);
     };
-    let resolved = resolve_path(cwd, workspace);
+    let resolved = PathBuf::from(cwd);
     let canonical =
         std::fs::canonicalize(&resolved).map_err(|e| format!("cwd not accessible: {e}"))?;
     if !canonical.is_dir() {
@@ -101,12 +99,11 @@ pub fn authorize_spawn_cwd(
 pub fn authorize_user_spawn_cwd(
     registry: &WorkspaceRegistry,
     cwd: Option<&str>,
-    workspace: &WorkspaceEnv,
 ) -> Result<Option<PathBuf>, String> {
     let Some(cwd) = cwd.map(str::trim).filter(|s| !s.is_empty()) else {
         return Ok(None);
     };
-    let resolved = resolve_path(cwd, workspace);
+    let resolved = PathBuf::from(cwd);
     let canonical =
         std::fs::canonicalize(&resolved).map_err(|e| format!("cwd not accessible: {e}"))?;
     if !canonical.is_dir() {
@@ -120,13 +117,12 @@ pub fn authorize_user_spawn_cwd(
 pub fn user_spawn_cwd_or_home(
     registry: &WorkspaceRegistry,
     cwd: Option<&str>,
-    workspace: &WorkspaceEnv,
 ) -> Option<String> {
     let cwd = cwd.map(str::trim).filter(|s| !s.is_empty())?;
-    match authorize_user_spawn_cwd(registry, Some(cwd), workspace) {
+    match authorize_user_spawn_cwd(registry, Some(cwd)) {
         Ok(_) => Some(cwd.to_owned()),
         Err(e) => {
-            log::warn!("pty cwd {cwd:?} unusable in {workspace:?} ({e}); opening home");
+            log::warn!("pty cwd {cwd:?} unusable ({e}); opening home");
             None
         }
     }
@@ -142,11 +138,9 @@ pub fn bootstrap_registry(registry: &WorkspaceRegistry) {
 #[tauri::command]
 pub async fn workspace_authorize(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     registry: tauri::State<'_, WorkspaceRegistry>,
 ) -> Result<String, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let resolved = resolve_path(&path, &workspace);
+    let resolved = PathBuf::from(&path);
     let canonical = registry.authorize(&resolved).map_err(|e| e.to_string())?;
     Ok(crate::modules::fs::to_canon(&canonical))
 }
@@ -296,23 +290,6 @@ fn compute_appimage_env_overrides(
     out
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
-pub enum WorkspaceEnv {
-    #[default]
-    Local,
-}
-
-impl WorkspaceEnv {
-    pub fn from_option(workspace: Option<Self>) -> Self {
-        workspace.unwrap_or_default()
-    }
-}
-
-pub fn resolve_path(path: &str, _workspace: &WorkspaceEnv) -> PathBuf {
-    PathBuf::from(path)
-}
-
 #[cfg(test)]
 mod auth_tests {
     use super::*;
@@ -333,7 +310,7 @@ mod auth_tests {
     #[test]
     fn authorize_spawn_cwd_accepts_none() {
         let reg = WorkspaceRegistry::default();
-        assert!(authorize_spawn_cwd(&reg, None, &WorkspaceEnv::Local)
+        assert!(authorize_spawn_cwd(&reg, None)
             .unwrap()
             .is_none());
     }
@@ -341,7 +318,7 @@ mod auth_tests {
     #[test]
     fn authorize_spawn_cwd_accepts_empty_string() {
         let reg = WorkspaceRegistry::default();
-        assert!(authorize_spawn_cwd(&reg, Some("   "), &WorkspaceEnv::Local)
+        assert!(authorize_spawn_cwd(&reg, Some("   "))
             .unwrap()
             .is_none());
     }
@@ -352,7 +329,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         reg.authorize(&dir).expect("authorize root");
         let s = dir.to_string_lossy().into_owned();
-        let resolved = authorize_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let resolved = authorize_spawn_cwd(&reg, Some(&s))
             .expect("authorized")
             .expect("returned canonical");
         assert_eq!(resolved, dir);
@@ -367,7 +344,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         reg.authorize(&root).expect("authorize root");
         let s = canonical_sub.to_string_lossy().into_owned();
-        let resolved = authorize_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let resolved = authorize_spawn_cwd(&reg, Some(&s))
             .expect("subdir authorized")
             .expect("returned canonical");
         assert_eq!(resolved, canonical_sub);
@@ -380,7 +357,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         reg.authorize(&allowed).expect("authorize root");
         let s = foreign.to_string_lossy().into_owned();
-        let err = authorize_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let err = authorize_spawn_cwd(&reg, Some(&s))
             .expect_err("should reject unauthorized cwd");
         assert!(err.contains("outside"), "got: {err}");
     }
@@ -398,7 +375,7 @@ mod auth_tests {
         ));
         let reg = WorkspaceRegistry::default();
         let s = missing.to_string_lossy().into_owned();
-        let err = authorize_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let err = authorize_spawn_cwd(&reg, Some(&s))
             .expect_err("should reject missing path");
         assert!(err.contains("cwd not accessible"), "got: {err}");
     }
@@ -409,7 +386,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         let s = dir.to_string_lossy().into_owned();
         assert!(!reg.is_authorized(&dir));
-        let resolved = authorize_user_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let resolved = authorize_user_spawn_cwd(&reg, Some(&s))
             .expect("user spawn allowed anywhere")
             .expect("returned canonical");
         assert_eq!(resolved, dir);
@@ -422,7 +399,7 @@ mod auth_tests {
         missing.push(format!("terra-user-missing-{}", std::process::id()));
         let reg = WorkspaceRegistry::default();
         let s = missing.to_string_lossy().into_owned();
-        let err = authorize_user_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let err = authorize_user_spawn_cwd(&reg, Some(&s))
             .expect_err("missing path must fail");
         assert!(err.contains("cwd not accessible"), "got: {err}");
     }
@@ -433,7 +410,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         let s = dir.to_string_lossy().into_owned();
         assert_eq!(
-            user_spawn_cwd_or_home(&reg, Some(&s), &WorkspaceEnv::Local),
+            user_spawn_cwd_or_home(&reg, Some(&s)),
             Some(s)
         );
         assert!(reg.is_authorized(&dir));
@@ -446,7 +423,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         let s = missing.to_string_lossy().into_owned();
         assert_eq!(
-            user_spawn_cwd_or_home(&reg, Some(&s), &WorkspaceEnv::Local),
+            user_spawn_cwd_or_home(&reg, Some(&s)),
             None
         );
     }
@@ -455,11 +432,11 @@ mod auth_tests {
     fn user_spawn_cwd_or_home_passes_through_empty() {
         let reg = WorkspaceRegistry::default();
         assert_eq!(
-            user_spawn_cwd_or_home(&reg, None, &WorkspaceEnv::Local),
+            user_spawn_cwd_or_home(&reg, None),
             None
         );
         assert_eq!(
-            user_spawn_cwd_or_home(&reg, Some("  "), &WorkspaceEnv::Local),
+            user_spawn_cwd_or_home(&reg, Some("  ")),
             None
         );
     }
@@ -473,7 +450,7 @@ mod auth_tests {
         let reg = WorkspaceRegistry::default();
         reg.authorize(&allowed).expect("authorize root");
         let s = link.to_string_lossy().into_owned();
-        let err = authorize_spawn_cwd(&reg, Some(&s), &WorkspaceEnv::Local)
+        let err = authorize_spawn_cwd(&reg, Some(&s))
             .expect_err("symlink-escape must be rejected");
         assert!(err.contains("outside"), "got: {err}");
     }

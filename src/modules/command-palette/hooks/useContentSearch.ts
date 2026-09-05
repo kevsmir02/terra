@@ -1,4 +1,3 @@
-import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
 import { type AsyncQueryState, useAsyncQuery } from "./useAsyncQuery";
@@ -32,7 +31,6 @@ export function useContentSearch(
         pattern: q,
         root,
         maxResults: LIMIT,
-        workspace: currentWorkspaceEnv(),
       });
       return res.hits;
     },

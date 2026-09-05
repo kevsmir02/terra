@@ -19,7 +19,6 @@ import type { ThemePref } from "@/modules/settings/store";
 import {
   setAgentNotifications,
   setAutostart,
-  setDefaultWorkspaceEnv,
   setExplorerGitDecorations,
   setRestoreWindowState,
   setShowHidden,
@@ -93,8 +92,6 @@ export function GeneralSection() {
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
   const [shells, setShells] = useState<ShellInfo[]>([]);
-  const [wslDistros, setWslDistros] = useState<{ name: string }[]>([]);
-  const defaultWorkspaceEnv = usePreferencesStore((s) => s.defaultWorkspaceEnv);
   const terminalLetterSpacing = usePreferencesStore(
     (s) => s.terminalLetterSpacing,
   );
@@ -121,9 +118,6 @@ export function GeneralSection() {
   useEffect(() => {
     void invoke<ShellInfo[]>("pty_list_shells")
       .then(setShells)
-      .catch(() => {});
-    void invoke<{ name: string }[]>("wsl_list_distros")
-      .then(setWslDistros)
       .catch(() => {});
   }, []);
 
@@ -302,9 +296,7 @@ export function GeneralSection() {
           description={
             shells.find((s) => s.path === terminalShell)?.integrated === false
               ? "Directory tracking is unavailable for this shell."
-              : wslDistros.length > 0
-                ? "Shell for the integrated terminal. WSL spaces use the distro login shell. Existing tabs keep their shell."
-                : "Shell for new terminal tabs. Existing tabs keep their shell."
+              : "Shell for new terminal tabs. Existing tabs keep their shell."
           }
         >
           <Select
@@ -331,49 +323,6 @@ export function GeneralSection() {
             </SelectContent>
           </Select>
         </SettingRow>
-        {(wslDistros.length > 0 || defaultWorkspaceEnv !== "local") && (
-          <SettingRow
-            title="Workspace environment"
-            description="Where new spaces run, terminal and AI agent alike: Windows or a WSL distro. Existing spaces keep theirs; switch any from the status bar."
-          >
-            <Select
-              value={defaultWorkspaceEnv}
-              onValueChange={(v) => void setDefaultWorkspaceEnv(v)}
-            >
-              <SelectTrigger
-                value={defaultWorkspaceEnv}
-                className="h-8 w-40 text-[12px]"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="local" className="text-[12px]">
-                  Windows
-                </SelectItem>
-                {wslDistros.map((d) => (
-                  <SelectItem
-                    key={d.name}
-                    value={`wsl:${d.name}`}
-                    className="text-[12px]"
-                  >
-                    WSL: {d.name}
-                  </SelectItem>
-                ))}
-                {defaultWorkspaceEnv.startsWith("wsl:") &&
-                  !wslDistros.some(
-                    (d) => `wsl:${d.name}` === defaultWorkspaceEnv,
-                  ) && (
-                    <SelectItem
-                      value={defaultWorkspaceEnv}
-                      className="text-[12px]"
-                    >
-                      {defaultWorkspaceEnv.slice("wsl:".length)} (unavailable)
-                    </SelectItem>
-                  )}
-              </SelectContent>
-            </Select>
-          </SettingRow>
-        )}
         <SettingRow
           title="Letter spacing"
           description="Extra horizontal space between characters (px). Use negative values to tighten Nerd Fonts."

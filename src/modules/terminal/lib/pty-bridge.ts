@@ -1,5 +1,4 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { currentWorkspaceEnv } from "@/modules/workspace";
 
 const textEncoder = new TextEncoder();
 
@@ -45,7 +44,6 @@ export async function openPty(
     cols,
     rows,
     cwd: cwd ?? null,
-    workspace: currentWorkspaceEnv(),
     shell: shell ?? null,
     onData,
     onExit,

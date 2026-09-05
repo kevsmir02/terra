@@ -8,7 +8,7 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use tauri::{AppHandle, Emitter, State};
 
 use crate::modules::fs::to_canon;
-use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 use crate::modules::sync::MutexExt;
 
 // Quiet-gap before a batch flushes; MAX_WINDOW caps latency under a long stream.
@@ -211,13 +211,12 @@ fn remove_paths(inner: &mut WatchInner, paths: Vec<PathBuf>) {
 // Canonical keys keep add/remove symmetric regardless of how the path was spelled.
 fn prepare_add(
     registry: &WorkspaceRegistry,
-    workspace: &WorkspaceEnv,
     paths: Vec<String>,
 ) -> Vec<PathBuf> {
     paths
         .into_iter()
         .filter_map(|raw| {
-            let resolved = resolve_path(&raw, workspace);
+            let resolved = PathBuf::from(&raw);
             let canonical = std::fs::canonicalize(&resolved).ok()?;
             if !canonical.is_dir() || is_skipped(&canonical) || !registry.is_authorized(&canonical) {
                 return None;
@@ -230,13 +229,11 @@ fn prepare_add(
 #[tauri::command]
 pub fn fs_watch_add(
     paths: Vec<String>,
-    workspace: Option<WorkspaceEnv>,
     app: AppHandle,
     state: State<'_, FsWatchState>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let prepared = prepare_add(&registry, &workspace, paths);
+    let prepared = prepare_add(&registry, paths);
     if prepared.is_empty() {
         return Ok(());
     }
@@ -251,16 +248,14 @@ pub fn fs_watch_add(
 #[tauri::command]
 pub fn fs_watch_remove(
     paths: Vec<String>,
-    workspace: Option<WorkspaceEnv>,
     state: State<'_, FsWatchState>,
 ) -> Result<(), String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
     // A removed/renamed dir no longer canonicalizes; fall back so the refcount
     // entry is still released.
     let prepared: Vec<PathBuf> = paths
         .into_iter()
         .map(|raw| {
-            let resolved = resolve_path(&raw, &workspace);
+            let resolved = PathBuf::from(&raw);
             std::fs::canonicalize(&resolved).unwrap_or(resolved)
         })
         .collect();

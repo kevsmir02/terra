@@ -2,18 +2,16 @@ use std::path::PathBuf;
 
 use portable_pty::CommandBuilder;
 
-use crate::modules::workspace::{self, WorkspaceEnv};
+use crate::modules::workspace;
 
 const FISH_REINSTALL_PROMPT: &str =
     "functions -q __terra_install_prompt; and __terra_install_prompt";
 
 pub fn build_command(
     cwd: Option<String>,
-    workspace: WorkspaceEnv,
     shell: Option<String>,
 ) -> Result<CommandBuilder, String> {
     let shell = sanitize_shell_override(shell);
-    let _ = workspace;
     unix::build(cwd, shell)
 }
 

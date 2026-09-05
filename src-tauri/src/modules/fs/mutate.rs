@@ -1,24 +1,22 @@
 use tauri::State;
 
 use super::{authorized_entry, authorized_new, authorized_read, authorized_write};
-use crate::modules::workspace::{WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 
 /// Creates a new empty file. Fails if the file already exists.
 #[tauri::command]
 pub fn fs_create_file(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    create_file(&registry, &path, &WorkspaceEnv::from_option(workspace))
+    create_file(&registry, &path)
 }
 
 pub fn create_file(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<(), String> {
-    let p = authorized_new(registry, path, workspace)?;
+    let p = authorized_new(registry, path)?;
     if p.exists() {
         return Err(format!("already exists: {}", p.display()));
     }
@@ -34,18 +32,16 @@ pub fn create_file(
 #[tauri::command]
 pub fn fs_create_dir(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    create_dir(&registry, &path, &WorkspaceEnv::from_option(workspace))
+    create_dir(&registry, &path)
 }
 
 pub fn create_dir(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<(), String> {
-    let p = authorized_new(registry, path, workspace)?;
+    let p = authorized_new(registry, path)?;
     if p.exists() {
         return Err(format!("already exists: {}", p.display()));
     }
@@ -60,20 +56,18 @@ pub fn create_dir(
 pub fn fs_rename(
     from: String,
     to: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    rename(&registry, &from, &to, &WorkspaceEnv::from_option(workspace))
+    rename(&registry, &from, &to)
 }
 
 pub fn rename(
     registry: &WorkspaceRegistry,
     from: &str,
     to: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<(), String> {
-    let from_p = authorized_entry(registry, from, workspace)?;
-    let to_p = authorized_new(registry, to, workspace)?;
+    let from_p = authorized_entry(registry, from)?;
+    let to_p = authorized_new(registry, to)?;
     if from_p.symlink_metadata().is_err() {
         return Err(format!("not found: {}", from_p.display()));
     }
@@ -95,18 +89,16 @@ pub fn rename(
 #[tauri::command]
 pub fn fs_delete(
     path: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    delete(&registry, &path, &WorkspaceEnv::from_option(workspace))
+    delete(&registry, &path)
 }
 
 pub fn delete(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<(), String> {
-    let p = authorized_entry(registry, path, workspace)?;
+    let p = authorized_entry(registry, path)?;
     let meta = std::fs::symlink_metadata(&p).map_err(|e| {
         log::debug!("fs_delete stat({}) failed: {e}", p.display());
         e.to_string()
@@ -144,24 +136,22 @@ fn copy_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Resu
 pub fn fs_copy(
     sources: Vec<String>,
     dest_dir: String,
-    workspace: Option<WorkspaceEnv>,
     registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    copy_into(&registry, &sources, &dest_dir, &WorkspaceEnv::from_option(workspace))
+    copy_into(&registry, &sources, &dest_dir)
 }
 
 pub fn copy_into(
     registry: &WorkspaceRegistry,
     sources: &[String],
     dest_dir: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<(), String> {
-    let dest = authorized_write(registry, dest_dir, workspace)?;
+    let dest = authorized_write(registry, dest_dir)?;
     for source in sources {
         // Sources are authorized too. A real OS drop registers its paths from
         // Rust before this runs (see the DragDrop handler in lib.rs), so genuine
         // drops pass while a caller inventing paths cannot read them out.
-        let src = authorized_read(registry, source, workspace)?;
+        let src = authorized_read(registry, source)?;
         let name = src
             .file_name()
             .ok_or_else(|| format!("invalid source: {source}"))?;
@@ -197,20 +187,19 @@ mod tests {
         r
     }
 
-    const LOCAL: WorkspaceEnv = WorkspaceEnv::Local;
 
     #[test]
     fn create_file_makes_empty_and_refuses_to_clobber() {
         let dir = tempfile::tempdir().unwrap();
         let r = reg(dir.path());
         let f = dir.path().join("new.txt");
-        create_file(&r, &s(f.clone()), &LOCAL).expect("create");
+        create_file(&r, &s(f.clone())).expect("create");
         assert!(f.exists());
         assert_eq!(std::fs::read(&f).unwrap(), b"");
 
         // A second create must error, not truncate existing content.
         std::fs::write(&f, b"data").unwrap();
-        let err = create_file(&r, &s(f.clone()), &LOCAL).unwrap_err();
+        let err = create_file(&r, &s(f.clone())).unwrap_err();
         assert!(err.contains("already exists"), "got: {err}");
         assert_eq!(std::fs::read(&f).unwrap(), b"data");
     }
@@ -220,9 +209,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let r = reg(dir.path());
         let nested = dir.path().join("a/b/c");
-        create_dir(&r, &s(nested.clone()), &LOCAL).expect("create dir");
+        create_dir(&r, &s(nested.clone())).expect("create dir");
         assert!(nested.is_dir());
-        let err = create_dir(&r, &s(nested), &LOCAL).unwrap_err();
+        let err = create_dir(&r, &s(nested)).unwrap_err();
         assert!(err.contains("already exists"), "got: {err}");
     }
 
@@ -234,18 +223,18 @@ mod tests {
         let to = dir.path().join("b.txt");
         std::fs::write(&from, b"payload").unwrap();
 
-        rename(&r, &s(from.clone()), &s(to.clone()), &LOCAL).expect("rename");
+        rename(&r, &s(from.clone()), &s(to.clone())).expect("rename");
         assert!(!from.exists());
         assert_eq!(std::fs::read(&to).unwrap(), b"payload");
 
         // Missing source is reported, not silently ignored.
-        let err = rename(&r, &s(from), &s(dir.path().join("c.txt")), &LOCAL).unwrap_err();
+        let err = rename(&r, &s(from), &s(dir.path().join("c.txt"))).unwrap_err();
         assert!(err.contains("not found"), "got: {err}");
 
         // Refusing to overwrite an existing target is the data-loss guard.
         let occupied = dir.path().join("keep.txt");
         std::fs::write(&occupied, b"keep").unwrap();
-        let err = rename(&r, &s(to.clone()), &s(occupied.clone()), &LOCAL).unwrap_err();
+        let err = rename(&r, &s(to.clone()), &s(occupied.clone())).unwrap_err();
         assert!(err.contains("already exists"), "got: {err}");
         assert_eq!(std::fs::read(&occupied).unwrap(), b"keep");
         assert!(to.exists());
@@ -265,7 +254,6 @@ mod tests {
             &r,
             &[s(src.path().join("a.txt")), s(src.path().join("d"))],
             &s(dest.path().to_path_buf()),
-            &LOCAL,
         )
         .expect("copy");
 
@@ -284,7 +272,6 @@ mod tests {
             &r,
             &[s(src.path().join("a.txt"))],
             &s(dest.path().to_path_buf()),
-            &LOCAL,
         )
         .unwrap_err();
         assert!(err.contains("already exists"), "got: {err}");
@@ -296,16 +283,16 @@ mod tests {
         let r = reg(dir.path());
         let f = dir.path().join("x.txt");
         std::fs::write(&f, b"x").unwrap();
-        delete(&r, &s(f.clone()), &LOCAL).expect("delete file");
+        delete(&r, &s(f.clone())).expect("delete file");
         assert!(!f.exists());
 
         let sub = dir.path().join("sub");
         std::fs::create_dir_all(sub.join("inner")).unwrap();
         std::fs::write(sub.join("inner/y.txt"), b"y").unwrap();
-        delete(&r, &s(sub.clone()), &LOCAL).expect("delete dir");
+        delete(&r, &s(sub.clone())).expect("delete dir");
         assert!(!sub.exists());
 
-        let err = delete(&r, &s(dir.path().join("missing")), &LOCAL).unwrap_err();
+        let err = delete(&r, &s(dir.path().join("missing"))).unwrap_err();
         assert!(!err.is_empty());
     }
 
@@ -322,7 +309,7 @@ mod tests {
         let link = dir.path().join("link");
         std::os::unix::fs::symlink(&real, &link).unwrap();
 
-        delete(&r, &s(link.clone()), &LOCAL).expect("delete symlink");
+        delete(&r, &s(link.clone())).expect("delete symlink");
         assert!(!link.exists(), "symlink itself should be gone");
         assert!(real.is_dir(), "target dir must survive");
         assert_eq!(std::fs::read(real.join("keep.txt")).unwrap(), b"keep");

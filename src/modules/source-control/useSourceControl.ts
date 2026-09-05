@@ -3,7 +3,6 @@ import {
   type GitRepoInfo,
   type GitStatusSnapshot,
 } from "@/lib/native";
-import { useWorkspaceEnvStore, workspaceScopeKey } from "@/modules/workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const AUTO_FETCH_THROTTLE_MS = 5 * 60_000;
@@ -150,8 +149,6 @@ export function useSourceControl(
   contextPath: string | null,
   enabled: boolean = true,
 ): SourceControlSummary {
-  const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
-  const workspaceKey = workspaceScopeKey(workspaceEnv);
   const [state, setState] = useState<SourceControlSummaryState>({
     repo: null,
     status: null,
@@ -177,7 +174,6 @@ export function useSourceControl(
     enabledRef.current = enabled;
   }, [enabled]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: a workspace switch must reset panel state
   useEffect(() => {
     requestIdRef.current++;
     inflightRef.current = null;
@@ -192,7 +188,7 @@ export function useSourceControl(
       busyAction: null,
       lastRemoteError: null,
     });
-  }, [workspaceKey]);
+  }, []);
 
   const applyStatus = useCallback(
     (updater: (status: GitStatusSnapshot) => GitStatusSnapshot) => {
@@ -206,7 +202,6 @@ export function useSourceControl(
     [],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: a workspace switch must rebuild the refresh closure
   const doRefresh = useCallback(
     async (remoteMode: SourceControlRefreshMode): Promise<void> => {
       if (!enabledRef.current) return;
@@ -343,7 +338,7 @@ export function useSourceControl(
         lastRefreshAtRef.current = Date.now();
       }
     },
-    [contextPath, workspaceKey],
+    [contextPath],
   );
 
   const refresh = useCallback(
@@ -415,7 +410,6 @@ export function useSourceControl(
     [refresh],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: a workspace switch must reset panel state
   useEffect(() => {
     if (!enabled) {
       requestIdRef.current++;
@@ -456,7 +450,7 @@ export function useSourceControl(
         window.clearTimeout(idle as number);
       }
     };
-  }, [refresh, contextPath, enabled, workspaceKey]);
+  }, [refresh, contextPath, enabled]);
 
   useEffect(() => {
     if (!enabled) return;

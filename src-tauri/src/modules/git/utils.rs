@@ -2,11 +2,10 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::modules::git::errors::{GitError, Result};
-use crate::modules::workspace::{resolve_path, WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::WorkspaceRegistry;
 
 #[derive(Clone, Debug)]
 pub struct ResolvedGitDirectory {
-    pub workspace: WorkspaceEnv,
     pub git_path: String,
     pub local_path: PathBuf,
 }
@@ -25,9 +24,8 @@ pub fn display_path(path: &Path) -> String {
 pub fn canonical_dir(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<ResolvedGitDirectory> {
-    let candidate = resolve_path(path, workspace);
+    let candidate = PathBuf::from(path);
     if !candidate.is_dir() {
         return Err(GitError::NotADirectory(path.to_string()));
     }
@@ -36,7 +34,6 @@ pub fn canonical_dir(
         .map_err(GitError::Io)?;
     let git_path = display_path(&local_path);
     Ok(ResolvedGitDirectory {
-        workspace: workspace.clone(),
         git_path,
         local_path,
     })
@@ -45,9 +42,8 @@ pub fn canonical_dir(
 pub fn authorized_repo_root(
     registry: &WorkspaceRegistry,
     path: &str,
-    workspace: &WorkspaceEnv,
 ) -> Result<ResolvedGitDirectory> {
-    let canonical = canonical_dir(registry, path, workspace)?;
+    let canonical = canonical_dir(registry, path)?;
     if !registry.is_authorized(&canonical.local_path) {
         return Err(GitError::PathOutsideWorkspace(canonical.local_path.clone()));
     }

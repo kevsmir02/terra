@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 
 use tauri::ipc::{Channel, Response};
 
-use crate::modules::workspace::{authorize_spawn_cwd, WorkspaceEnv, WorkspaceRegistry};
+use crate::modules::workspace::{authorize_spawn_cwd, WorkspaceRegistry};
 use session::LspSession;
 use crate::modules::sync::RwLockExt;
 
@@ -66,12 +66,10 @@ pub async fn lsp_spawn(
     env: Option<HashMap<String, String>>,
     root: String,
     max_rss_mb: Option<u64>,
-    workspace: Option<WorkspaceEnv>,
     on_message: Channel<Response>,
     on_exit: Channel<session::LspExit>,
 ) -> Result<u32, String> {
-    let workspace = WorkspaceEnv::from_option(workspace);
-    let root = authorize_spawn_cwd(&registry, Some(root.as_str()), &workspace)?
+    let root = authorize_spawn_cwd(&registry, Some(root.as_str()))?
         .ok_or("lsp: workspace root is required")?;
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);

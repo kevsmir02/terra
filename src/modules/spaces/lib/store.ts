@@ -1,12 +1,10 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
-import type { WorkspaceEnv } from "@/modules/workspace";
 import type { SerializedTab } from "./serialize";
 
 export type SpaceMeta = {
   id: string;
   name: string;
   root: string | null;
-  env: WorkspaceEnv;
   /** Opt-in accent, index into SPACE_COLORS. Undefined = theme primary. */
   color?: number;
   /** Shell commands auto-run in dedicated terminal tabs on first per-session space activation. */
