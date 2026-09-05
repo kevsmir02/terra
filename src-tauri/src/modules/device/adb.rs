@@ -25,6 +25,15 @@ pub const GPU_MODES: &[&str] = &[
 pub const GPU_FALLBACK: &str = "swiftshader_indirect";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(
+    test,
+    ts(
+        export,
+        export_to = "../../src/modules/device/generated/DeviceEntry.ts",
+        optional_fields
+    )
+)]
 pub struct DeviceEntry {
     pub serial: String,
     pub state: String,
@@ -34,11 +43,20 @@ pub struct DeviceEntry {
     pub model: Option<String>,
 }
 
+impl DeviceEntry {
+    /// Readiness: whether this Device is usable. adb reports a usable device
+    /// with the state string "device"; everywhere else in the module should
+    /// call this rather than compare against that literal directly.
+    pub fn is_ready(&self) -> bool {
+        self.state == "device"
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AvdEntry {
     pub name: String,
     /// Serial of the already-running instance, if this AVD is booted. The UI
-    /// offers "attach" rather than "launch" when this is set — relaunching a
+    /// offers "attach" rather than "launch" when this is set, relaunching a
     /// running AVD fails on its lock file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serial: Option<String>,
@@ -79,7 +97,7 @@ pub fn sdk_roots() -> Vec<PathBuf> {
         }
     }
     if let Some(home) = dirs::home_dir() {
-        // macOS default — note the lowercase `sdk`, which differs from Linux.
+        // macOS default, note the lowercase `sdk`, which differs from Linux.
         roots.push(home.join("Library").join("Android").join("sdk"));
         // Linux default.
         roots.push(home.join("Android").join("Sdk"));
@@ -112,7 +130,7 @@ pub fn resolve_adb_path() -> Result<PathBuf, String> {
     resolve_tool(
         "adb",
         "platform-tools",
-        "adb not found on PATH or in the Android SDK — install Android Platform Tools, or set ANDROID_HOME",
+        "adb not found on PATH or in the Android SDK. Install Android Platform Tools, or set ANDROID_HOME",
     )
 }
 
@@ -120,7 +138,7 @@ pub fn resolve_emulator_path() -> Result<PathBuf, String> {
     resolve_tool(
         "emulator",
         "emulator",
-        "emulator not found on PATH or in the Android SDK — install the Android Emulator package, or set ANDROID_HOME",
+        "emulator not found on PATH or in the Android SDK. Install the Android Emulator package, or set ANDROID_HOME",
     )
 }
 
@@ -149,7 +167,7 @@ pub fn resolve_avdmanager_path() -> Result<PathBuf, String> {
             return Ok(found);
         }
     }
-    Err("avdmanager not found — install the Android SDK Command-line Tools".to_string())
+    Err("avdmanager not found. Install the Android SDK Command-line Tools".to_string())
 }
 
 /// Enumerate installed system images by walking `<sdk>/system-images`, which is
@@ -358,7 +376,7 @@ pub fn log_tail(path: &Path, lines: usize) -> Option<String> {
 /// `gpu` is `None` by default *deliberately*. Passing any `-gpu` value
 /// overrides the AVD's own `hw.gpu.mode`; when the two disagree the emulator
 /// rejects its boot snapshot ("Change of GLES renderer detected") and cold
-/// boots, which is both far slower and — measured on Mesa 26 / Fedora 44 —
+/// boots, which is both far slower and, measured on Mesa 26 / Fedora 44,
 /// a reliable segfault. Respecting the AVD's configuration boots in ~8s.
 pub fn launch_avd(
     emulator: &Path,
@@ -409,7 +427,7 @@ pub fn launch_avd(
 }
 
 /// Create an AVD from an already-installed system image. Downloading a new
-/// image is deliberately out of scope — that needs sdkmanager, license
+/// image is deliberately out of scope, that needs sdkmanager, license
 /// acceptance and a progress UI.
 pub fn create_avd(avdmanager: &Path, name: &str, package: &str) -> Result<(), String> {
     use std::io::Write;
@@ -592,6 +610,14 @@ emulator-5556   offline product:emu64 model:emu64 phone:emulator-5556\n\
         assert_eq!(out[2].serial, "192.168.1.42:5555");
         assert_eq!(out[2].state, "unauthorized");
         assert!(out[2].product.is_none());
+    }
+
+    #[test]
+    fn is_ready_true_only_for_the_device_state() {
+        let out = parse_devices_output(SAMPLE);
+        assert!(out[0].is_ready(), "state \"device\" must be ready");
+        assert!(!out[1].is_ready(), "state \"offline\" must not be ready");
+        assert!(!out[2].is_ready(), "state \"unauthorized\" must not be ready");
     }
 
     #[test]

@@ -86,6 +86,11 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+      # ts-rs writes the generated bindings during `cargo test`, so a stale
+      # committed copy only shows up as a diff right after it.
+      - name: Generated TypeScript bindings are up to date
+        run: git diff --exit-code src/modules/device/generated
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 

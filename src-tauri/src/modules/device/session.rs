@@ -1,16 +1,16 @@
 use std::io::Read;
 use std::net::{Shutdown, TcpStream};
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tauri::ipc::Channel;
+use tauri::ipc::{Channel, Response};
 use tokio::sync::mpsc;
 
 use super::control::{serialize_control_message, ControlMessage};
-use super::remux::{drain_complete_nals, split_nal_units, Segment, StreamAssembler};
+use super::remux::StreamAssembler;
 use super::state::SerialReservation;
 use crate::modules::sync::MutexExt;
 
@@ -19,12 +19,25 @@ use crate::modules::sync::MutexExt;
 const SHUTDOWN_BUDGET: Duration = Duration::from_secs(1);
 const SHUTDOWN_POLL: Duration = Duration::from_millis(20);
 
+/// How long the reader keeps retrying the connect+probe cycle before giving up
+/// on a server that never became ready. A parameter so a test can exhaust it
+/// in milliseconds instead of the twelve seconds production waits.
+#[derive(Clone, Copy)]
+struct ConnectBudget {
+    attempts: u32,
+    interval: Duration,
+}
+
+const CONNECT_BUDGET: ConnectBudget = ConnectBudget {
+    attempts: 60,
+    interval: Duration::from_millis(100),
+};
+
+/// Why a mirror session stopped, reported to the webview so it can tell a dead
+/// stream from a frozen last frame.
 #[derive(serde::Serialize, Clone)]
-pub struct DeviceFrame {
-    /// 0 = init segment (ftyp+moov), 1 = media fragment (moof+mdat).
-    pub kind: u8,
-    /// Raw fMP4 bytes; the webview appends these to a `SourceBuffer`.
-    pub bytes: Vec<u8>,
+pub struct DeviceExit {
+    pub reason: String,
 }
 
 /// Handles to the video and control sockets the IO threads own, so shutdown
@@ -105,7 +118,8 @@ fn drive_shutdown<O: ShutdownOps>(ops: &mut O, budget: Duration, interval: Durat
 struct Teardown {
     adb: PathBuf,
     serial: String,
-    local_port: u16,
+    video_port: u16,
+    control_port: u16,
     child: Option<Child>,
     sockets: Arc<SocketRegistry>,
     reservation: Arc<SerialReservation>,
@@ -136,18 +150,14 @@ impl ShutdownOps for Teardown {
     }
 
     fn remove_forwards(&mut self) {
-        for port in [self.local_port, self.local_port + 1] {
-            let _ = Command::new(&self.adb)
-                .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{port}")])
-                .output();
-        }
+        super::server::remove_forwards(&self.adb, &self.serial, self.video_port, self.control_port);
     }
 }
 
 pub struct DeviceSession {
-    pub id: u32,
+    pub handle: u32,
     pub serial: String,
-    pub control_tx: mpsc::Sender<ControlMessage>,
+    control_tx: Option<mpsc::Sender<ControlMessage>>,
     stopping: Arc<AtomicBool>,
     teardown: Option<Teardown>,
 }
@@ -155,21 +165,26 @@ pub struct DeviceSession {
 impl DeviceSession {
     /// Spawn a session: pushes the JAR, forwards the ports, starts the server,
     /// and starts the blocking-IO threads that read Annex-B NALs into fMP4
-    /// `DeviceFrame`s on `channel` and write control messages back.
+    /// frames sent raw (`[discriminator][payload]`, see `remux::decode_frame`)
+    /// on `channel` and write control messages back.
     ///
-    /// `local_port` is chosen by the caller from the OS ephemeral range. The
-    /// reservation is released when the reader exits, on shutdown, or if this
-    /// spawn fails.
+    /// `video_port` and `control_port` are chosen by the caller from the OS
+    /// ephemeral range (see `commands::ephemeral_ports`) and must be distinct.
+    /// The reservation is released when the reader exits, on shutdown, or if
+    /// this spawn fails.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
-        id: u32,
+        handle: u32,
         adb: PathBuf,
         jar: PathBuf,
         serial: String,
-        local_port: u16,
-        channel: Channel<DeviceFrame>,
+        video_port: u16,
+        control_port: u16,
+        channel: Channel<Response>,
+        on_exit: Channel<DeviceExit>,
         reservation: Arc<SerialReservation>,
     ) -> Result<Self, String> {
-        let child = super::server::spawn_server(&adb, &jar, &serial, local_port)?;
+        let child = super::server::spawn_server(&adb, &jar, &serial, video_port, control_port)?;
         #[cfg(windows)]
         let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
             Ok(j) => Some(j),
@@ -182,14 +197,21 @@ impl DeviceSession {
         let sockets = Arc::new(SocketRegistry::default());
 
         let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
-        let control_port = local_port + 1;
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
 
         let stop_reader = stopping.clone();
         let reader_sockets = sockets.clone();
         let reader_reservation = Arc::clone(&reservation);
         tauri::async_runtime::spawn_blocking(move || {
-            run_read_loop(local_port, channel, stop_reader, Some(ready_tx), &reader_sockets);
+            run_read_loop(
+                video_port,
+                channel,
+                on_exit,
+                stop_reader,
+                Some(ready_tx),
+                &reader_sockets,
+                CONNECT_BUDGET,
+            );
             reader_reservation.release();
         });
 
@@ -200,14 +222,15 @@ impl DeviceSession {
         });
 
         Ok(Self {
-            id,
+            handle,
             serial: serial.clone(),
-            control_tx: tx,
+            control_tx: Some(tx),
             stopping,
             teardown: Some(Teardown {
                 adb,
                 serial,
-                local_port,
+                video_port,
+                control_port,
                 child: Some(child),
                 sockets,
                 reservation,
@@ -218,18 +241,27 @@ impl DeviceSession {
     }
 
     #[cfg(test)]
-    pub(super) fn stub(id: u32, serial: &str, control_tx: mpsc::Sender<ControlMessage>) -> Self {
+    pub(super) fn stub(handle: u32, serial: &str, control_tx: mpsc::Sender<ControlMessage>) -> Self {
         Self {
-            id,
+            handle,
             serial: serial.to_string(),
-            control_tx,
+            control_tx: Some(control_tx),
             stopping: Arc::new(AtomicBool::new(false)),
             teardown: None,
         }
     }
 
+    /// `None` once the session has been shut down: `shutdown` stores the stop
+    /// flag first, then drops the sender, which is what unblocks a control loop
+    /// parked in `blocking_recv`. The flag has to land first so every IO thread
+    /// the drop or the socket close wakes already reads the stop as deliberate.
+    pub fn control_tx(&self) -> Option<&mpsc::Sender<ControlMessage>> {
+        self.control_tx.as_ref()
+    }
+
     pub fn shutdown(&mut self) {
         self.stopping.store(true, Ordering::Relaxed);
+        self.control_tx = None;
         let Some(mut teardown) = self.teardown.take() else { return };
         drive_shutdown(&mut teardown, SHUTDOWN_BUDGET, SHUTDOWN_POLL);
         teardown.reservation.release();
@@ -242,18 +274,28 @@ impl Drop for DeviceSession {
     }
 }
 
-/// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)`, split
-/// it into NAL units and feed them through a `StreamAssembler`, forwarding each
-/// resulting segment on `channel`. `Channel::send` is synchronous (it just queues
-/// for the webview), so no async runtime is needed in this thread.
+/// Read the H.264 frame-metadata packet stream off
+/// `TcpStream(127.0.0.1:local_port)` and
+/// feed it through a `StreamAssembler`, forwarding each resulting encoded
+/// frame (`[discriminator][payload]`, see `remux::decode_frame`) on `channel`
+/// as `Response::new(frame)`. One channel keeps the frames in order, which is
+/// why there is only one: the init frame must reach the media source before
+/// the first media frame. Framing lives in the assembler; this loop only does
+/// IO. `Channel::send` is synchronous (it just queues for the webview), so no
+/// async runtime is needed in this thread.
+///
+/// When the stream dies on its own the loop reports why on `on_exit`; a stop
+/// the webview asked for is not a death, so nothing is sent once `stopping` is
+/// set (`shutdown` sets it before it closes the sockets that wake this read).
 fn run_read_loop(
     local_port: u16,
-    channel: Channel<DeviceFrame>,
+    channel: Channel<Response>,
+    on_exit: Channel<DeviceExit>,
     stopping: Arc<AtomicBool>,
     mut ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
     sockets: &SocketRegistry,
+    budget: ConnectBudget,
 ) {
-    log::info!("[device] read_loop start: connecting to TCP 127.0.0.1:{local_port}");
     // adb forward maps the local TCP port IMMEDIATELY (before the scrcpy server
     // has even bound its abstract socket), so `connect()` succeeds right away even
     // when the remote side isn't ready: the first `read()` then returns 0 (EOF)
@@ -261,9 +303,8 @@ fn run_read_loop(
     // not just connect.
     let mut stream: Option<std::net::TcpStream> = None;
     let mut probe = [0u8; 1];
-    for attempt in 1..=60 {
+    for _attempt in 1..=budget.attempts {
         if stopping.load(Ordering::Relaxed) {
-            log::info!("[device] read_loop: stopping before connect");
             return;
         }
         match std::net::TcpStream::connect(("127.0.0.1", local_port)) {
@@ -276,10 +317,9 @@ fn run_read_loop(
                 match s.peek(&mut probe) {
                     Ok(0) => {
                         // adb accepted our local connection but the remote
-                        // abstract socket isn't ready — close and retry.
-                        log::debug!("[device] read_loop attempt {attempt}/60: port open, remote not ready (peek=0)");
+                        // abstract socket isn't ready; close and retry.
                         drop(s);
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        std::thread::sleep(budget.interval);
                         continue;
                     }
                     Ok(_) | Err(_) => {
@@ -287,7 +327,6 @@ fn run_read_loop(
                         // either way we'll find out in the read loop. Switch back
                         // to blocking reads.
                         s.set_read_timeout(None).ok();
-                        log::info!("[device] read_loop: TCP connected + alive on attempt {attempt}/60");
                         sockets.register(&s);
                         if let Some(tx) = ready_tx.take() {
                             let _ = tx.send(());
@@ -297,9 +336,8 @@ fn run_read_loop(
                     }
                 }
             }
-            Err(e) => {
-                log::debug!("[device] read_loop attempt {attempt}/60: connect failed: {e}");
-                std::thread::sleep(std::time::Duration::from_millis(100));
+            Err(_) => {
+                std::thread::sleep(budget.interval);
             }
         }
     }
@@ -307,71 +345,72 @@ fn run_read_loop(
     let mut stream = match stream {
         Some(s) => s,
         None => {
-            log::error!(
-                "[device] read_loop: TCP connect FAILED after 60×~200ms (~12s); \
-                 scrcpy server never became ready on 127.0.0.1:{local_port} — \
-                 check the 'scrcpy-server stderr' lines above"
+            log::warn!(
+                "[device] read_loop: TCP connect failed after {} attempts, scrcpy server never became ready on 127.0.0.1:{local_port}",
+                budget.attempts
             );
+            report_exit(&on_exit, &stopping, "server-unreachable".to_string());
             return;
         }
     };
 
-    let mut buf: Vec<u8> = Vec::new();
     let mut read_buf = [0u8; 65536];
     let mut assembler = StreamAssembler::default();
-    let mut segments: Vec<Segment> = Vec::new();
-    let mut total_bytes: u64 = 0;
-    let mut reads: u64 = 0;
+    let mut frames: Vec<Vec<u8>> = Vec::new();
 
-    loop {
+    let reason = loop {
         if stopping.load(Ordering::Relaxed) {
-            log::info!("[device] read_loop: stopping (reads={reads} bytes={total_bytes} {:?})", assembler.stats);
-            break;
+            break None;
         }
         let n = match stream.read(&mut read_buf) {
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => {
-                log::warn!("[device] read_loop: stream read error after {total_bytes} bytes: {e}");
-                break;
+                log::warn!("[device] read_loop: stream read error: {e}");
+                break Some(format!("stream-error: {e}"));
             }
         };
-        reads += 1;
-        total_bytes += n as u64;
 
         if n == 0 {
-            log::info!(
-                "[device] read_loop: stream EOF at {total_bytes} bytes {:?}; flushing trailing NALs",
-                assembler.stats
-            );
-            for nal in split_nal_units(&buf) {
-                assembler.push(nal, &mut segments);
-            }
-            send_segments(&channel, &mut segments);
-            break;
+            break Some("stream-ended".to_string());
         }
 
-        buf.extend_from_slice(&read_buf[..n]);
-        for nal in drain_complete_nals(&mut buf) {
-            assembler.push(nal, &mut segments);
+        assembler.push_bytes(&read_buf[..n], &mut frames);
+        if !send_frames(&channel, &mut frames) {
+            break None;
         }
-        send_segments(&channel, &mut segments);
 
-        if reads.is_multiple_of(60) {
-            log::info!("[device] read_loop heartbeat: reads={reads} bytes={total_bytes} {:?}", assembler.stats);
+        // Nothing can resynchronize a packet stream once a header stops making
+        // sense, so reading on would only spin on bytes the assembler drops.
+        if assembler.is_corrupt() {
+            log::warn!("[device] read_loop: video stream desynchronized, stopping the reader");
+            break Some("stream-corrupt".to_string());
         }
+    };
+
+    if let Some(reason) = reason {
+        report_exit(&on_exit, &stopping, reason);
     }
-    log::info!("[device] read_loop EXIT: reads={reads} bytes={total_bytes} {:?}", assembler.stats);
 }
 
-fn send_segments(channel: &Channel<DeviceFrame>, segments: &mut Vec<Segment>) {
-    for segment in segments.drain(..) {
-        let frame = match segment {
-            Segment::Init(bytes) => DeviceFrame { kind: 0, bytes },
-            Segment::Media(bytes) => DeviceFrame { kind: 1, bytes },
-        };
-        let _ = channel.send(frame);
+/// A stop the webview asked for is not a failure, so the exit is suppressed
+/// once `stopping` is set: nothing is left listening for it either way.
+fn report_exit(on_exit: &Channel<DeviceExit>, stopping: &AtomicBool, reason: String) {
+    if stopping.load(Ordering::Relaxed) {
+        return;
     }
+    let _ = on_exit.send(DeviceExit { reason });
+}
+
+/// False once the webview dropped the frame channel: it will never read again,
+/// so the reader stops rather than decoding into a void.
+fn send_frames(channel: &Channel<Response>, frames: &mut Vec<Vec<u8>>) -> bool {
+    for frame in frames.drain(..) {
+        if channel.send(Response::new(frame)).is_err() {
+            return false;
+        }
+    }
+    true
 }
 
 fn run_control_loop(
@@ -406,15 +445,14 @@ fn run_control_loop(
         }
     };
 
-    while !stopping.load(Ordering::Relaxed) {
-        if let Ok(msg) = rx.try_recv() {
-            let bytes = serialize_control_message(&msg);
-            if stream.write_all(&bytes).is_err() {
-                log::warn!("[device] control_loop write failed");
-                break;
-            }
-        } else {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+    while let Some(msg) = rx.blocking_recv() {
+        if stopping.load(Ordering::Relaxed) {
+            break;
+        }
+        let bytes = serialize_control_message(&msg);
+        if stream.write_all(&bytes).is_err() {
+            log::warn!("[device] control_loop write failed");
+            break;
         }
     }
 }
@@ -524,7 +562,8 @@ mod tests {
         session.teardown = Some(Teardown {
             adb: std::env::temp_dir().join("terra-missing-adb-for-tests"),
             serial: "emulator-5554".into(),
-            local_port: 27183,
+            video_port: 27183,
+            control_port: 27184,
             child: None,
             sockets: Arc::new(SocketRegistry::default()),
             reservation: state.reserve_serial("emulator-5554").unwrap(),
@@ -547,7 +586,8 @@ mod tests {
     fn spawn_failure_releases_serial_reservation() {
         let state = super::super::state::DeviceState::default();
         let reservation = state.reserve_serial("emulator-5554").unwrap();
-        let channel: Channel<DeviceFrame> = Channel::new(|_| Ok(()));
+        let channel: Channel<Response> = Channel::new(|_| Ok(()));
+        let on_exit: Channel<DeviceExit> = Channel::new(|_| Ok(()));
         let missing_adb = std::env::temp_dir().join("terra-missing-adb-for-tests");
         let result = DeviceSession::spawn(
             1,
@@ -555,11 +595,27 @@ mod tests {
             missing_adb,
             "emulator-5554".into(),
             27183,
+            27184,
             channel,
+            on_exit,
             reservation,
         );
         assert!(result.is_err(), "spawning against a missing adb binary must fail");
         assert!(state.reserve_serial("emulator-5554").is_ok(), "a failed spawn must release the serial");
+    }
+
+    /// Bounds a wait on a thread that is expected to unblock (a control loop
+    /// exiting, a `blocking_recv` waking) so a regression that brings back a
+    /// stuck receiver fails the test instead of hanging the suite.
+    fn join_within<T>(handle: std::thread::JoinHandle<T>, budget: Duration) -> T {
+        let deadline = Instant::now() + budget;
+        while !handle.is_finished() {
+            if Instant::now() >= deadline {
+                panic!("thread did not finish within {budget:?}");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        handle.join().expect("thread panicked")
     }
 
     #[test]
@@ -597,7 +653,203 @@ mod tests {
         assert_eq!(buf[0], 2); // TYPE_INJECT_TOUCH = 2
         assert_eq!(buf[1], 0); // Action = Down = 0
 
+        drop(tx);
+        join_within(handle, Duration::from_secs(2));
+    }
+
+    #[test]
+    fn control_loop_exits_when_every_sender_is_dropped() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
+        let stopping = Arc::new(AtomicBool::new(false));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let _ = ready_tx.send(());
+
+        let handle = std::thread::spawn(move || {
+            run_control_loop(port, &mut rx, stopping, ready_rx, &SocketRegistry::default());
+        });
+
+        let (_socket, _) = listener.accept().unwrap();
+        drop(tx);
+
+        join_within(handle, Duration::from_secs(2));
+    }
+
+    #[test]
+    fn shutdown_drops_the_control_sender() {
+        let (tx, mut rx) = mpsc::channel::<ControlMessage>(1);
+        let mut session = DeviceSession::stub(1, "emulator-5554", tx);
+
+        session.shutdown();
+
+        let handle = std::thread::spawn(move || rx.blocking_recv());
+        assert_eq!(join_within(handle, Duration::from_secs(2)), None);
+    }
+
+    /// Collects the `reason` of every exit the read loop reports, so a test can
+    /// assert both the reason and that exactly one (or no) exit was sent.
+    fn capturing_exit_channel() -> (Channel<DeviceExit>, Arc<Mutex<Vec<String>>>) {
+        let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+        let channel = Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(json) = body {
+                let payload: serde_json::Value =
+                    serde_json::from_str(&json).expect("exit payload is json");
+                let reason = payload["reason"].as_str().expect("exit carries a reason");
+                sink.lock_or_recover().push(reason.to_string());
+            }
+            Ok(())
+        });
+        (channel, seen)
+    }
+
+    fn test_budget(attempts: u32) -> ConnectBudget {
+        ConnectBudget { attempts, interval: Duration::from_millis(10) }
+    }
+
+    #[test]
+    fn read_loop_reports_stream_ended_when_the_server_closes() {
+        use std::io::Write as _;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            // Fewer bytes than a packet header, so the assembler buffers them
+            // and stays healthy: this is about EOF, not about framing.
+            socket.write_all(&[0u8; 8]).unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+        });
+
+        let (on_exit, seen) = capturing_exit_channel();
+        run_read_loop(
+            port,
+            Channel::new(|_| Ok(())),
+            on_exit,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            &SocketRegistry::default(),
+            test_budget(20),
+        );
+
+        server.join().unwrap();
+        assert_eq!(*seen.lock_or_recover(), ["stream-ended"]);
+    }
+
+    #[test]
+    fn read_loop_reports_server_unreachable_when_nothing_listens() {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .map(|l| l.local_addr().unwrap().port())
+            .unwrap();
+
+        let (on_exit, seen) = capturing_exit_channel();
+        let started = Instant::now();
+        run_read_loop(
+            port,
+            Channel::new(|_| Ok(())),
+            on_exit,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            &SocketRegistry::default(),
+            test_budget(3),
+        );
+
+        assert_eq!(*seen.lock_or_recover(), ["server-unreachable"]);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "the retry budget must bound how long the reader waits"
+        );
+    }
+
+    /// `read_loop_stays_silent_when_teardown_initiated_the_stop` pins the
+    /// reader's half; this pins `shutdown`'s, so reordering it to close the
+    /// sockets before storing `stopping` fails here instead of shipping a
+    /// spurious "the device stopped streaming" on every close.
+    #[test]
+    fn shutdown_delivers_no_exit_to_a_live_reader() {
+        let state = DeviceState::default();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let sockets = Arc::new(SocketRegistry::default());
+        let (on_exit, seen) = capturing_exit_channel();
+
+        let (tx, _rx) = mpsc::channel(1);
+        let mut session = DeviceSession::stub(1, "emulator-5554", tx);
+        session.teardown = Some(Teardown {
+            adb: std::env::temp_dir().join("terra-missing-adb-for-tests"),
+            serial: "emulator-5554".into(),
+            video_port: port,
+            control_port: port.wrapping_add(1),
+            child: None,
+            sockets: Arc::clone(&sockets),
+            reservation: state.reserve_serial("emulator-5554").unwrap(),
+            #[cfg(windows)]
+            _job: None,
+        });
+
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let reader_stopping = Arc::clone(&session.stopping);
+        let reader_sockets = Arc::clone(&sockets);
+        let handle = std::thread::spawn(move || {
+            run_read_loop(
+                port,
+                Channel::new(|_| Ok(())),
+                on_exit,
+                reader_stopping,
+                Some(ready_tx),
+                &reader_sockets,
+                test_budget(20),
+            );
+        });
+
+        let (_socket, _) = listener.accept().unwrap();
+        ready_rx.blocking_recv().expect("the reader registers its socket before reading");
+
+        session.shutdown();
+
+        join_within(handle, Duration::from_secs(5));
+        assert!(
+            seen.lock_or_recover().is_empty(),
+            "closing a session must not reach the webview as a session death"
+        );
+    }
+
+    #[test]
+    fn read_loop_stays_silent_when_teardown_initiated_the_stop() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stopping = Arc::new(AtomicBool::new(false));
+        let sockets = Arc::new(SocketRegistry::default());
+        let (on_exit, seen) = capturing_exit_channel();
+
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let reader_stopping = Arc::clone(&stopping);
+        let reader_sockets = Arc::clone(&sockets);
+        let handle = std::thread::spawn(move || {
+            run_read_loop(
+                port,
+                Channel::new(|_| Ok(())),
+                on_exit,
+                reader_stopping,
+                Some(ready_tx),
+                &reader_sockets,
+                test_budget(20),
+            );
+        });
+
+        let (_socket, _) = listener.accept().unwrap();
+        ready_rx.blocking_recv().expect("the reader registers its socket before reading");
+
+        // Exactly what shutdown() does, in the order it does it.
         stopping.store(true, Ordering::Relaxed);
-        handle.join().unwrap();
+        sockets.close_all();
+
+        join_within(handle, Duration::from_secs(5));
+        assert!(
+            seen.lock_or_recover().is_empty(),
+            "a webview-initiated stop is a teardown, not a session death"
+        );
     }
 }

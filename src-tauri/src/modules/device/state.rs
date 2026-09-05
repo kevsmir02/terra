@@ -9,7 +9,7 @@ use super::session::DeviceSession;
 use crate::modules::sync::{MutexExt, RwLockExt};
 
 /// An emulator this process started. Tracked so Terra can stop what it started
-/// and clean up on exit — and, just as importantly, so it can tell those apart
+/// and clean up on exit, and, just as importantly, so it can tell those apart
 /// from emulators the user launched from Android Studio, which it must leave
 /// strictly alone.
 pub struct LaunchedAvd {
@@ -17,9 +17,11 @@ pub struct LaunchedAvd {
     pub child: std::process::Child,
 }
 
-/// Exclusive claim on one serial for the lifetime of a mirror session. Opening
-/// a serial pkills any scrcpy server on the device, so two live sessions on one
-/// serial would kill each other mid-stream.
+/// Exclusive claim on one serial for the lifetime of a mirror session. Each
+/// session gets its own scid and abstract socket, so two live sessions on one
+/// serial no longer collide on the wire, but they would still fight over the
+/// same touch/key input and adb forwards, so only one session per serial is
+/// allowed at a time.
 pub struct SerialReservation {
     open: Arc<Mutex<HashSet<String>>>,
     serial: String,
@@ -44,7 +46,7 @@ impl Drop for SerialReservation {
 
 pub struct DeviceState {
     pub sessions: RwLock<HashMap<u32, DeviceSession>>,
-    pub next_id: AtomicU32,
+    pub next_handle: AtomicU32,
     pub jar_path: Mutex<Option<PathBuf>>,
     /// Keyed by adb serial (`emulator-<port>`).
     pub launched: Mutex<HashMap<String, LaunchedAvd>>,
@@ -55,7 +57,7 @@ impl Default for DeviceState {
     fn default() -> Self {
         Self {
             sessions: RwLock::new(HashMap::new()),
-            next_id: AtomicU32::new(1),
+            next_handle: AtomicU32::new(1),
             jar_path: Mutex::new(None),
             launched: Mutex::new(HashMap::new()),
             open_serials: Arc::new(Mutex::new(HashSet::new())),
@@ -64,8 +66,8 @@ impl Default for DeviceState {
 }
 
 impl DeviceState {
-    pub(super) fn take(&self, id: u32) -> Option<DeviceSession> {
-        self.sessions.write_or_recover().remove(&id)
+    pub(super) fn take(&self, handle: u32) -> Option<DeviceSession> {
+        self.sessions.write_or_recover().remove(&handle)
     }
 
     pub fn reserve_serial(&self, serial: &str) -> Result<Arc<SerialReservation>, String> {

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MsePlayer, TRIM_KEEP_SECONDS, TRIM_THRESHOLD_SECONDS } from "./MsePlayer";
+import { MsePlayer } from "./MsePlayer";
+import { PLAYBACK_POLICY } from "./playbackPolicy";
+
+const KEEP = PLAYBACK_POLICY.keepBehindSeconds;
+const EVICT_THRESHOLD = PLAYBACK_POLICY.evictThresholdSeconds;
 
 type Range = [number, number];
 
@@ -18,7 +22,7 @@ class FakeTimeRanges {
 
 class FakeSourceBuffer extends EventTarget {
   updating = false;
-  appended: ArrayBuffer[] = [];
+  appended: Uint8Array[] = [];
   removed: Range[] = [];
   ranges: Range[] = [];
   failNext: Error[] = [];
@@ -38,7 +42,7 @@ class FakeSourceBuffer extends EventTarget {
     super.removeEventListener(type, listener);
   }
 
-  appendBuffer(buf: ArrayBuffer) {
+  appendBuffer(buf: Uint8Array) {
     if (this.updating) throw new DOMException("busy", "InvalidStateError");
     const err = this.failNext.shift();
     if (err) throw err;
@@ -102,25 +106,37 @@ function fakeVideo(): FakeVideo {
 
 const CODEC = "avc1.42001E";
 
+// Mirrors what splitFrame() actually hands MsePlayer off the wire: a view
+// starting at byte offset 1 into a larger (discriminator-prefixed) buffer,
+// never offset 0. pushData must anchor its DataView at payload.byteOffset,
+// not payload.buffer directly; a fixture at offset 0 would pass even if that
+// anchoring regressed, so every payload built here carries a real offset.
+function withDiscriminator(kind: number, bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  const encoded = new Uint8Array(1 + bytes.length);
+  encoded[0] = kind;
+  encoded.set(bytes, 1);
+  return encoded.subarray(1);
+}
+
 function initFrame(moov = new Uint8Array([9, 9])) {
   const codec = new TextEncoder().encode(CODEC);
-  const out = new Uint8Array(4 + codec.length + moov.length);
-  new DataView(out.buffer).setUint32(0, codec.length, false);
-  out.set(codec, 4);
-  out.set(moov, 4 + codec.length);
-  return out.buffer;
+  const inner = new Uint8Array(4 + codec.length + moov.length);
+  new DataView(inner.buffer).setUint32(0, codec.length, false);
+  inner.set(codec, 4);
+  inner.set(moov, 4 + codec.length);
+  return withDiscriminator(0, inner);
 }
 
 function fragment(tag: number) {
-  return new Uint8Array([tag, tag, tag]).buffer;
+  return withDiscriminator(1, new Uint8Array([tag, tag, tag]));
 }
 
 function quotaError() {
   return new DOMException("quota", "QuotaExceededError");
 }
 
-function bytes(bufs: ArrayBuffer[]) {
-  return bufs.map((b) => Array.from(new Uint8Array(b)));
+function bytes(bufs: Uint8Array[]) {
+  return bufs.map((b) => Array.from(b));
 }
 
 function lastMediaSource() {
@@ -189,11 +205,24 @@ describe("MsePlayer append cycle", () => {
   });
 });
 
+describe("MsePlayer init segment validation", () => {
+  it("fails with a clear message instead of throwing when the init payload is too short to carry a codec length", () => {
+    const onError = vi.fn<(message: string) => void>();
+    const player = new MsePlayer(fakeVideo(), onError);
+
+    expect(() => player.pushData(0, withDiscriminator(0, new Uint8Array([1, 2, 3])))).not.toThrow();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toMatch(/too short/i);
+    expect(lastMediaSource().sourceBuffers).toHaveLength(0);
+  });
+});
+
 describe("MsePlayer buffer trimming", () => {
   it("does not trim while the backlog behind the playhead is under the threshold", () => {
     const { player, sb, video } = setup();
-    sb.ranges = [[0, TRIM_THRESHOLD_SECONDS]];
-    video.currentTime = TRIM_THRESHOLD_SECONDS;
+    sb.ranges = [[0, EVICT_THRESHOLD]];
+    video.currentTime = EVICT_THRESHOLD;
 
     player.pushData(1, fragment(1));
 
@@ -203,12 +232,12 @@ describe("MsePlayer buffer trimming", () => {
 
   it("trims behind the playhead once the backlog crosses the threshold, then resumes appending", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
 
     player.pushData(1, fragment(1));
-    expect(sb.removed).toEqual([[0, now - TRIM_KEEP_SECONDS]]);
+    expect(sb.removed).toEqual([[0, now - KEEP]]);
     expect(sb.appended).toHaveLength(1);
 
     sb.finish();
@@ -220,33 +249,37 @@ describe("MsePlayer buffer trimming", () => {
     expect(sb.appended).toHaveLength(3);
   });
 
-  it("seeks into the surviving range and warns once when a trim evicts the playhead", () => {
+  it("heals the playhead into the next range when an evict strands it in a gap (rule 3)", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     player.pushData(1, fragment(1));
-    expect(sb.removed).toEqual([[0, now - TRIM_KEEP_SECONDS]]);
-    // The browser extends the remove to the next keyframe, evicting further
-    // than requested and leaving the playhead stranded ahead of what survives.
-    sb.ranges = [[now + 5, now + 30]];
+    expect(sb.removed).toEqual([[0, now - KEEP]]);
+    // The browser extends the remove to the next keyframe, landing the
+    // playhead in a gap. It stays within the live-lag threshold of the new
+    // live edge, so this is a heal (rule 3), not a live-catch-up seek (rule 2).
+    sb.ranges = [
+      [now - 5, now - 0.5],
+      [now + 0.3, now + 0.9],
+    ];
     sb.finish();
 
-    expect(video.currentTime).toBe(now + 5);
+    expect(video.currentTime).toBe(now + 0.3);
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it("does not seek or warn when the playhead's range survives a trim", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     player.pushData(1, fragment(1));
-    sb.ranges = [[now - TRIM_KEEP_SECONDS, now + 1]];
+    sb.ranges = [[now - KEEP, now + 1]];
     sb.finish();
 
     expect(video.currentTime).toBe(now);
@@ -255,7 +288,7 @@ describe("MsePlayer buffer trimming", () => {
 
   it("never issues two trims without an append in between", () => {
     const { player, sb, video } = setup();
-    const now = TRIM_THRESHOLD_SECONDS + 1;
+    const now = EVICT_THRESHOLD + 1;
     sb.ranges = [[0, now]];
     video.currentTime = now;
 
@@ -267,6 +300,49 @@ describe("MsePlayer buffer trimming", () => {
 
     expect(sb.removed).toHaveLength(1);
     expect(sb.appended).toHaveLength(2);
+  });
+});
+
+describe("MsePlayer live catch-up (rule 2)", () => {
+  it("seeks the video to just behind live without blocking the append", () => {
+    const { player, sb, video } = setup();
+    sb.ranges = [[0, 10]];
+    video.currentTime = 2;
+
+    player.pushData(1, fragment(1));
+
+    expect(video.currentTime).toBe(10 - PLAYBACK_POLICY.liveTargetOffsetSeconds);
+    // The seek does not gate the append: it lands in the same tick.
+    expect(bytes(sb.appended)).toEqual([[9, 9], [1, 1, 1]]);
+  });
+
+  it("does not warn for a routine live catch-up from within a continuous range", () => {
+    const { player, sb, video } = setup();
+    sb.ranges = [[0, 10]];
+    video.currentTime = 2;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    player.pushData(1, fragment(1));
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when a live catch-up seek happens to also sit in a buffered gap", () => {
+    // The playhead falls in the gap between the two ranges, which on its
+    // own would look like a heal, but it is far enough behind the live
+    // edge that rule 2 (live catch-up) fires instead of rule 3 (heal).
+    const { player, sb, video } = setup();
+    sb.ranges = [
+      [0, 5],
+      [8, 20],
+    ];
+    video.currentTime = 6;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    player.pushData(1, fragment(1));
+
+    expect(video.currentTime).toBe(20 - PLAYBACK_POLICY.liveTargetOffsetSeconds);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -304,10 +380,10 @@ describe("MsePlayer append failures", () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
-  it("is terminal on a quota error when nothing behind the playhead can be trimmed", () => {
-    const { onError, player, sb, video } = setup();
-    sb.ranges = [[0, 4]];
-    video.currentTime = 0;
+  it("is terminal on a quota error when nothing behind the playhead can be reclaimed", () => {
+    // Nothing buffered yet (setup()'s default), so the policy is a no-op on
+    // both the normal and the zeroed quota-retry pass.
+    const { onError, player, sb } = setup();
     sb.failNext.push(quotaError());
 
     player.pushData(1, fragment(1));

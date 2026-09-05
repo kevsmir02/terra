@@ -1,13 +1,14 @@
 // Ported from ws-scrcpy's MsePlayer pattern (Apache-2.0). The MediaSource
 // SourceBuffer is fed fMP4 init segment (kind=0) and moof+mdat fragments
-// (kind=1) emitted from the Rust read loop. We do not parse NALs here — Rust
+// (kind=1) emitted from the Rust read loop. We do not parse NALs here, Rust
 // already did. We append bytes to the SourceBuffer when it can accept more.
 
-// A remove(start, end) is extended by the browser to the next keyframe at or
-// after `end`, and scrcpy's default keyframe interval is 10 s, so keeping less
-// than one GOP behind the playhead would evict the GOP currently on screen.
-export const TRIM_KEEP_SECONDS = 12;
-export const TRIM_THRESHOLD_SECONDS = TRIM_KEEP_SECONDS * 2;
+import {
+  type BufferedRange,
+  PLAYBACK_POLICY,
+  type PlaybackPolicy,
+  playbackPolicy,
+} from "./playbackPolicy";
 
 export type MseErrorHandler = (message: string) => void;
 
@@ -23,9 +24,8 @@ function describeError(e: unknown): string {
 export class MsePlayer {
   private mediaSource: MediaSource;
   private sourceBuffer: SourceBuffer | null = null;
-  private pending: ArrayBuffer[] = [];
+  private pending: Uint8Array<ArrayBuffer>[] = [];
   private codecString: string | null = null;
-  private appendCount = 0;
   private ended = false;
   private trimPending = false;
   private quotaRetryArmed = false;
@@ -44,7 +44,6 @@ export class MsePlayer {
   }
 
   private onSourceOpen = () => {
-    console.info("[device] MSE: sourceopen, readyState=", this.mediaSource.readyState);
     if (this.codecString && !this.sourceBuffer) {
       this.initSourceBuffer();
     }
@@ -65,11 +64,7 @@ export class MsePlayer {
       ? this.codecString
       : `video/mp4; codecs="${this.codecString}"`;
     try {
-      console.info("[device] MSE: addSourceBuffer", mimeType);
       this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
-      // ponytail: "sequence" (default) is more tolerant than "segments" — Chrome
-      // doesn't require styp/sidx boxes between our per-NAL moof+mdat fragments.
-      // Switch to "segments" only when we batch full access units + add styp.
       this.sourceBuffer.addEventListener("updateend", this.onUpdateEnd);
       this.flushPending();
     } catch (e) {
@@ -77,38 +72,31 @@ export class MsePlayer {
     }
   }
 
-  private onUpdateEnd = () => {
-    const afterTrim = this.trimPending;
-    if (afterTrim) this.healPlayheadAfterTrim();
-    this.flushPending();
-  };
+  private onUpdateEnd = () => this.flushPending();
 
   /** kind: 0 = init segment (carries the codec string in-band),
-   *        1 = media fragment bytes. */
-  pushData(kind: number, bytes: ArrayBuffer) {
+   *        1 = media fragment bytes. `payload` is a view, never copied. */
+  pushData(kind: number, payload: Uint8Array<ArrayBuffer>) {
     if (this.ended) return;
     if (kind === 0) {
       // CONTRACT (Rust↔TS codec-string handoff, see remux.rs Fmp4Builder):
-      // The init segment frame (kind=0) from the Rust read loop is laid out as:
+      // The init segment payload (kind=0) from the Rust read loop is laid out as:
       //   [4-byte BE length] [UTF-8 codec string, e.g. "avc1.42001E"] [fMP4 ftyp+moov bytes]
       // We extract the codec string here for SourceBuffer construction and feed
       // the remainder to SourceBuffer.
-      const view = new DataView(bytes);
+      if (payload.byteLength < 4) {
+        this.fail("Init segment is too short to carry a codec length; stream is unusable");
+        return;
+      }
+      const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
       const len = view.getUint32(0, /* littleEndian */ false);
-      this.codecString = new TextDecoder().decode(
-        new Uint8Array(bytes, 4, len),
-      );
-      const remainder = bytes.slice(4 + len);
-      console.info(
-        "[device] MSE: recv INIT kind=0 codec=", this.codecString,
-        "frameLen=", bytes.byteLength, "moovLen=", remainder.byteLength,
-      );
-      this.pending.push(remainder);
+      this.codecString = new TextDecoder().decode(payload.subarray(4, 4 + len));
+      this.pending.push(payload.subarray(4 + len));
       if (!this.sourceBuffer && this.mediaSource.readyState === "open") {
         this.initSourceBuffer();
       }
     } else {
-      this.pending.push(bytes);
+      this.pending.push(payload);
     }
     this.flushPending();
   }
@@ -118,40 +106,14 @@ export class MsePlayer {
     if (this.ended || !sb || sb.updating) return;
     const next = this.pending[0];
     if (next === undefined) return;
-    // At most one trim per append, so a remove that did not shrink the backlog
-    // can never starve the queue by re-issuing itself on every updateend.
-    if (!this.trimPending && this.trimBehindPlayhead(TRIM_KEEP_SECONDS, TRIM_THRESHOLD_SECONDS)) {
-      return;
-    }
+    // A seek never blocks the append; only an evict does (it waits on
+    // updateend), so only an issued evict returns early here.
+    if (this.applyPolicy(sb, PLAYBACK_POLICY)) return;
     try {
-      // DIAGNOSTIC: hex-dump first 32 bytes of the first 3 fragments so we can
-      // verify fMP4 box structure byte-for-byte vs the ISO spec on disk.
-      if (this.appendCount < 2) {
-        const v = new Uint8Array(next, 0, Math.min(next.byteLength, 64));
-        const hex = Array.from(v).map(b => b.toString(16).padStart(2, '0')).join(' ');
-        console.info(`[device] MSE append #${this.appendCount} hex[0..${v.length}]=`, hex);
-      }
       sb.appendBuffer(next);
       this.pending.shift();
       this.trimPending = false;
       this.quotaRetryArmed = false;
-      // DIAGNOSTIC: report the MSE buffered range (where currentTime lives) on
-      // every other successful append. The black-video bug = this range stuck at
-      // 0..0 or absent → nothing to paint.
-      if ((this.appendCount & 0x3) === 0) {
-        try {
-          const ranges = sb.buffered;
-          const r = ranges.length ? `${ranges.start(0).toFixed(3)}..${ranges.end(0).toFixed(3)}` : "(empty)";
-          console.info(
-            `[device] MSE appended #${this.appendCount}`,
-            `len=${next.byteLength}`,
-            `buffered=${r}`,
-            `currentTime=${this.video.currentTime.toFixed(3)}`,
-            `readyState=${this.video.readyState}`,
-          );
-        } catch {}
-      }
-      this.appendCount++;
       if (this.video.paused) {
         void this.video.play().catch(() => {});
       }
@@ -161,69 +123,57 @@ export class MsePlayer {
         return;
       }
       // The fragment stays at the head of the queue; updateend after the
-      // trim re-enters flushPending and retries it exactly once.
+      // evict re-enters flushPending and retries it exactly once.
       if (!this.quotaRetryArmed) {
         this.quotaRetryArmed = true;
-        if (this.trimBehindPlayhead(0, 0)) return;
+        if (this.applyPolicy(sb, { ...PLAYBACK_POLICY, keepBehindSeconds: 0, evictThresholdSeconds: 0 })) {
+          return;
+        }
       }
       this.fail("Video buffer is full and nothing behind the playhead could be reclaimed");
     }
   }
 
-  // Returns true when a remove was issued; appending resumes on updateend.
-  private trimBehindPlayhead(keepSeconds: number, thresholdSeconds: number): boolean {
-    const sb = this.sourceBuffer;
-    if (!sb) return false;
-    let start: number;
+  private bufferedRanges(sb: SourceBuffer): BufferedRange[] {
     try {
       const buffered = sb.buffered;
-      if (buffered.length === 0) return false;
-      start = buffered.start(0);
+      const ranges: BufferedRange[] = [];
+      for (let i = 0; i < buffered.length; i++) {
+        ranges.push({ start: buffered.start(i), end: buffered.end(i) });
+      }
+      return ranges;
     } catch {
-      return false;
+      return [];
     }
-    const now = this.video.currentTime;
-    const end = now - keepSeconds;
-    if (now - start <= thresholdSeconds || end <= start) return false;
+  }
+
+  // Returns true when an evict (remove) was issued; appending resumes on
+  // updateend. A seek is applied unconditionally and does not gate the return.
+  private applyPolicy(sb: SourceBuffer, policy: PlaybackPolicy): boolean {
+    const currentTime = this.video.currentTime;
+    const buffered = this.bufferedRanges(sb);
+    const intent = playbackPolicy({ currentTime, buffered }, policy);
+
+    if (intent.seekTo !== undefined) {
+      this.video.currentTime = intent.seekTo;
+      // Only warn for a heal (the playhead was orphaned outside every
+      // buffered range): a live catch-up is routine (e.g. every stream
+      // start) and not worth logging. The policy says which rule fired,
+      // so this never re-derives it from the buffered ranges itself.
+      if (intent.seekReason === "heal" && !this.warnedPlayheadDrift) {
+        this.warnedPlayheadDrift = true;
+        console.warn("[device] MSE: playhead fell outside the buffered ranges, seeking to", intent.seekTo);
+      }
+    }
+
+    if (intent.evictBefore === undefined || this.trimPending) return false;
     try {
-      sb.remove(0, end);
+      sb.remove(0, intent.evictBefore);
       this.trimPending = true;
       return true;
     } catch (e) {
       console.warn("[device] MSE: remove failed:", e);
       return false;
-    }
-  }
-
-  // The trim math assumes a remove is extended to the next keyframe at or
-  // after `end`, never past the playhead. If the real keyframe interval is
-  // longer than assumed, the browser can extend the remove past the
-  // playhead's own range; reclaim it by seeking into whatever survived.
-  private healPlayheadAfterTrim() {
-    const sb = this.sourceBuffer;
-    if (!sb) return;
-    let buffered: TimeRanges;
-    try {
-      buffered = sb.buffered;
-    } catch {
-      return;
-    }
-    const now = this.video.currentTime;
-    let nextStart: number | null = null;
-    let lastStart: number | null = null;
-    for (let i = 0; i < buffered.length; i++) {
-      const start = buffered.start(i);
-      const end = buffered.end(i);
-      if (now >= start && now < end) return;
-      if (start > now && (nextStart === null || start < nextStart)) nextStart = start;
-      lastStart = start;
-    }
-    const target = nextStart ?? lastStart;
-    if (target === null) return;
-    this.video.currentTime = target;
-    if (!this.warnedPlayheadDrift) {
-      this.warnedPlayheadDrift = true;
-      console.warn("[device] MSE: playhead fell outside the buffered ranges after a trim, seeking to", target);
     }
   }
 

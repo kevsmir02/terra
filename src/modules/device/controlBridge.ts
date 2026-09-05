@@ -1,12 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 
-/// Android `KEYCODE_*` values injected verbatim via the scrcpy control socket.
+// Android `KEYCODE_*` values injected verbatim via the scrcpy control socket.
 export const DEVICE_KEYCODE = {
   HOME: 3,
   BACK: 4,
-  VOLUME_UP: 24,
-  VOLUME_DOWN: 25,
   APP_SWITCH: 187,
 } as const;
 
@@ -16,7 +14,8 @@ export const DEVICE_KEYCODE = {
  * `videoWidth`/`videoHeight` MUST be the encoded video dimensions, not the
  * device's physical size. scrcpy's `getPhysicalPoint` compares the width/height
  * carried by each touch against the current video size and *silently discards*
- * the event when they differ — no error, no log. With `max_size=1920` a
+ * the event when they differ - no error, no log. A device that downscales via
+ * `max_size` encodes below its physical resolution: with `max_size=1920` a
  * 1080x2400 device encodes at 864x1920, so sending physical dimensions drops
  * every touch. Verified against scrcpy 4.1: 864x1920 works, and 1080x2400,
  * 880x1920 and 864x1912 are all dropped.
@@ -86,7 +85,7 @@ function releasePointer(el: Element, pointerId: number) {
 }
 
 // scrcpy takes scroll as discrete clicks, while wheel deltas are pixels that
-// grow downward — Android's axes point the other way, hence the negation. A
+// grow downward, Android's axes point the other way, hence the negation. A
 // small-but-nonzero delta still has to move one click or fine-grained trackpad
 // scrolling does nothing. Returning early on a zero delta keeps a horizontal
 // wheel event from injecting a phantom vertical click, and avoids the `-0`
@@ -116,7 +115,7 @@ export class DeviceControlBridge {
 
   /**
    * Track the encoded video size. Must be kept in sync with the `<video>`'s
-   * `videoWidth`/`videoHeight` — including after a device rotation, which
+   * `videoWidth`/`videoHeight`, including after a device rotation, which
    * re-encodes at swapped dimensions and would otherwise silently break touch
    * until the tab is reopened.
    */
@@ -170,7 +169,7 @@ export class DeviceControlBridge {
   // the up lands first the device would see Down -> Up -> Move and treat that
   // finger as still held. The up carries the authoritative final position, so
   // dropping the queued move loses nothing. Only this pointer's move is
-  // discarded — other fingers still down keep theirs.
+  // discarded, other fingers still down keep theirs.
   private discardPendingMove(pointerId: number) {
     this.pendingMoves.delete(pointerId);
     if (this.pendingMoves.size === 0 && this.rafId !== null) {
@@ -201,7 +200,7 @@ export class DeviceControlBridge {
     this.scheduleFlush();
   }
 
-  /// Number of fingers currently down. Exposed for tests and diagnostics.
+  // Number of fingers currently down. Exposed for tests and diagnostics.
   public get activePointerCount() {
     return this.activePointers.size;
   }
@@ -272,7 +271,7 @@ export class DeviceControlBridge {
     }).catch((err) => console.error("[controlBridge] send_key failed:", err));
   }
 
-  /// Android only acts on a key once it sees the matching up.
+  // Android only acts on a key once it sees the matching up.
   public pressKey(keycode: number) {
     this.sendKey(keycode, 0);
     this.sendKey(keycode, 1);

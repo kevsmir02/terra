@@ -1,9 +1,10 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 
 export const DOCK_DEFAULT_WIDTH = 340;
 export const DOCK_MIN_WIDTH = 240;
-export const DOCK_MAX_WIDTH = 640;
+export const DOCK_MAX_WIDTH = 960;
 
 const DOCK_WIDTH_STORAGE_KEY = "terra.deviceDock.width";
 
@@ -22,7 +23,7 @@ export function readDockWidth(): number {
 }
 
 /**
- * Dock state, mirroring useSidebarPanel. The docked serial is deliberately not
+ * Dock state, mirroring useSidebarPanel. The docked device is deliberately not
  * persisted: reconnecting on startup to a device that has since disappeared
  * surfaces an error before the user has done anything.
  */
@@ -30,7 +31,7 @@ export function useDeviceDock() {
   const dockRef = useRef<PanelImperativeHandle | null>(null);
   const dockWidthRef = useRef(readDockWidth());
   const widthWriteTimerRef = useRef(0);
-  const [serial, setSerial] = useState<string | null>(null);
+  const [device, setDevice] = useState<DeviceEntry | null>(null);
 
   const persistDockWidth = useCallback((next: number) => {
     const clamped = clampDockWidth(next);
@@ -54,20 +55,20 @@ export function useDeviceDock() {
 
   // Picking the already-docked device just re-expands it, so the live scrcpy
   // session is reused instead of being torn down and restarted.
-  const dockDevice = useCallback((next: string) => {
-    setSerial(next);
+  const dockDevice = useCallback((next: DeviceEntry) => {
+    setDevice(next);
     dockRef.current?.resize(`${dockWidthRef.current}px`);
   }, []);
 
   const stopDevice = useCallback(() => {
-    setSerial(null);
+    setDevice(null);
     dockRef.current?.collapse();
   }, []);
 
   return {
     dockRef,
     dockWidthRef,
-    serial,
+    device,
     dockDevice,
     stopDevice,
     persistDockWidth,

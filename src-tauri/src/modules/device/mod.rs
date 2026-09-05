@@ -6,5 +6,6 @@ pub mod scrcpy_server_version;
 pub mod server;
 pub mod session;
 pub mod state;
+pub mod timeline;
 
 pub use state::DeviceState;

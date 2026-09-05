@@ -43,6 +43,14 @@ describe("clampDockWidth", () => {
     expect(clampDockWidth(5000)).toBe(DOCK_MAX_WIDTH);
   });
 
+  // Pins the widened bound to its literal value: a relative comparison against
+  // DOCK_MAX_WIDTH alone would keep passing even if the constant regressed.
+  it("raises the maximum to 960 for a wider dock", () => {
+    expect(DOCK_MAX_WIDTH).toBe(960);
+    expect(clampDockWidth(960)).toBe(960);
+    expect(clampDockWidth(961)).toBe(960);
+  });
+
   it("rounds fractional widths from pixel drags", () => {
     expect(clampDockWidth(341.6)).toBe(342);
   });
@@ -102,6 +110,16 @@ describe("the dock is the only device surface", () => {
   it("has no device-preview tab kind left in the codebase", () => {
     const hits = execSync(
       "grep -rn 'device-preview\\|DevicePreviewTab\\|newDevicePreviewTab' src/ --exclude=useDeviceDock.test.ts || true",
+      { cwd: repoRoot, encoding: "utf8" },
+    ).trim();
+    expect(hits).toBe("");
+  });
+
+  // The IPC shape has exactly one declaration (the ts-rs generated
+  // DeviceEntry); a hand-rolled copy anywhere else can silently drift from it.
+  it("has no hand-written copy of the device IPC shape", () => {
+    const hits = execSync(
+      "grep -rn 'serial: string; state: string' src/modules/device --exclude=useDeviceDock.test.ts || true",
       { cwd: repoRoot, encoding: "utf8" },
     ).trim();
     expect(hits).toBe("");

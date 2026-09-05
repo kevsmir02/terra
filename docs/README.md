@@ -17,6 +17,12 @@ If a guide conflicts with `TERRA.md`, `TERRA.md` wins.
 - [Security model](architecture/security-model.md) - SSRF guard, workspace authorization, IPC allowlist, OSC trust.
 - [Terminal renderer pool](architecture/terminal-renderer-pool.md) - slot pooling, the DormantRing, and the never-serialize-mid-command invariant.
 
+## Decisions
+
+Architecture decision records live in [adr/](adr/), numbered and append-only: a superseded record is marked, not deleted.
+
+- [0001 - The device mirror does not reconnect automatically](adr/0001-mirror-does-not-reconnect-automatically.md) - why a dead mirror waits for a Reconnect click instead of respawning the way the language server host does.
+
 ## Contributing guides
 
 - [Testing](contributing/testing.md) - the testing contract, how to run checks, and what makes a good core-subsystem test.

@@ -49,6 +49,7 @@ base64 = "0.22"
 [dev-dependencies]
 proptest = "1"
 tempfile = "3"
+ts-rs = "12"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
