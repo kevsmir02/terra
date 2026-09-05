@@ -2,7 +2,7 @@
 /// the start codes). Recognizes both the 4-byte `00 00 00 01` start code and
 /// the 3-byte `00 00 01` start code per the H.264 spec. Pure function so the
 /// parser is unit-testable without a live scrcpy socket.
-pub fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
+fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
     let mut nals = Vec::new();
     let mut i = 0usize;
     let mut unit_start: Option<usize> = None;
@@ -41,7 +41,7 @@ fn push_nonempty(nals: &mut Vec<Vec<u8>>, bytes: &[u8], start: Option<usize>, en
 ///
 /// Only NALs bounded by two start codes are considered complete; with fewer
 /// than two start codes nothing is drained (the whole `buf` is retained).
-pub fn drain_complete_nals(buf: &mut Vec<u8>) -> Vec<Vec<u8>> {
+fn drain_complete_nals(buf: &mut Vec<u8>) -> Vec<Vec<u8>> {
     let mut sc: Vec<(usize, usize)> = Vec::new();
     let mut i = 0usize;
     while i + 2 < buf.len() {
@@ -214,6 +214,8 @@ pub enum Segment {
 /// bootstrapped yet rather than panicking or emitting a broken avcC.
 #[derive(Default)]
 pub struct StreamAssembler {
+    /// Annex-B bytes accumulated across reads, not yet provably complete NALs.
+    buf: Vec<u8>,
     builder: Option<Fmp4Builder>,
     sps: Option<Vec<u8>>,
     pps: Option<Vec<u8>>,
@@ -227,7 +229,26 @@ impl StreamAssembler {
         self.builder.is_some()
     }
 
-    pub fn push(&mut self, nal: Vec<u8>, out: &mut Vec<Segment>) {
+    /// Append newly read bytes to the framing buffer and process every NAL
+    /// unit that is now provably complete (bounded by two start codes). A
+    /// unit split across reads waits in the buffer for the next call.
+    pub fn push_bytes(&mut self, bytes: &[u8], out: &mut Vec<Segment>) {
+        self.buf.extend_from_slice(bytes);
+        for nal in drain_complete_nals(&mut self.buf) {
+            self.push(nal, out);
+        }
+    }
+
+    /// End of stream: the trailing NAL has no closing start code to prove it
+    /// complete, so split whatever is left in the framing buffer outright.
+    pub fn finish(&mut self, out: &mut Vec<Segment>) {
+        let remaining = std::mem::take(&mut self.buf);
+        for nal in split_nal_units(&remaining) {
+            self.push(nal, out);
+        }
+    }
+
+    fn push(&mut self, nal: Vec<u8>, out: &mut Vec<Segment>) {
         let Some(&header) = nal.first() else { return };
         match header & 0x1F {
             7 => {
@@ -747,6 +768,74 @@ mod tests {
         }
         match &out[2] {
             Segment::Media(m) => assert_eq!(&m[108..], P_SLICE.as_slice()),
+            other => panic!("expected media, got {other:?}"),
+        }
+    }
+
+    /// Annex-B byte stream (4-byte start codes) for the given NALs, the way
+    /// bytes actually arrive off the scrcpy socket.
+    fn nal_stream(nals: &[&[u8]]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for nal in nals {
+            bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+            bytes.extend_from_slice(nal);
+        }
+        bytes
+    }
+
+    #[test]
+    fn assembler_emits_init_exactly_once_and_before_first_media() {
+        let bytes = nal_stream(&[
+            &SPS_HIGH_31, &PPS, &IDR, &P_SLICE, &SPS_HIGH_31, &PPS, &P_SLICE,
+        ]);
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&bytes, &mut out);
+        a.finish(&mut out);
+
+        let init_count = out.iter().filter(|s| matches!(s, Segment::Init(_))).count();
+        assert_eq!(init_count, 1, "a repeated SPS+PPS mid-stream must not re-emit the init segment");
+        assert!(matches!(out[0], Segment::Init(_)), "the init segment must lead the output");
+    }
+
+    #[test]
+    fn assembler_reassembles_a_nal_split_across_two_reads() {
+        let bytes = nal_stream(&[&SPS_HIGH_31, &PPS, &IDR, &P_SLICE]);
+        // Land inside the IDR NAL's payload bytes, not on a start-code boundary.
+        let idr_payload_start = bytes.len() - PPS.len() - P_SLICE.len() - 4;
+        let split_at = idr_payload_start + 2;
+
+        let mut whole = StreamAssembler::default();
+        let mut out_whole = Vec::new();
+        whole.push_bytes(&bytes, &mut out_whole);
+        whole.finish(&mut out_whole);
+
+        let mut split = StreamAssembler::default();
+        let mut out_split = Vec::new();
+        split.push_bytes(&bytes[..split_at], &mut out_split);
+        split.push_bytes(&bytes[split_at..], &mut out_split);
+        split.finish(&mut out_split);
+
+        assert!(!out_whole.is_empty());
+        assert_eq!(out_whole, out_split, "a NAL split across two reads must reassemble identically");
+    }
+
+    #[test]
+    fn assembler_buffers_pre_bootstrap_slices_and_flushes_in_order_from_bytes() {
+        let bytes = nal_stream(&[&IDR, &P_SLICE, &SPS_HIGH_31, &PPS]);
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&bytes, &mut out);
+        a.finish(&mut out);
+
+        assert_eq!(out.len(), 3);
+        assert!(matches!(&out[0], Segment::Init(_)));
+        match &out[1] {
+            Segment::Media(m) => assert_eq!(&m[108..], IDR.as_slice(), "the first media segment must be the IDR"),
+            other => panic!("expected media, got {other:?}"),
+        }
+        match &out[2] {
+            Segment::Media(m) => assert_eq!(&m[108..], P_SLICE.as_slice(), "media segments must stay in arrival order"),
             other => panic!("expected media, got {other:?}"),
         }
     }

@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use terra_lib::modules::device::remux::{split_nal_units, Fmp4Builder};
+use terra_lib::modules::device::remux::Fmp4Builder;
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -14,16 +14,37 @@ fn fixture_path() -> PathBuf {
         .join("scrcpy-annexb-sample.bin")
 }
 
+/// Annex-B NAL boundary scanner for this fixture's 4-byte start codes only.
+/// `remux`'s own splitter is private (framing is an internal assembler
+/// concern), so this test isolates the known SPS/PPS/IDR triplet on its own
+/// to exercise `Fmp4Builder` directly against real captured bytes.
+fn split_4byte_start_codes(bytes: &[u8]) -> Vec<&[u8]> {
+    let mut starts = Vec::new();
+    for i in 0..bytes.len().saturating_sub(3) {
+        if bytes[i] == 0 && bytes[i + 1] == 0 && bytes[i + 2] == 0 && bytes[i + 3] == 1 {
+            starts.push(i + 4);
+        }
+    }
+    starts
+        .iter()
+        .enumerate()
+        .map(|(idx, &start)| {
+            let end = starts.get(idx + 1).map_or(bytes.len(), |&next| next - 4);
+            &bytes[start..end]
+        })
+        .collect()
+}
+
 #[test]
 fn device_remux_fixture_produces_valid_init_and_fragment() {
     let bytes = std::fs::read(fixture_path()).expect("fixture must exist");
     assert_eq!(bytes.len(), 5409);
 
-    let nals = split_nal_units(&bytes);
+    let nals = split_4byte_start_codes(&bytes);
     assert_eq!(nals.len(), 3, "fixture must contain SPS + PPS + IDR NALs");
-    let sps = &nals[0];
-    let pps = &nals[1];
-    let idr = &nals[2];
+    let sps = nals[0];
+    let pps = nals[1];
+    let idr = nals[2];
 
     // Sanity: SPS type 7, PPS type 8, IDR type 5.
     assert_eq!(sps[0] & 0x1F, 7);
@@ -57,12 +78,12 @@ fn device_remux_fixture_produces_valid_init_and_fragment() {
     assert_eq!(init[body + 5], 0xE1, "reserved + numSPS=1");
     let sps_len = u16::from_be_bytes([init[body + 6], init[body + 7]]) as usize;
     assert_eq!(sps_len, sps.len());
-    assert_eq!(&init[body + 8..body + 8 + sps_len], sps.as_slice());
+    assert_eq!(&init[body + 8..body + 8 + sps_len], sps);
     let pps_off = body + 8 + sps_len;
     assert_eq!(init[pps_off], 1, "numPPS == 1");
     let pps_len = u16::from_be_bytes([init[pps_off + 1], init[pps_off + 2]]) as usize;
     assert_eq!(pps_len, pps.len());
-    assert_eq!(&init[pps_off + 3..pps_off + 3 + pps_len], pps.as_slice());
+    assert_eq!(&init[pps_off + 3..pps_off + 3 + pps_len], pps);
 
     // Media fragment: must start with moof.
     let frag = builder.append_nal(idr);
@@ -85,7 +106,7 @@ fn device_remux_fixture_produces_valid_init_and_fragment() {
         frag[mdat_body + 3],
     ]) as usize;
     assert_eq!(nal_len, idr.len(), "mdat length prefix must equal IDR NAL length");
-    assert_eq!(&frag[mdat_body + 4..mdat_body + 4 + nal_len], idr.as_slice());
+    assert_eq!(&frag[mdat_body + 4..mdat_body + 4 + nal_len], idr);
 
     // A second fragment must use sequence_number = 2 (per-session increment).
     let frag2 = builder.append_nal(idr);

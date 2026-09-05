@@ -10,7 +10,7 @@ use tauri::ipc::Channel;
 use tokio::sync::mpsc;
 
 use super::control::{serialize_control_message, ControlMessage};
-use super::remux::{drain_complete_nals, split_nal_units, Segment, StreamAssembler};
+use super::remux::{Segment, StreamAssembler};
 use super::state::SerialReservation;
 use crate::modules::sync::MutexExt;
 
@@ -250,10 +250,11 @@ impl Drop for DeviceSession {
     }
 }
 
-/// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)`, split
-/// it into NAL units and feed them through a `StreamAssembler`, forwarding each
-/// resulting segment on `channel`. `Channel::send` is synchronous (it just queues
-/// for the webview), so no async runtime is needed in this thread.
+/// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)` and
+/// feed it through a `StreamAssembler`, forwarding each resulting segment on
+/// `channel`. Framing lives in the assembler; this loop only does IO.
+/// `Channel::send` is synchronous (it just queues for the webview), so no
+/// async runtime is needed in this thread.
 fn run_read_loop(
     local_port: u16,
     channel: Channel<DeviceFrame>,
@@ -317,7 +318,6 @@ fn run_read_loop(
         }
     };
 
-    let mut buf: Vec<u8> = Vec::new();
     let mut read_buf = [0u8; 65536];
     let mut assembler = StreamAssembler::default();
     let mut segments: Vec<Segment> = Vec::new();
@@ -336,17 +336,12 @@ fn run_read_loop(
         };
 
         if n == 0 {
-            for nal in split_nal_units(&buf) {
-                assembler.push(nal, &mut segments);
-            }
+            assembler.finish(&mut segments);
             send_segments(&channel, &mut segments);
             break;
         }
 
-        buf.extend_from_slice(&read_buf[..n]);
-        for nal in drain_complete_nals(&mut buf) {
-            assembler.push(nal, &mut segments);
-        }
+        assembler.push_bytes(&read_buf[..n], &mut segments);
         send_segments(&channel, &mut segments);
     }
 }
