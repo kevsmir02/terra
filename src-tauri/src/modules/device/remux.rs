@@ -593,7 +593,7 @@ fn build_moov(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
     let mut moov_p = Vec::new();
     moov_p.extend_from_slice(&mvhd);
     moov_p.extend_from_slice(&trak);
-    // mvex (Movie Extends Box) is REQUIRED by Chrome's fMP4 parser — without it
+    // mvex (Movie Extends Box) is REQUIRED by Chrome's fMP4 parser, without it
     // the moov declares a regular (non-fragmented) movie and the browser silently
     // rejects all moof+mdat media fragments. Contains a trex per track.
     moov_p.extend_from_slice(&build_mvex());

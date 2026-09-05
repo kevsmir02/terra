@@ -71,7 +71,7 @@ export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: 
   return (
     <Shell title="No active devices connected" icon={SmartPhone01Icon} narrow={narrow}>
       <p className="mb-2">
-        Plug in a physical device via USB, or launch an emulator below — it runs headless and
+        Plug in a physical device via USB, or launch an emulator below, it runs headless and
         streams here, so no separate emulator window opens.
       </p>
 

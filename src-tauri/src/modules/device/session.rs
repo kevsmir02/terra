@@ -155,7 +155,7 @@ impl ShutdownOps for Teardown {
 }
 
 pub struct DeviceSession {
-    pub id: u32,
+    pub handle: u32,
     pub serial: String,
     control_tx: Option<mpsc::Sender<ControlMessage>>,
     stopping: Arc<AtomicBool>,
@@ -174,7 +174,7 @@ impl DeviceSession {
     /// this spawn fails.
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
-        id: u32,
+        handle: u32,
         adb: PathBuf,
         jar: PathBuf,
         serial: String,
@@ -222,7 +222,7 @@ impl DeviceSession {
         });
 
         Ok(Self {
-            id,
+            handle,
             serial: serial.clone(),
             control_tx: Some(tx),
             stopping,
@@ -241,9 +241,9 @@ impl DeviceSession {
     }
 
     #[cfg(test)]
-    pub(super) fn stub(id: u32, serial: &str, control_tx: mpsc::Sender<ControlMessage>) -> Self {
+    pub(super) fn stub(handle: u32, serial: &str, control_tx: mpsc::Sender<ControlMessage>) -> Self {
         Self {
-            id,
+            handle,
             serial: serial.to_string(),
             control_tx: Some(control_tx),
             stopping: Arc::new(AtomicBool::new(false)),

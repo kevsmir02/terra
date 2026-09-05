@@ -83,7 +83,7 @@ function releasePointer(el: Element, pointerId: number) {
 }
 
 // scrcpy takes scroll as discrete clicks, while wheel deltas are pixels that
-// grow downward — Android's axes point the other way, hence the negation. A
+// grow downward, Android's axes point the other way, hence the negation. A
 // small-but-nonzero delta still has to move one click or fine-grained trackpad
 // scrolling does nothing. Returning early on a zero delta keeps a horizontal
 // wheel event from injecting a phantom vertical click, and avoids the `-0`
@@ -113,7 +113,7 @@ export class DeviceControlBridge {
 
   /**
    * Track the encoded video size. Must be kept in sync with the `<video>`'s
-   * `videoWidth`/`videoHeight` — including after a device rotation, which
+   * `videoWidth`/`videoHeight`, including after a device rotation, which
    * re-encodes at swapped dimensions and would otherwise silently break touch
    * until the tab is reopened.
    */
@@ -167,7 +167,7 @@ export class DeviceControlBridge {
   // the up lands first the device would see Down -> Up -> Move and treat that
   // finger as still held. The up carries the authoritative final position, so
   // dropping the queued move loses nothing. Only this pointer's move is
-  // discarded — other fingers still down keep theirs.
+  // discarded, other fingers still down keep theirs.
   private discardPendingMove(pointerId: number) {
     this.pendingMoves.delete(pointerId);
     if (this.pendingMoves.size === 0 && this.rafId !== null) {

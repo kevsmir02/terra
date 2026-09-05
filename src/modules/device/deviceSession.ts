@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { DeviceControlBridge } from "./controlBridge";
+import { isReady } from "./device";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 import { MsePlayer } from "./MsePlayer";
 
@@ -188,7 +189,7 @@ export function openDeviceSession(opts: {
         onStatus({ kind: "unauthorized", serial });
         return;
       }
-      if (match.state !== "device") {
+      if (!isReady(match)) {
         onStatus({ kind: "error", message: `Device state: ${match.state}` });
         return;
       }

@@ -151,7 +151,7 @@ fn emit_boot(app: &tauri::AppHandle, name: &str, serial: &str, phase: &str, mess
 /// Polls until Android reports `sys.boot_completed`.
 ///
 /// If the emulator dies first, retrying on software rendering is only correct
-/// when the host genuinely cannot provide GL — i.e. there is no display server.
+/// when the host genuinely cannot provide GL, i.e. there is no display server.
 /// On a desktop the AVD's own renderer is right and forcing a different one is
 /// what breaks it, so there we fail fast and report the emulator's own log
 /// rather than crashing a second time.
@@ -192,7 +192,7 @@ fn await_boot(
 
             if !may_retry_on_software_gpu {
                 let detail = match reason {
-                    Some(r) => format!("emulator exited before Android finished booting — {r}"),
+                    Some(r) => format!("emulator exited before Android finished booting, {r}"),
                     None => "emulator exited before Android finished booting".to_string(),
                 };
                 log::warn!("[device] {serial}: {detail}");
@@ -231,7 +231,7 @@ fn await_boot(
         }
 
         let visible = list_devices(&adb)
-            .map(|d| d.iter().any(|e| e.serial == serial && e.state == "device"))
+            .map(|d| d.iter().any(|e| e.serial == serial && e.is_ready()))
             .unwrap_or(false);
         if visible {
             if !announced_booting {
@@ -307,10 +307,10 @@ pub async fn device_open(
     let adb = resolve_adb_path()?;
     let jar = state.jar_path(&app)?;
     let (video_port, control_port) = ephemeral_ports()?;
-    let id = state.next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let handle = state.next_handle.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let session = tauri::async_runtime::spawn_blocking(move || {
         DeviceSession::spawn(
-            id,
+            handle,
             adb,
             jar,
             serial,
@@ -323,8 +323,8 @@ pub async fn device_open(
     })
     .await
     .map_err(|e| format!("device_open join: {e}"))??;
-    state.sessions.write_or_recover().insert(id, session);
-    Ok(id)
+    state.sessions.write_or_recover().insert(handle, session);
+    Ok(handle)
 }
 
 /// Idempotent: an unknown or already-closed handle is a no-op. The teardown

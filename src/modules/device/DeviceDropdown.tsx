@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { CreateAvd } from "./CreateAvd";
-import { deviceDisplayName } from "./device";
+import { deviceDisplayName, isReady } from "./device";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
 
@@ -82,10 +82,10 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                 <li key={d.serial}>
                   <button
                     type="button"
-                    disabled={d.state !== "device"}
+                    disabled={!isReady(d)}
                     onClick={() => onPick(d)}
                     className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/(--emph-medium) disabled:opacity-50"
-                    title={d.state === "device" ? "Open device preview" : `state: ${d.state}`}
+                    title={isReady(d) ? "Open device preview" : `state: ${d.state}`}
                   >
                     <span className="truncate">{deviceDisplayName(d)}</span>
                     <span className="shrink-0 whitespace-nowrap text-muted-foreground">
@@ -129,7 +129,7 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                 // boot) has no live session, so picking it must be a no-op
                 // rather than a silent dead click.
                 const readyDevice = runningSerial
-                  ? devices?.find((d) => d.serial === runningSerial && d.state === "device")
+                  ? devices?.find((d) => d.serial === runningSerial && isReady(d))
                   : undefined;
                 return (
                   <div key={avd.name} className="flex items-center gap-1">
