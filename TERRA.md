@@ -1,66 +1,92 @@
 # TERRA.md
 
-Terra loads `TERRA.md` from the workspace root as agent memory (similar to AGENTS.md / CLAUDE.md). This file is also the project's living architecture doc - read it before making changes.
+Terra loads `TERRA.md` from the workspace root as agent memory (similar to AGENTS.md / CLAUDE.md). It is also the project's living architecture doc: read it before making changes, and update it in the same change whenever an invariant, gate, or module boundary moves. Long-form guides under `docs/` elaborate on it; if anything conflicts, `TERRA.md` wins.
 
-## Project
+## Product
 
-**Terra**: open-source terminal IDE. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client.
+**Terra** is a lightweight, terminal-first IDE for developers who spend their day in agent harnesses (Claude Code, Codex, Gemini CLI, Pi, OpenCode, Antigravity and the like) rather than typing code by hand. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client.
 
-- Frontend checks: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm knip`, `pnpm audit` (CI runs `--prod` and the full tree as separate steps)
-- Rust checks: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cd src-tauri && cargo nextest run --locked` (local fallback: `cargo test --locked`), `cd src-tauri && cargo audit`
+The terminal is the product. Everything else (editor, explorer, source control, preview, device mirror, language servers, services) exists so the user can read, verify, and touch up what an agent produced without leaving the window. Each of those surfaces is **on demand**: dormant until opened or enabled, dormant again when closed.
 
-`pnpm lint` runs with `--error-on-warnings`: biome warnings fail the build, so a
-deliberate exception needs a `// biome-ignore <rule>: <reason>` naming the reason,
-not a growing warning count. Accepted Rust advisories live in
-`src-tauri/.cargo/audit.toml` with their rationale; anything unlisted fails.
+Lightweight is measured, not asserted. The eager startup graph, the total client bundle, and idle work all have gates (see **Budgets**), and Terra stays small by keeping features dormant rather than by refusing them. Heavy IDE machinery (debuggers, refactoring engines, project-wide indexers, package-manager UIs, document hosts) is out of scope; `ROADMAP.md` is the authority on direction and lists what is deliberately out.
 
-## Quality bar
+Cross-platform parity (macOS, Linux, Windows, WSL) and security by default (every disk and process access gated by the workspace registry) hold for every feature.
 
-Production-grade or it does not ship. Every change is judged against all of these, not just "it works":
+## On demand
 
-- **Correctness**: edge cases, failure modes, concurrent access. No "works for now".
-- **Performance**: ultra-lightweight is the product. ~7-8 MB bundle, high-performance terminal. For every change ask: how much RAM it costs, whether it adds IPC round-trips or redundant requests, whether it triggers extra re-renders or wasted work, whether it pulls a heavy dependency. Unused features consume zero resources.
-- **Security**: no critical security holes. Validate at every boundary (IPC, fs, network).
-- **UI/UX**: polished, professional, premium. Every state and detail considered.
-- **Architecture**: new or changed logic lives in pure, dependency-light functions (functional core); tauri commands and React components stay thin (imperative shell). Keeps it testable without a later rewrite.
+A feature has two states, and both are designed:
 
-Run the checks listed under **Project** before claiming done.
+- **Dormant** (closed, disabled, or never used): no process, no thread, no timer, no PATH probe, no listener doing work, no store subscription, and nothing in the eager bundle beyond the shell that offers to turn it on. Disabled and unset cost the same as absent.
+- **Live** (the user opened or enabled it): owns exactly the resources it needs, bounded (caps, idle shutdown, memory watchdog), and returns to dormant on close, on disable, and on `RunEvent::Exit`.
 
-A change to a core subsystem (terminal/shell spawn, workspace auth, git, fs, IPC) needs a test that locks the invariant.
+Patterns already in the tree, to copy rather than reinvent:
+
+- Frontend surfaces load through `*Lazy.tsx` wrappers (`EditorStackLazy`, `GitDiffStackLazy`, `GitHistoryStackLazy`, `MarkdownStackLazy`, `CommandPaletteLazy`, `DeviceDockLazy`, `SourceControlPanelLazy`, the Settings sections, the block `ShellInput`). `src/app/eager-budget.test.ts` locks the heavy stacks out of both windows' eager graphs and `pnpm size:eager` measures the real startup set from the built HTML.
+- Rust commands spawn nothing until called. Long-lived things (PTYs, LSP servers, device sessions, services, watchers) live in a `*State` and die on close and on exit.
+- Polling exists only while something is live and someone is looking: the services pill polls only while a service is running and the window is focused (`services/lib/pillGate.ts`), the LSP memory watchdog only while a server runs, the AVD boot poll only while a launch is in flight.
+- Opt-in persists in the settings store (`lspActivation`: `enabled` / `dismissed` / unset), and the UI offers a feature only where its tool exists.
+
+A new feature is done when its dormant state costs nothing on the list above, the eager budgets are unchanged, it tears down on close, disable, and exit, and a test locks the invariant (the module stays out of the eager graph, or its state is empty when disabled).
+
+## Budgets
+
+| Budget | Set in | Gate |
+| --- | --- | --- |
+| Eager startup JS per window (entry script plus every `modulepreload`, gzipped) | `eager-budget.json` | `pnpm build && pnpm size:eager` (CI) |
+| Heavy stacks out of the eager graph (`@codemirror`, `streamdown`, ...) | `src/app/eager-budget.test.ts` | `pnpm test` (CI) |
+| Total client JS, gzipped | `.size-limit.json` | `pnpm size` (local) |
+| Language server RSS and session count | `lsp/session.rs` (`DEFAULT_MAX_RSS_MB`), `lsp/lib/sessionManager.ts` (4 per server) | watchdog kills a server over budget; the manager refuses a fifth |
+| Idle work | **On demand** above | review: a new timer, thread, or process needs a live surface to justify it |
+
+Raising a budget is its own reviewed decision, recorded in the commit message with the reason. For every change ask: how much RAM it costs, whether it adds IPC round-trips or redundant requests, whether it triggers extra re-renders or wasted work, whether it pulls a heavy dependency.
+
+## Deliverables
+
+Production-grade or it does not ship. A change is done when all of these hold:
+
+- **Checks green.** CI (`.github/workflows/ci.yml`) is the authority; run its steps locally before claiming done.
+  - Frontend: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm build && pnpm size:eager`, `pnpm knip`, `pnpm audit --prod` and `pnpm audit`.
+  - Rust: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cargo nextest run --locked` (local fallback: `cargo test --locked`), `cargo audit`, then `git diff --exit-code src/modules/device/generated` (the `ts-rs` export must be committed).
+  - `pnpm lint` runs with `--error-on-warnings`: a deliberate exception carries `// biome-ignore <rule>: <reason>`. Accepted Rust advisories live in `src-tauri/.cargo/audit.toml` with their rationale; anything unlisted fails.
+- **Invariant locked.** A change to a core subsystem (terminal/shell spawn, workspace authorization, git, fs, IPC, the dormant state of a feature) ships with a test that fails when the invariant breaks. `docs/contributing/testing.md` has the contract.
+- **Correct under stress.** Edge cases, failure modes, and concurrent access handled. Every boundary (IPC, fs, network, OSC) validates its input.
+- **Within budget.** See **Budgets**. A dormant feature costs nothing.
+- **Cross-platform.** macOS, Linux, Windows, WSL considered; platform code behind `#[cfg(...)]`, paths handled per the frontend conventions below.
+- **Polished.** Every UI state considered (loading, empty, error, disconnected, disabled), keyboard-first, themed through the central engine.
+- **Architected.** New or changed logic lives in pure, dependency-light functions (functional core); Tauri commands and React components stay thin (imperative shell).
+- **Documented.** `TERRA.md` updated when an invariant, gate, or module boundary changed. A decision that would otherwise be re-litigated gets an ADR in `docs/adr/` (numbered, append-only; a superseded record is marked, never deleted).
 
 ## Conventions
 
 - **Comments**: default to none, the code should explain itself. If genuinely needed, 1-2 lines on *why*, never *what*.
 - **No em-dash** anywhere: code, comments, commits, docs.
 - **No emojis** anywhere.
-- **No AI attribution in commits**: never add `Co-Authored-By:` for Claude or any assistant, and never a "Generated with Claude Code" line. Earlier commits carry these; do not copy them when matching commit style. A `commit-msg` hook strips them as a backstop.
+- **Commits**: `type(scope): summary` in the imperative, matching the log. **No AI attribution**: never `Co-Authored-By:` for Claude or any assistant, never a "Generated with Claude Code" line. Earlier commits carry these; do not copy them when matching commit style. A `commit-msg` hook strips them as a backstop.
 - **Imports**: always `@/...` on the frontend, never relative across modules.
 - **pnpm only**, never npm/npx/yarn.
+- **Issues**: GitHub Issues on `kevsmir02/terra` via the `gh` CLI. Triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
 
 ## Architecture
 
 ### Two-process model
 
-**Rust (`src-tauri/`)** owns all OS access. The webview never touches the FS, processes, or shells directly - everything goes through `invoke()` calls to commands registered in `src-tauri/src/lib.rs`:
+**Rust (`src-tauri/`)** owns all OS access. The webview never touches the FS, processes, or shells directly: everything goes through `invoke()` calls to commands registered in `src-tauri/src/lib.rs`. The per-command catalog and the steps for adding a command live in `docs/architecture/two-process-model.md`. The module map:
 
-- `pty::pty_*` - long-lived interactive PTY sessions (xterm ↔ portable-pty), managed by `PtyState` (`RwLock<HashMap<id, Session>>`). Output streams via a Tauri `Channel<PtyEvent>`.
-- `fs::tree::*` (`fs_read_dir`, `list_subdirs`), `fs::file::*` (`fs_read_file`, `fs_write_file`, `fs_stat`, `fs_canonicalize`, `fs_allow_asset`), `fs::mutate::*` (`fs_create_file`, `fs_create_dir`, `fs_rename`, `fs_delete`, `fs_copy`), `fs::watch::*` (`fs_watch_add`, `fs_watch_remove`): file explorer + editor IO.
-- `fs::search::*` (`fs_search`, `fs_list_files`), `fs::grep::*` (`fs_grep`, `fs_grep_interactive`, `fs_glob`): fuzzy file finder + content search (powered by `ignore` + `grep-*` crates).
-- `git::commands::*`: full source-control surface (`git_status`, `git_diff`, `git_diff_content`, `git_stage`, `git_unstage`, `git_discard`, `git_commit`, `git_fetch`, `git_pull_ff_only`, `git_push`, `git_log`, `git_show_commit`, `git_commit_files`, `git_commit_file_diff`, `git_panel_snapshot`, `git_resolve_repo`, `git_remote_url`, `git_list_branches`, `git_checkout_branch`). All gated through the workspace authorization registry.
-- `workspace::*`: `workspace_authorize` / `workspace_current_dir` (the authorization registry) plus the WSL bridge (`wsl_list_distros`, `wsl_default_distro`, `wsl_home`).
-- `shell::shell_run_command`: one-shot command execution for internal tooling (formatters, `git` helpers). Runs through the login shell with a clamped timeout and a 256 KB output cap; cwd goes through `authorize_spawn_cwd`, and the **canonical** path it returns is what the child spawns into.
-- `history::*` (`history_suggest`, `history_commands`, `history_record`, `history_list`): shell-history-backed command suggestions.
-- `device::commands::*` (`device_list`, `device_list_avds`, `device_launch_avd`, `device_stop_avd`, `device_list_system_images`, `device_create_avd`, `device_open`, `device_close`, `device_send_touch`, `device_send_key`, `device_send_scroll`): Android device/emulator mirroring. See **Device module** below.
-- `updater::*` (`updater_package_kind`, `updater_download`, `updater_install`): package-aware update flow around `tauri-plugin-updater`.
-- `services::*` (`services_status`, `services_up`, `services_down`, `services_delete_data`): optional local hosting services for databases, mail, web, and project sites.
-- `agent::*` (`agent_enable_hooks`, `agent_hooks_status`), `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
-- `lsp::*` (`lsp_detect`, `lsp_host_pid`, `lsp_resolve_root`, `lsp_spawn`, `lsp_send`, `lsp_kill`): language server process host. Dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the workspace registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). All sessions killed on `RunEvent::Exit`.
-- `open_settings_window`: separate webview window for Settings (optional `tab` arg deep-links a section).
+- `pty::*`: long-lived interactive PTY sessions (xterm to portable-pty), managed by `PtyState` (`RwLock<HashMap<id, Session>>`); output streams via a Tauri `Channel<PtyEvent>`. The reader thread hosts two byte filters, agent detection (`agent_detect.rs`) and dev-server URL detection (`url_detect.rs`), both zero cost when nothing matches.
+- `fs::*`: explorer and editor IO (`tree`, `file`, `mutate`, `watch`), fuzzy finder and content search (`search`, `grep`, powered by `ignore` + `grep-*`).
+- `git::commands::*`: the full source-control surface, all gated through the workspace registry.
+- `workspace::*`: the authorization registry (`workspace_authorize` / `workspace_current_dir`) plus the WSL bridge.
+- `shell::shell_run_command`: one-shot execution for internal tooling (formatters). Login shell, clamped timeout, 256 KB output cap; cwd goes through `authorize_spawn_cwd`, and the **canonical** path it returns is what the child spawns into.
+- `history::*`: shell-history-backed suggestions for the block shell input.
+- `lsp::*`: language server process host. A dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). A per-server memory watchdog kills a server over its RSS budget after a startup grace. All sessions killed on `RunEvent::Exit`.
+- `device::*`: Android device and emulator mirroring (see **Device module**).
+- `services::*`: optional local hosting stack (databases, mail, web, project sites) on Docker or Podman; probed from the Settings tab and polled only while a service is running.
+- `agent::*`: installs the agent notification hooks (see **agents/** below). `updater::*`: package-aware update flow around `tauri-plugin-updater`. `open_settings_window` (optional `tab` arg deep-links a section), `open_preview_tab`, `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
 - `migrate::migrate_legacy_app_dirs`: not a command. Runs before the builder, because the store and webview open their identifier-scoped trees during plugin init.
 
 ### Workspace authorization
 
-`WorkspaceRegistry` (`modules/workspace.rs`) is the single answer to "may the webview touch this path". Everything that reaches the disk or spawns a process goes through it - **fs, git, PTY/shell spawn, LSP spawn, and the asset protocol**.
+`WorkspaceRegistry` (`modules/workspace.rs`) is the single answer to "may the webview touch this path". Everything that reaches the disk or spawns a process goes through it: **fs, git, PTY/shell spawn, LSP spawn, and the asset protocol**.
 
 Roots are added only by a user gesture: app launch (cwd + every CLI file argument), `$HOME` at bootstrap, a terminal `cd` (OSC 7 re-authorizes), a space root typed in Settings, and a real OS drag-drop (registered from the `DragDrop` window event in `lib.rs`, *not* from the paths JS hands back). Registering the dropped path itself rather than its parent keeps the grant as narrow as the gesture.
 
@@ -73,7 +99,7 @@ Four gates in `fs/mod.rs`, and picking the wrong one is a real bug:
 | `authorized_entry` | delete, rename source, `fs_stat` | authorizes the **parent**; never resolves the final component, so a symlink is acted on as itself |
 | `authorized_new` | create, rename/copy target | authorizes the nearest existing ancestor, re-joins the missing tail |
 
-Canonicalizing first is what makes the check mean anything: `..` collapses and symlinks resolve, so the root is compared against the real target rather than the spelling. `is_authorized` uses `Path::starts_with`, which is component-wise - never swap it for a string prefix.
+Canonicalizing first is what makes the check mean anything: `..` collapses and symlinks resolve, so the root is compared against the real target rather than the spelling. `is_authorized` uses `Path::starts_with`, which is component-wise; a string prefix would let `/home/user2` pass for `/home/user`.
 
 Commands stay thin shells over a core taking `&WorkspaceRegistry`, so the gate is unit-testable without a Tauri runtime (`fs::mutate::create_file`, `fs::grep::grep`, ...). The invariants are locked in `fs::authorization_tests`.
 
@@ -84,21 +110,25 @@ The asset protocol (`asset://`, used for image/video/audio/PDF previews) has an 
 PTY shells are bootstrapped via injected init scripts in `src-tauri/src/modules/pty/scripts/`:
 
 - **Unix** (`zshenv.zsh`, `zprofile.zsh`, `zlogin.zsh`, `zshrc.zsh`, `bashrc.bash`) for zsh/bash, plus `init.fish` installed to `~/.config/fish/conf.d/terra.fish` for fish. Emit OSC 7 (cwd) and OSC 133 A/B/C/D (prompt boundaries + exit code) so the host can track cwd and detect command boundaries without re-parsing the prompt. Fish 4.0+ writes its own OSC 133 prompt markers; Terra sets `fish_features=no-mark-prompt` and re-asserts its own prompt via `-C` to avoid doubling.
-- **Windows** (`profile.ps1`) - passed via `pwsh -NoLogo -NoExit -ExecutionPolicy Bypass -File <path>`. Wraps the user's existing `prompt` function (after their `$PROFILE` runs) to emit OSC 7 + OSC 133 A/B/D. Shell priority: `pwsh.exe` (PS 7+) → `powershell.exe` (PS 5.1) → `cmd.exe` (no integration). cwd is normalized to backslashes before being passed to ConPTY (`CreateProcessW` misbehaves with forward-slash cwd).
+- **Windows** (`profile.ps1`), passed via `pwsh -NoLogo -NoExit -ExecutionPolicy Bypass -File <path>`. Wraps the user's existing `prompt` function (after their `$PROFILE` runs) to emit OSC 7 + OSC 133 A/B/D. Shell priority: `pwsh.exe` (PS 7+), then `powershell.exe` (PS 5.1), then `cmd.exe` (no integration). cwd is normalized to backslashes before being passed to ConPTY (`CreateProcessW` misbehaves with forward-slash cwd).
 
-`pty/shell_init.rs` is split into `#[cfg(unix)]` / `#[cfg(windows)]` modules - keep new platform-specific code in the right cfg arm.
+`pty/shell_init.rs` is split into `#[cfg(unix)]` / `#[cfg(windows)]` modules; keep new platform-specific code in the right cfg arm.
 
-ConPTY on Windows requires `SPAWN_LOCK` (Mutex) around `openpty + spawn_command` in `session.rs`. Concurrent spawns leave one of the resulting PTYs with a stalled output pipe. Don't remove the lock without verifying first-tab stability under fast tab spam.
+ConPTY on Windows requires `SPAWN_LOCK` (Mutex) around `openpty + spawn_command` in `session.rs`. Concurrent spawns leave one of the resulting PTYs with a stalled output pipe. Keep the lock unless first-tab stability under fast tab spam has been verified without it.
 
-Each ConPTY child is also assigned to a per-session **Job Object** with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`pty/job.rs`). When the Job HANDLE drops - clean shutdown, panic, or even SIGKILL'd Terra process - the kernel kills every descendant of the shell (e.g. `npm run dev` spawned from inside pwsh). Without this Windows orphans the entire process subtree because `TerminateProcess` only kills the immediate child. macOS/Linux rely on `Drop for Session → killer.kill()`; on dev-`Ctrl-C` of `cargo run` destructors don't fire and orphans are possible there too - acceptable for now since dev only.
+Each ConPTY child is also assigned to a per-session **Job Object** with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`pty/job.rs`). When the Job HANDLE drops (clean shutdown, panic, or even a SIGKILL'd Terra process) the kernel kills every descendant of the shell (e.g. `npm run dev` spawned from inside pwsh). Without it Windows orphans the entire process subtree because `TerminateProcess` only kills the immediate child. macOS/Linux rely on `Drop for Session` calling `killer.kill()`; on dev `Ctrl-C` of `cargo run` destructors don't fire and orphans are possible there too, acceptable for now since dev only.
 
 ### Device module (`src-tauri/src/modules/device/`)
 
-Android device and emulator mirroring, driven by the platform-tools on PATH. Vocabulary for this module (device, serial, readiness, AVD, emulator, session, mirror, dock) is defined once in `GLOSSARY.md`. `adb.rs` resolves `adb` / `emulator` / `avdmanager`, parses their output into `DeviceEntry`, and exports that type once via `ts-rs` during `cargo test` into `src/modules/device/generated/DeviceEntry.ts` so the frontend cannot restate it and drift; `DeviceEntry::is_ready` (readiness) replaces comparing the raw `state` string against the literal `"device"` everywhere it is checked. `server.rs` pushes and starts the bundled `scrcpy-server-4.1.jar` (shipped via `bundle.resources`) in frame-metadata mode (`send_frame_meta=true`, device/stream meta and the dummy byte off, `video_bit_rate=4000000`, `clipboard_autosync=false`, `max_size=1920`, `max_fps=30`); each session gets its own `scid` and abstract socket `scrcpy_<scid>`, so two live sessions never collide on the wire, both forwarded ports are claimed explicitly rather than one assumed from the other, and a failed start removes both. `session.rs` owns the live session: `device_open` hands `DeviceSession::spawn` (run in `spawn_blocking`, so opening a session never stalls the IPC thread; `device_close` runs the teardown the same way, since it waits on the adb client) an `on_frame: Channel<Response>` of raw bytes and an `on_exit: Channel<DeviceExit>` (reasons `server-unreachable`, `stream-ended`, `stream-error: <io>`, `stream-corrupt`) sent only when the webview did not itself ask for the stop, so the pane can dim the frozen last frame and offer Reconnect rather than mistake it for a live mirror; the control loop blocks on its receiver instead of polling. `remux.rs` holds the pure `StreamAssembler` (bytes in, encoded frames out): it reads the 12-byte frame-metadata packet header, bootstraps from the CONFIG packet (the init segment is emitted once, a later CONFIG is ignored, so a mid-stream rotation keeps the original geometry until the session restarts), and packages one fMP4 fragment per access unit with sync flags from the KEY_FRAME flag, prefixed with a discriminator byte (`FRAME_INIT` / `FRAME_MEDIA`) on the same raw-byte channel the terminal uses; an oversized packet puts the assembler into a corrupt state and the reader stops. `timeline.rs`'s `FrameTimeline` paces those fragments from the capture's real presentation timestamps, with durations clamped to [1 ms, 100 ms] so MSE never sees a discontinuity. `control.rs` encodes touch/key/scroll control messages; `state.rs` holds sessions and Terra-launched AVDs, all killed on `RunEvent::Exit` (AVDs the user started elsewhere are left alone).
+Android device and emulator mirroring over the platform-tools on PATH, on demand: nothing runs until the dock opens, and `device_close` and `RunEvent::Exit` kill every session and every Terra-launched AVD (AVDs the user started elsewhere are left alone). Vocabulary (device, serial, readiness, AVD, emulator, session, mirror, dock) is defined once in `GLOSSARY.md`; the stream pipeline (scrcpy server, `StreamAssembler` remux, `FrameTimeline` pacing, control protocol, frontend playback policy) is in `docs/architecture/device-mirroring.md`.
 
-On the frontend, `deviceSession.ts` reports `connecting` until the first decoded frame, then `streaming`, and `disconnected` when the session dies unexpectedly, never on its own initiative (dimmed last frame, Reconnect button, no auto-reconnect: `docs/adr/0001-mirror-does-not-reconnect-automatically.md`); `playbackPolicy.ts` is a pure policy that evicts behind the playhead, seeks to live after a stall, and heals a stranded playhead, so memory stays constant no matter how long the dock stays open.
+Invariants to keep:
 
-Every process is spawned argv-style, never through a shell. Two values arrive from IPC and are validated before they reach `adb`: AVD names via `is_safe_avd_name`, and serials via `ensure_safe_serial` (`emulator-5554` and `host:port` shapes only, no leading `-`). Coordinates are `u32`, so they cannot carry an argument. Adding a command that takes a serial means calling `ensure_safe_serial` on it.
+- `DeviceEntry` is exported by `ts-rs` during `cargo test` into `src/modules/device/generated/`; the frontend consumes it and never restates it. Readiness is `DeviceEntry::is_ready`, never a comparison against the literal `"device"`.
+- Every process is spawned argv-style. AVD names pass `is_safe_avd_name`, serials pass `ensure_safe_serial` (`emulator-5554` and `host:port` shapes only, no leading `-`); adding a command that takes a serial means calling it. Coordinates are `u32`, so they cannot carry an argument.
+- `device_open` and `device_close` run in `spawn_blocking`, so a session never stalls the IPC thread.
+- Each session has its own `scid` and abstract socket, both forwarded ports are claimed explicitly, and a failed start removes both.
+- The mirror never reconnects on its own (`docs/adr/0001-mirror-does-not-reconnect-automatically.md`): `on_exit` fires only for stops the webview did not request, and the pane dims the last frame and offers Reconnect.
 
 ### Concurrency
 
@@ -106,43 +136,42 @@ Every process is spawned argv-style, never through a shell. Two values arrive fr
 
 ### Frontend (`src/`)
 
-Single-window React app. Path alias `@/*` → `src/*`. Tabs are a tagged union (`kind`: `terminal` | `editor` | `preview` | `markdown` | `git-diff` | `git-history` | `git-commit-file`) and **not** unmounted on switch - they're hidden via `invisible pointer-events-none` so PTYs and dev servers keep streaming in the background.
+Single-window React app. Path alias `@/*` maps to `src/*`. Tabs are a tagged union (`kind`: `terminal` | `editor` | `preview` | `markdown` | `git-diff` | `git-history` | `git-commit-file`) and **not** unmounted on switch: they're hidden via `invisible pointer-events-none` so PTYs and dev servers keep streaming in the background.
 
-`App.tsx` wires modules together - keep it a coordinator. New features go inside the appropriate `modules/<area>/`.
+`App.tsx` wires modules together; keep it a coordinator. New features go inside the appropriate `modules/<area>/`.
 
 ### Module layout (`src/modules/`)
 
 Each module is self-contained, exports a thin barrel via `index.ts`, and owns its hooks under `lib/`.
 
-- **terminal/** - `TerminalStack` keeps one mounted xterm per tab via `useTerminalSession` + `pty-bridge`. `osc-handlers.ts` parses OSC 7 (with Windows drive-letter normalization: `/C:/Users/foo` → `C:/Users/foo`) and OSC 133 markers. The xterm color palette is driven by the central theme engine (`modules/theme`), not a local table. Renderer slots are pooled (`rendererPool.ts`, max 5): a hidden leaf with a foreground job (OSC 133 C..D, agent signal, or `pty_has_foreground_job`) keeps its live grid parked with rendering paused via `display:none`; an idle hidden leaf releases its slot but the buffer is retained and serialized lazily only when another leaf steals it. The `DormantRing` (1 MiB, no terminal reset on overflow) buffers bytes only for leaves whose slot was stolen or never bound. Never serialize a leaf that is mid-command: replaying incremental TUI repaints over a snapshot is what used to wipe Claude Code.
-- **editor/** - CodeMirror 6 stack (`EditorStack` mirrors `TerminalStack`). `extensions.ts` configures language modes; supports vim mode. Buffers live in LF space and the original EOL (`lib/eol.ts`, majority-vote detection) is restored on save; indent unit/tab size are detected per file (`lib/indent.ts`) via a per-pane compartment. Saves are conflict-checked against the disk mtime returned by `fs_read_file`/`fs_write_file` (mismatch → warning toast with explicit Overwrite, never silent last-writer-wins); external format-on-save only applies the disk read-back if the doc is unchanged since the save snapshot. Files over 10 MB offer "Open anyway" (hard cap 50 MB, `force` arg); above 4 MB syntax highlighting and LSP stay off. Cmd-F routes to CodeMirror's own search panel (find/replace/regex) when an editor tab is active, Ctrl-G opens go-to-line; both panels styled in `chromeTheme.ts`. Format-on-save formatters live in `lib/externalFormat.ts` (`FORMATTERS` registry: biome, prettier, ruff, rustfmt, gofmt, clang-format, shfmt, zig fmt, plus a custom `{file}` command template); `resolveFormatter` applies per-language overrides (`editorFormatterByLang`) over the global default, and a global external default only runs on languages its tool understands. Diff panes resolve the language before mounting CodeMirror: a late compartment reconfigure leaves the merge view's deleted-chunk widgets unhighlighted.
-  Editor code size is stored separately as `editorFontSize` and does not affect `terminalFontSize`.
-- **explorer/** - file tree with Material/Catppuccin icons (`iconResolver.ts`), fuzzy search, keyboard nav, inline rename, context actions. Backslash-aware `basename`.
-- **preview/** - auto-detected dev-server preview tab (status-bar pill suggests opening when a localhost URL is detected).
-- **tabs/** - `useTabs` is the source of truth for tab list + active id. `useWorkspaceCwd` derives explorer root + inherited cwd for new tabs from active tab. `basename` splits on both `/` and `\`.
-- **header/** - top bar + inline search (`SearchInline` adapts to terminal vs editor via `SearchTarget`). `WindowControls` rendered when `USE_CUSTOM_WINDOW_CONTROLS` is true (Linux + Windows; macOS uses native traffic lights).
-- **statusbar/** - bottom bar, `CwdBreadcrumb` (handles Unix paths, Windows drive letters, and home `~` segments via `pathUtils.segmentsFromCwd`).
-- **shortcuts/** - keymap registry (`shortcuts.ts`) + `useGlobalShortcuts`. Handlers live in `App.tsx` and are passed in by id (`tab.new`, …). `metaKey || ctrlKey` for cross-platform Cmd/Ctrl.
-- **settings/** - settings store (`store.ts` via `tauri-plugin-store`), preferences hook, settings window opener. The Settings window includes a Services tab.
-- **services/** - optional local hosting stack status and controls for databases, mail, web, and project sites.
-- **sidebar/** - activity bar + collapsible side panels (explorer, source control, git history).
-- **source-control/** - git status / stage / commit panel and diff workflow.
-- **git-history/** - commit graph rail, refs, per-commit file diffs.
-- **lsp/** - opt-in language server support, zero cost until enabled (no process, no PATH check, nothing in the eager bundle beyond a 14.5 kB shell). Statusbar pill offers Enable (binary found) or Install (with copyable command) per language; activation persists as `lspActivation` in the settings store (`enabled`/`dismissed`/unset). `sessionManager.ts` keys sessions by (server, workspace root), refcounts open docs, idle-kills after 3 min, and crash-backoffs (cooldown before respawn; 3 in 5 min → give up + toast with the server's stderr tail). Resource invariants: **no root marker → no session** (a dirname fallback once spawned a server per directory and burned GBs), hard cap of 4 sessions per server, lean per-preset `initializationOptions` (rust-analyzer: `cachePriming` off + bounded `lru`; tsls: `maxTsServerMemory`). Client is `codemirror-languageserver` behind a lazy import, subclassed (`lib/client.ts`) to add didClose/didSave/shutdown, `textDocument/references` (Shift-F12; multi-result definitions and references share the `locationsPanel.ts` picker) and the publishDiagnostics capability the lib forgets (tsls sends no diagnostics without it); `lib/transport.ts` bridges to the Rust pipe and answers server-to-client requests the lib ignores. `vscode-languageserver-protocol` is aliased to a 4-enum shim in vite.config.ts (~117 kB saved). Presets: typescript, rust-analyzer, pyright, ruff, gopls and more; custom stdio servers via Settings. Several presets can claim one language (pyright and ruff both take `py`): `serverForLanguage` prefers the enabled candidate, so enabling ruff while pyright is unset or dismissed routes Python to ruff. WSL workspaces excluded for now.
-- **markdown/** - markdown preview renderer (backs the `markdown` tab kind).
-- **workspace/** - workspace environment switching (Local + WSL distros).
-- **theme/** - custom theme engine (no `next-themes`). `ThemeProvider` + `applyTheme` write CSS variables; built-in presets in `themes/` (terra-default, nothing, stardew, gameboy, kanagawa, kanagawa-dragon, gruvbox, windows-xp), each optionally declaring an `editorTheme` pairing consumed by `resolveEditorTheme` (see editor/). User themes via `customThemes.ts` + `validateTheme.ts`. Syntax and status colours are derived from each theme's ANSI palette (`derive.ts` + `oklab.ts`, both pure) rather than authored, so a theme colours the editor and the git surfaces without declaring anything extra. Optional background image via `bgImageStore.ts` + `SurfaceLayer`. **Authoring a theme or adding a theme token: read `THEME.md` first.**
-- **updater/** - auto-updater UI built on `tauri-plugin-updater`.
-- **agents/** - agent notifications + management for terminal coding-agents (Claude Code, Codex, Gemini CLI, Pi). Shared store (`store/agentStore.ts`: terminal `sessions` + `notifications`) and a shared router (`lib/route.ts`: suppress when focused-and-visible, OS-notify when unfocused, in-app Sonner toast when focused-but-hidden) feed the header `NotificationBell` (management surface, per-agent hook enable rows). Toasts use Sonner (`components/ui/sonner.tsx`) themed via the central engine; `lib/agentIcon.tsx` renders the per-agent brand mark (Pi logo, Claude/ChatGPT/Gemini hugeicon). Terminal detection is Rust-side (`pty/agent_detect.rs`) on the PTY reader's byte filter, armed on `OSC 133;C;<cmd>` or self-armed by the marker, emitting `terra:agent-signal` transitions (`started`/`working`/`attention`/`finished`/`exited`) driven only by OSC sequences (never raw output, so a repainting TUI never flaps) - zero cost when no agent runs. All terminal agents converge on the same `OSC 777` marker the detector reads, installed via `agent_enable_hooks(agent)` / `agent_hooks_status(agent)` in `modules/agent.rs` (data-driven `AgentSpec` for JSON-hook agents plus a Terra-owned Pi extension; atomic writes, foreign configuration preserved, idempotent; gated on `TERRA_TERMINAL`). Delivery differs because only Claude's hook protocol can return terminal bytes in the hook *response*: **Claude** (`~/.claude/settings.json`, `UserPromptSubmit`/`Notification`/`Stop`) returns the marker via the `terminalSequence` field (legacy 3-field `notify;Terra;<event>`). **Codex** (`~/.codex/hooks.json`, `UserPromptSubmit`/`PermissionRequest`/`Stop`) and **Gemini** (`~/.gemini/settings.json`, `BeforeAgent`/`Notification`/`AfterAgent`, `matcher:"*"`) can't, so the hook *command* emits the 4-field `notify;Terra;<agent>;<event>` marker itself (`printf > /dev/tty` on Unix, or `terra __terra_notify` writing to `CONOUT$` after `AttachConsole` on Windows) and prints `{}` as a JSON stdout no-op (Codex's `Stop` and Gemini both reject empty/non-JSON stdout). **Pi** (`~/.pi/agent/extensions/terra-notifications.ts`) uses `agent_start`/`agent_settled` extension events and writes its named marker directly to stdout. The agent-named marker lets a self-arm name the right agent when no preexec fired (bash/tmux/Windows). The Terra agent path is `ai/components/LocalAgentNotificationsBridge.tsx`, mapping `chatStore.agentMeta` (`awaiting-approval`→attention, busy→idle→finished, `error`) into the same router.
-- **command-palette/** - modal command palette (`CommandPalette.tsx`, `commands.ts`) for actions and navigation.
-- **spaces/** - workspace spaces/projects (name, root, env, color, per-space tab persistence) via `useSpaces` and `SpaceSwitcher`.
+- **terminal/**: `TerminalStack` keeps one mounted xterm per tab via `useTerminalSession` + `pty-bridge`. `osc-handlers.ts` parses OSC 7 (with Windows drive-letter normalization: `/C:/Users/foo` becomes `C:/Users/foo`) and OSC 133 markers. The xterm palette is driven by the central theme engine (`modules/theme`), not a local table. Renderer slots are pooled (`rendererPool.ts`, max 5): a hidden leaf with a foreground job (OSC 133 C..D, agent signal, or `pty_has_foreground_job`) keeps its live grid parked with rendering paused via `display:none`; an idle hidden leaf releases its slot but the buffer is retained and serialized lazily only when another leaf steals it. The `DormantRing` (1 MiB, no terminal reset on overflow) buffers bytes only for leaves whose slot was stolen or never bound. Never serialize a leaf that is mid-command: replaying incremental TUI repaints over a snapshot is what used to wipe Claude Code. `block/` is the block shell input (a CodeMirror input bar with history ghost text, history popover, and path completion) driven by an OSC 133 mode machine (`modeMachine.ts`: prompt / running / alt-screen, pure + tested); it mounts lazily and only for tabs with `blocks` enabled.
+- **editor/**: CodeMirror 6 stack (`EditorStack` mirrors `TerminalStack`). `extensions.ts` configures language modes; supports vim mode. Buffers live in LF space and the original EOL (`lib/eol.ts`, majority-vote detection) is restored on save; indent unit/tab size are detected per file (`lib/indent.ts`) via a per-pane compartment. Saves are conflict-checked against the disk mtime returned by `fs_read_file`/`fs_write_file` (mismatch means a warning toast with explicit Overwrite, never silent last-writer-wins); external format-on-save only applies the disk read-back if the doc is unchanged since the save snapshot. Files over 10 MB offer "Open anyway" (hard cap 50 MB, `force` arg); above 4 MB syntax highlighting and LSP stay off. Cmd-F routes to CodeMirror's own search panel when an editor tab is active, Ctrl-G opens go-to-line; both styled in `chromeTheme.ts`. Format-on-save formatters live in `lib/externalFormat.ts` (`FORMATTERS` registry plus a custom `{file}` command template); `resolveFormatter` applies per-language overrides (`editorFormatterByLang`) over the global default, and a global external default only runs on languages its tool understands. `lib/diagnosticsStore.ts` counts CodeMirror lint diagnostics per file for the statusbar with no server involved. Diff panes resolve the language before mounting CodeMirror: a late compartment reconfigure leaves the merge view's deleted-chunk widgets unhighlighted. Editor code size is stored separately as `editorFontSize` and does not affect `terminalFontSize`.
+- **explorer/**: file tree with Material/Catppuccin icons (`iconResolver.ts`), fuzzy search, keyboard nav, inline rename, context actions, live re-read on fs-watch events. Backslash-aware `basename`.
+- **preview/**: dev-server preview tab. Detection is Rust-side on the PTY byte stream (`pty/url_detect.rs`); the frontend keeps the detected URL per leaf in `devServerStore.ts` and renders a one-click `DevServerChip` on the terminal pane, cleared on shell exit.
+- **tabs/**: `useTabs` is the source of truth for tab list + active id. `useWorkspaceCwd` derives explorer root + inherited cwd for new tabs from the active tab. `basename` splits on both `/` and `\`.
+- **header/**: top bar + inline search (`SearchInline` adapts to terminal vs editor via `SearchTarget`). `WindowControls` rendered when `USE_CUSTOM_WINDOW_CONTROLS` is true (Linux + Windows; macOS uses native traffic lights).
+- **statusbar/**: bottom bar, `CwdBreadcrumb` (Unix paths, Windows drive letters, and home `~` segments via `pathUtils.segmentsFromCwd`), the LSP pill, the lazy services pill.
+- **shortcuts/**: keymap registry (`shortcuts.ts`) + `useGlobalShortcuts`. Handlers live in `App.tsx` and are passed in by id (`tab.new`, ...). `metaKey || ctrlKey` for cross-platform Cmd/Ctrl. Recording a chord previews the actions that already claim it.
+- **settings/**: settings store (`store.ts` via `tauri-plugin-store`), preferences hook, settings window opener. Settings is its own webview window with its own eager budget; sections beyond the first load lazily.
+- **services/**: status and controls for the optional local hosting stack; `lib/pillGate.ts` is the pure policy deciding whether and how often the pill polls.
+- **sidebar/**: activity bar + collapsible side panels (explorer, source control, git history).
+- **source-control/**: git status / stage / commit panel and diff workflow.
+- **git-history/**: commit graph rail, refs, per-commit file diffs.
+- **lsp/**: opt-in language server support, zero cost until enabled (no process, no PATH check, nothing in the eager bundle beyond a 14.5 kB shell). Statusbar pill offers Enable (binary found) or Install (with copyable command) per language; activation persists as `lspActivation` (`enabled`/`dismissed`/unset). `sessionManager.ts` keys sessions by (server, workspace root), refcounts open docs, idle-kills after 3 min, and crash-backoffs (cooldown before respawn; 3 in 5 min means give up + toast with the server's stderr tail). Resource invariants: **no root marker, no session** (a dirname fallback once spawned a server per directory and burned GBs), hard cap of 4 sessions per server, lean per-preset `initializationOptions` (rust-analyzer: `cachePriming` off + bounded `lru`; tsls: `maxTsServerMemory`). Client is `codemirror-languageserver` behind a lazy import, subclassed (`lib/client.ts`) to add didClose/didSave/shutdown, `textDocument/references` (Shift-F12; multi-result definitions and references share the `locationsPanel.ts` picker) and the publishDiagnostics capability the lib forgets (tsls sends no diagnostics without it); `lib/transport.ts` bridges to the Rust pipe and answers server-to-client requests the lib ignores. `vscode-languageserver-protocol` is aliased to a 4-enum shim in vite.config.ts (~117 kB saved). Several presets can claim one language (pyright and ruff both take `py`): `serverForLanguage` prefers the enabled candidate. WSL workspaces excluded for now.
+- **markdown/**: markdown preview renderer (backs the `markdown` tab kind), lazy.
+- **workspace/**: workspace environment switching (Local + WSL distros).
+- **theme/**: custom theme engine (no `next-themes`). `ThemeProvider` + `applyTheme` write CSS variables; built-in presets in `themes/`, each optionally declaring an `editorTheme` pairing consumed by `resolveEditorTheme`. User themes via `customThemes.ts` + `validateTheme.ts`. Syntax and status colours are derived from each theme's ANSI palette (`resolveTheme.ts` + `oklab.ts`, both pure) rather than authored. Optional background image via `bgImageStore.ts` + `SurfaceLayer`; optional fonts load on demand (`fonts.ts`). **Authoring a theme or adding a theme token: read `THEME.md` first.**
+- **updater/**: auto-updater UI built on `tauri-plugin-updater`, dialog out of the startup graph.
+- **agents/**: notifications for the terminal harnesses that are the reason Terra exists. Shared store (`store/agentStore.ts`: terminal `sessions` + `notifications`) and a shared router (`lib/route.ts`: suppress when focused-and-visible, OS-notify when unfocused, in-app Sonner toast when focused-but-hidden) feed the header `NotificationBell` (management surface, per-agent hook enable rows). Toasts use Sonner (`components/ui/sonner.tsx`) themed via the central engine; `lib/agentIcon.tsx` renders the per-agent brand mark.
+  Detection is Rust-side (`pty/agent_detect.rs`) on the PTY reader's byte filter, armed on `OSC 133;C;<cmd>` or self-armed by the marker, emitting `terra:agent-signal` transitions (`started`/`working`/`attention`/`finished`/`exited`) driven only by OSC sequences (never raw output, so a repainting TUI never flaps); zero cost when no agent runs.
+  All harnesses converge on the same `OSC 777` marker the detector reads, installed via `agent_enable_hooks(agent)` / `agent_hooks_status(agent)` in `modules/agent.rs` (data-driven `AgentSpec` for JSON-hook agents plus a Terra-owned Pi extension; atomic writes, foreign configuration preserved, idempotent; gated on `TERRA_TERMINAL`). Delivery differs because only Claude's hook protocol can return terminal bytes in the hook *response*. **Claude** (`~/.claude/settings.json`, `UserPromptSubmit`/`Notification`/`Stop`) returns the marker via the `terminalSequence` field (legacy 3-field `notify;Terra;<event>`). **Codex** (`~/.codex/hooks.json`, `UserPromptSubmit`/`PermissionRequest`/`Stop`) and **Gemini** (`~/.gemini/settings.json`, `BeforeAgent`/`Notification`/`AfterAgent`, `matcher:"*"`) can't, so the hook *command* emits the 4-field `notify;Terra;<agent>;<event>` marker itself (`printf > /dev/tty` on Unix, or `terra __terra_notify` writing to `CONOUT$` after `AttachConsole` on Windows) and prints `{}` as a JSON stdout no-op (Codex's `Stop` and Gemini both reject empty/non-JSON stdout). **Pi** (`~/.pi/agent/extensions/terra-notifications.ts`) uses `agent_start`/`agent_settled` extension events and writes its named marker directly to stdout. The agent-named marker lets a self-arm name the right agent when no preexec fired (bash/tmux/Windows). Supporting a new harness means one `AgentSpec` (or extension) that lands the same marker; the detector and router stay untouched.
+- **command-palette/**: modal command palette (`CommandPalette.tsx`, `commands.ts`) for actions and navigation, lazy.
+- **spaces/**: workspace spaces/projects (name, root, env, color, per-space tab persistence, panel split ratios, `startupCommands` run when a space opens) via `useSpaces` and `SpaceSwitcher`.
 
 ### UI conventions
 
-- **shadcn/ui** is configured (`components.json`, style `radix-luma`, base `mist`, icon lib **hugeicons**). Primitives in `src/components/ui/` - don't hand-edit; re-run `pnpm dlx shadcn add` to upgrade.
-
+- **shadcn/ui** is configured (`components.json`, style `radix-luma`, base `mist`, icon lib **hugeicons**). Primitives in `src/components/ui/`; don't hand-edit, re-run `pnpm dlx shadcn add` to upgrade.
 - Animation: `motion` (Framer Motion successor). Resizable layout: `react-resizable-panels`.
-- Path imports: always `@/…`, never relative across modules.
 - Cross-platform paths: anywhere a path may originate from OSC 7, the explorer, or the OS, normalize separators with `.split(/[\\/]/)` rather than `.split("/")`.
 - Canonical path form on the frontend is **forward-slash**. `homeDir()` returns backslashes on Windows; convert at the boundary (App.tsx setHome). OSC 7 already arrives as forward-slash. Equal canonical strings keep `useFileTree` from wiping its tree and flashing the explorer when `tab.cwd` first arrives.
 
@@ -154,36 +183,27 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 
 ### Tauri capabilities
 
-`src-tauri/capabilities/default.json` is the allowlist for plugin APIs available to the webview. New plugins (dialog, autostart, updater, window-state, store, opener, os, log are wired in `lib.rs`) typically need:
-
-1. `Cargo.toml` dependency
-2. `.plugin(...)` call in `lib.rs` `run()`
-3. capability entry in `default.json`
+`src-tauri/capabilities/default.json` is the allowlist for plugin APIs available to the webview. A new plugin needs the `Cargo.toml` dependency, a `.plugin(...)` call in `lib.rs` `run()`, and a capability entry in `default.json`. Custom commands are covered by the window capability; plugin permissions are not.
 
 ### Cross-platform conventions
 
 - HOME / cache dirs: use the `dirs` crate (`dirs::home_dir()`, `dirs::cache_dir()`), never raw `$HOME` / `%USERPROFILE%`.
 - Shell init scripts: gate Unix-only logic behind `#[cfg(unix)]`; Windows arm in `pty::shell_init::windows`.
-- Terminal input: send `\r` (CR) for Enter, not `\n` (LF) - PowerShell on Windows requires CR.
+- Terminal input: send `\r` (CR) for Enter, not `\n` (LF); PowerShell on Windows requires CR.
 
 ### Bundle config
 
-- `bundle.targets: "all"` plus per-platform sections in `tauri.conf.json`:
-  - **macOS**: `minimumSystemVersion: 13.0`, entitlements at `src-tauri/entitlements.plist`.
-  - **Linux**: deb depends `libwebkit2gtk-4.1-0`, `libgtk-3-0`; rpm `webkit2gtk4.1`, `gtk3`; AppImage bundles its media framework.
-  - **Windows**: NSIS installer in `currentUser` mode (no admin required), WebView2 via `downloadBootstrapper`.
-- Auto-updater configured with a public minisign key; release artifacts at `https://github.com/kevsmir02/terra/releases/latest/download/latest.json`.
-- `bundle.resources` ships `resources/scrcpy-server-*.jar` for the device module.
+`tauri.conf.json` is the source of truth for targets and per-platform bundle sections. The decisions worth knowing: macOS minimum 13.0 with entitlements at `src-tauri/entitlements.plist`; Windows NSIS in `currentUser` mode (no admin) with WebView2 via `downloadBootstrapper`; the auto-updater is signed with a public minisign key and reads `https://github.com/kevsmir02/terra/releases/latest/download/latest.json`; `bundle.resources` ships `resources/scrcpy-server-*.jar` for the device module.
 
 ### Known gotchas
 
-- **React 19 strict mode** double-mounts `useEffect` in dev → terminals spawn twice on first render. The first PTY is cleaned up almost immediately. The `SPAWN_LOCK` mutex serializes this; don't be alarmed by `pty opened id=1` followed by `pty closed id=1` in dev logs.
-- **Windows PowerShell process lifecycle**: `killer.kill()` from `portable-pty` only kills the immediate child. Descendants (e.g. `npm run dev` started inside pwsh) survive unless something else takes them down. The Job Object in `pty/job.rs` handles this for the Terra-process-death case; an explicit `pty_close` from JS also kills only the immediate child + relies on the Job to take the rest. Don't disable the Job without a replacement.
-- **Tab `cwd` storage**: comes from OSC 7 with forward slashes (after `parseOsc7` strips `/C:` → `C:`). Anything that consumes `tab.cwd` and passes it to a Rust fs command on Windows must normalize separators or accept both forms - `apply_common` in `pty::shell_init` handles this for PTY spawn; other call sites must do their own.
+- **React 19 strict mode** double-mounts `useEffect` in dev, so terminals spawn twice on first render. The first PTY is cleaned up almost immediately. The `SPAWN_LOCK` mutex serializes this; `pty opened id=1` followed by `pty closed id=1` in dev logs is expected.
+- **Windows PowerShell process lifecycle**: `killer.kill()` from `portable-pty` only kills the immediate child. Descendants (e.g. `npm run dev` started inside pwsh) survive unless something else takes them down. The Job Object in `pty/job.rs` handles this for the Terra-process-death case; an explicit `pty_close` from JS also kills only the immediate child and relies on the Job to take the rest. The Job stays unless a replacement takes over its role.
+- **Tab `cwd` storage**: comes from OSC 7 with forward slashes (after `parseOsc7` strips `/C:` to `C:`). Anything that consumes `tab.cwd` and passes it to a Rust fs command on Windows must normalize separators or accept both forms; `apply_common` in `pty::shell_init` handles this for PTY spawn, other call sites must do their own.
 
 ## Further reading
 
-- `THEME.md` - authoring a theme: the full token reference, surface classes, terminal palette contrast rules, and font metrics. Read it before writing a theme or adding a theme token.
-- `GLOSSARY.md` - vocabulary for the device module: device, serial, readiness, AVD, emulator, session, mirror, dock.
-
-Long-form contributor guides live under `docs/` (index: `docs/README.md`). These guides elaborate on `TERRA.md`; if anything conflicts, `TERRA.md` wins.
+- `ROADMAP.md`: direction, what is shipped, what is deliberately out of scope.
+- `THEME.md`: authoring a theme, the full token reference, surface classes, terminal palette contrast rules, font metrics. Read it before writing a theme or adding a theme token.
+- `GLOSSARY.md`: vocabulary for the device module.
+- `docs/README.md` indexes the long-form guides: `docs/architecture/two-process-model.md` (per-command IPC catalog, adding a command), `docs/architecture/security-model.md`, `docs/architecture/pty-shell-integration.md`, `docs/architecture/terminal-renderer-pool.md`, `docs/architecture/device-mirroring.md`, `docs/contributing/testing.md`, and the ADRs in `docs/adr/`. These elaborate on `TERRA.md`; if anything conflicts, `TERRA.md` wins.

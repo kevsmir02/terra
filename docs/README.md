@@ -16,6 +16,7 @@ If a guide conflicts with `TERRA.md`, `TERRA.md` wins.
 - [PTY shell integration](architecture/pty-shell-integration.md) - PTY sessions, shell init scripts, OSC 7 / 133, ConPTY, SPAWN_LOCK, Job Object, WSL.
 - [Security model](architecture/security-model.md) - SSRF guard, workspace authorization, IPC allowlist, OSC trust.
 - [Terminal renderer pool](architecture/terminal-renderer-pool.md) - slot pooling, the DormantRing, and the never-serialize-mid-command invariant.
+- [Device mirroring](architecture/device-mirroring.md) - scrcpy server, session lifecycle, remux and pacing, control protocol, input validation, frontend playback policy.
 
 ## Decisions
 
