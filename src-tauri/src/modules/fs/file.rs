@@ -296,7 +296,6 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
     }
 
-    #[cfg(unix)]
     #[test]
     fn does_not_follow_legacy_staging_symlink() {
         use std::os::unix::fs::symlink;

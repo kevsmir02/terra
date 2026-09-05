@@ -192,7 +192,6 @@ mod tests {
     // `forward`, fails the control `forward`, and logs every `forward
     // --remove` it sees so the test can see both ports were cleaned up.
     #[test]
-    #[cfg(unix)]
     fn spawn_server_removes_both_forwards_when_the_control_forward_fails() {
         use std::os::unix::fs::PermissionsExt;
 

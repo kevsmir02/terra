@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use crate::modules::proc::hide_console;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -63,7 +62,6 @@ fn owns(argv: &[&str], exe: &Path) -> bool {
         .arg(exe)
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    hide_console(&mut cmd);
     cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 

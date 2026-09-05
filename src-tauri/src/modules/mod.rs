@@ -4,7 +4,6 @@ pub mod env;
 pub mod fs;
 pub mod git;
 pub mod lsp;
-pub mod proc;
 pub mod pty;
 pub mod sync;
 pub mod updater;

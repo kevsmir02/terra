@@ -22,7 +22,7 @@ Upstream Terax is an *AI-native* terminal workspace. This fork strips the AI sub
 This is my personal workspace tool, not a product.
 
 - **One maintainer, no support.** I work on it when I need something. Updates may land monthly or not for a while.
-- **Linux only.** Developed and used on Fedora; it should run on any current Linux with WebKitGTK. The macOS and Windows code paths inherited from upstream are still in the tree and compile, but nothing is tested there and no release targets them.
+- **Linux only.** Developed and used on Fedora; it should run on any current Linux with WebKitGTK. The macOS and Windows code paths inherited from upstream have been removed.
 - **Public so you can fork it.** Apache-2.0, same as upstream. Take whatever is useful.
 - **Issues are fine, promises are not.** If something is broken you are welcome to open an issue, but expect no timeline. For the AI features, signed releases, and a community, go to [Terax](https://github.com/crynta/terax-ai).
 
@@ -100,7 +100,7 @@ cd src-tauri && cargo nextest run --locked                           # or: cargo
 cd src-tauri && cargo audit
 ```
 
-Pushing a tag runs `release.yml`, which builds the Linux bundles. The macOS job inherited from upstream still runs there but its output is untested.
+Pushing a tag runs `release.yml`, which builds and signs the Linux bundles.
 
 ### Linux notes
 

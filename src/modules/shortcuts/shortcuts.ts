@@ -1,4 +1,3 @@
-import { IS_MAC, MOD_PROP } from "@/lib/platform";
 
 /**
  * Single source of truth for keyboard shortcuts.
@@ -76,128 +75,124 @@ export const SHORTCUTS: Shortcut[] = [
     id: "commandPalette.open",
     label: "Open command palette",
     group: "General",
-    defaultBindings: [{ [MOD_PROP]: true, key: "p" }],
+    defaultBindings: [{ ctrl: true, key: "p" }],
   },
   {
     id: "commandPalette.content",
     label: "Find in files",
     group: "General",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "p" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "p" }],
   },
   {
     id: "settings.open",
     label: "Open settings",
     group: "General",
-    defaultBindings: [{ [MOD_PROP]: true, key: "," }],
+    defaultBindings: [{ ctrl: true, key: "," }],
   },
   {
     id: "tab.new",
     label: "New tab",
     group: "Tabs",
-    defaultBindings: [{ [MOD_PROP]: true, key: "t" }],
+    defaultBindings: [{ ctrl: true, key: "t" }],
   },
   {
     id: "tab.newPrivate",
     label: "New private terminal",
     group: "Tabs",
-    defaultBindings: [{ [MOD_PROP]: true, key: "r" }],
+    defaultBindings: [{ ctrl: true, key: "r" }],
   },
   {
     id: "tab.newPreview",
     label: "New web preview",
     group: "Tabs",
     // Cmd/Ctrl+P now opens the command palette, so web preview moves here.
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "o" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "o" }],
   },
   {
     id: "tab.newEditor",
     label: "New editor tab",
     group: "Tabs",
-    defaultBindings: [{ [MOD_PROP]: true, key: "e" }],
+    defaultBindings: [{ ctrl: true, key: "e" }],
   },
   {
     id: "tab.close",
     label: "Close tab or pane",
     group: "Tabs",
-    defaultBindings: [{ [MOD_PROP]: true, key: "w" }],
+    defaultBindings: [{ ctrl: true, key: "w" }],
   },
   {
     id: "pane.splitRight",
     label: "Split pane right",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, key: "d" }],
+    defaultBindings: [{ ctrl: true, key: "d" }],
   },
   {
     id: "pane.splitDown",
     label: "Split pane down",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "d" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "d" }],
   },
   {
     id: "pane.focusNext",
     label: "Focus next pane",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, key: "]" }],
+    defaultBindings: [{ ctrl: true, key: "]" }],
   },
   {
     id: "pane.focusPrev",
     label: "Focus previous pane",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, key: "[" }],
+    defaultBindings: [{ ctrl: true, key: "[" }],
   },
   {
     id: "pane.swapLeft",
     label: "Swap pane left",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "ArrowLeft" }],
+    defaultBindings: [{ ctrl: true, alt: true, key: "ArrowLeft" }],
   },
   {
     id: "pane.swapRight",
     label: "Swap pane right",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "ArrowRight" }],
+    defaultBindings: [{ ctrl: true, alt: true, key: "ArrowRight" }],
   },
   {
     id: "pane.swapUp",
     label: "Swap pane up",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "ArrowUp" }],
+    defaultBindings: [{ ctrl: true, alt: true, key: "ArrowUp" }],
   },
   {
     id: "pane.swapDown",
     label: "Swap pane down",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, alt: true, key: "ArrowDown" }],
+    defaultBindings: [{ ctrl: true, alt: true, key: "ArrowDown" }],
   },
   {
     id: "pane.source",
     label: "Toggle source panel",
     group: "Panes",
-    defaultBindings: [{ [MOD_PROP]: true, key: "g" }],
+    defaultBindings: [{ ctrl: true, key: "g" }],
   },
   {
     id: "terminal.clear",
     label: "Clear terminal",
     group: "Terminal",
-    // macOS Terminal's ⌘K (clear scrollback, keep the prompt). Default only on
-    // macOS — on other platforms Ctrl+K is readline's kill-line, so we leave it
-    // unbound and let users assign their own in settings.
-    defaultBindings: IS_MAC ? [{ meta: true, key: "k" }] : [],
+    // Ctrl+K is readline's kill-line, so this stays unbound by default; the
+    // user can assign a chord in settings.
+    defaultBindings: [],
   },
   {
     id: "terminal.copy",
     label: "Copy selection",
     group: "Terminal",
-    // macOS routes ⌘C through the webview's own clipboard handling, which
-    // already works; leave it unbound there rather than replacing it. The row
-    // still shows in Settings so a mac user can bind something if they want.
-    defaultBindings: IS_MAC ? [] : [{ ctrl: true, shift: true, key: "c" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "c" }],
   },
   {
     id: "terminal.paste",
     label: "Paste into terminal",
     group: "Terminal",
-    defaultBindings: IS_MAC ? [] : [{ ctrl: true, shift: true, key: "v" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "v" }],
   },
   {
     id: "terminal.newline",
@@ -226,43 +221,43 @@ export const SHORTCUTS: Shortcut[] = [
     id: "tab.selectByIndex",
     label: "Jump to tab 1–9",
     group: "Tabs",
-    defaultBindings: [{ [MOD_PROP]: true, key: "1" }],
+    defaultBindings: [{ ctrl: true, key: "1" }],
   },
   {
     id: "space.next",
     label: "Next space",
     group: "Spaces",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "]" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "]" }],
   },
   {
     id: "space.prev",
     label: "Previous space",
     group: "Spaces",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "[" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "[" }],
   },
   {
     id: "space.overview",
     label: "Open spaces",
     group: "Spaces",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "s" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "s" }],
   },
   {
     id: "explorer.search",
     label: "Search files",
     group: "Search",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "f" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "f" }],
   },
   {
     id: "search.focus",
     label: "Find in tab",
     group: "Search",
-    defaultBindings: [{ [MOD_PROP]: true, key: "f" }],
+    defaultBindings: [{ ctrl: true, key: "f" }],
   },
   {
     id: "agent.focusAttention",
     label: "Jump to agent needing attention",
     group: "Terminal",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "a" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "a" }],
   },
   {
     id: "sidebar.toggle",
@@ -272,23 +267,23 @@ export const SHORTCUTS: Shortcut[] = [
     // where it's handed to the shell / Claude Code (its "run in background"
     // key). Mod+Shift+B always toggles, including from inside a terminal.
     defaultBindings: [
-      { [MOD_PROP]: true, key: "b" },
-      { [MOD_PROP]: true, shift: true, key: "b" },
+      { ctrl: true, key: "b" },
+      { ctrl: true, shift: true, key: "b" },
     ],
   },
   {
     id: "explorer.focus",
     label: "Toggle file explorer focus",
     group: "View",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "e" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "e" }],
   },
   {
     id: "view.zoomIn",
     label: "Zoom in",
     group: "View",
     defaultBindings: [
-      { [MOD_PROP]: true, key: "=" },
-      { [MOD_PROP]: true, shift: true, key: "+" },
+      { ctrl: true, key: "=" },
+      { ctrl: true, shift: true, key: "+" },
     ],
     allowRepeat: true,
   },
@@ -297,8 +292,8 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Zoom out",
     group: "View",
     defaultBindings: [
-      { [MOD_PROP]: true, key: "-" },
-      { [MOD_PROP]: true, shift: true, key: "_" },
+      { ctrl: true, key: "-" },
+      { ctrl: true, shift: true, key: "_" },
     ],
     allowRepeat: true,
   },
@@ -306,13 +301,13 @@ export const SHORTCUTS: Shortcut[] = [
     id: "view.zoomReset",
     label: "Reset zoom",
     group: "View",
-    defaultBindings: [{ [MOD_PROP]: true, key: "0" }],
+    defaultBindings: [{ ctrl: true, key: "0" }],
   },
   {
     id: "view.zenMode",
     label: "Toggle zen mode",
     group: "View",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "'" }],
+    defaultBindings: [{ ctrl: true, shift: true, key: "'" }],
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface
@@ -323,13 +318,13 @@ export const SHORTCUTS: Shortcut[] = [
     id: "editor.undo",
     label: "Undo",
     group: "Editor",
-    defaultBindings: [{ [MOD_PROP]: true, key: "z" }],
+    defaultBindings: [{ ctrl: true, key: "z" }],
   },
   {
     id: "editor.redo",
     label: "Redo",
     group: "Editor",
-    defaultBindings: [{ [MOD_PROP]: true, key: "y" }],
+    defaultBindings: [{ ctrl: true, key: "y" }],
   },
   {
     id: "editor.codeComplete",
@@ -411,17 +406,10 @@ export function matchBinding(
 export function getBindingTokens(binding?: KeyBinding): string[] {
   if (!binding) return [];
   const tokens: string[] = [];
-  if (IS_MAC) {
-    if (binding.ctrl) tokens.push("⌃");
-    if (binding.alt) tokens.push("⌥");
-    if (binding.shift) tokens.push("⇧");
-    if (binding.meta) tokens.push("⌘");
-  } else {
-    if (binding.ctrl) tokens.push("Ctrl");
-    if (binding.alt) tokens.push("Alt");
-    if (binding.shift) tokens.push("Shift");
-    if (binding.meta) tokens.push("Win");
-  }
+  if (binding.ctrl) tokens.push("Ctrl");
+  if (binding.alt) tokens.push("Alt");
+  if (binding.shift) tokens.push("Shift");
+  if (binding.meta) tokens.push("Win");
 
   let keyLabel = binding.key;
   if (keyLabel === " ") keyLabel = "Space";

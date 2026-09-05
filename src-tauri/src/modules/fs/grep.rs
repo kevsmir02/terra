@@ -66,11 +66,8 @@ fn escape_literal(s: &str) -> String {
     out
 }
 
-#[allow(clippy::too_many_arguments)]
 fn search_tree(
     root_path: &Path,
-    root_display: &str,
-    workspace: &WorkspaceEnv,
     matcher: &RegexMatcher,
     globs: &Option<GlobSet>,
     cap: usize,
@@ -97,8 +94,6 @@ fn search_tree(
         let scanned = scanned.clone();
         let truncated = truncated.clone();
         let root_path = root_path.to_path_buf();
-        let root_display = root_display.to_string();
-        let workspace = workspace.clone();
 
         Box::new(move |dent_res| {
             if truncated.load(Ordering::Relaxed) || cancel() {
@@ -129,7 +124,7 @@ fn search_tree(
 
             scanned.fetch_add(1, Ordering::Relaxed);
 
-            let abs = display_path(path, &root_path, &root_display, &workspace);
+            let abs = to_canon(path);
             let rel_clone = rel.clone();
             let mut searcher = SearcherBuilder::new()
                 .binary_detection(BinaryDetection::quit(b'\x00'))
@@ -212,11 +207,7 @@ pub fn grep(
 
     let globs = build_globset(glob.as_deref().unwrap_or(&[]))?;
 
-    Ok(search_tree(
-        &root_path,
-        root,
-        workspace,
-        &matcher,
+    Ok(search_tree(&root_path, &matcher,
         &globs,
         cap,
         &|| false,
@@ -255,11 +246,7 @@ pub fn fs_grep_interactive(
         .map_err(|e| format!("bad pattern: {e}"))?;
 
     let cancel = || state.generation.load(Ordering::SeqCst) != my_gen;
-    Ok(search_tree(
-        &root_path,
-        &root,
-        &workspace,
-        &matcher,
+    Ok(search_tree(&root_path, &matcher,
         &None,
         cap,
         &cancel,
@@ -339,33 +326,12 @@ pub fn glob_files(
             continue;
         }
         hits.push(GlobHit {
-            path: display_path(path, &root_path, root, workspace),
+            path: to_canon(path),
             rel,
         });
     }
 
     Ok(GlobResponse { hits, truncated })
-}
-
-fn display_path(
-    path: &std::path::Path,
-    root_path: &std::path::Path,
-    root_display: &str,
-    workspace: &WorkspaceEnv,
-) -> String {
-    if workspace.is_wsl() {
-        if let Ok(rel) = path.strip_prefix(root_path) {
-            let rel = to_canon(rel);
-            return if rel.is_empty() {
-                root_display.to_string()
-            } else if root_display.ends_with('/') {
-                format!("{root_display}{rel}")
-            } else {
-                format!("{root_display}/{rel}")
-            };
-        }
-    }
-    to_canon(path)
 }
 
 #[cfg(test)]
@@ -383,14 +349,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("a.txt"), "hello\nfind me here\n").unwrap();
         let matcher = RegexMatcherBuilder::new().build("find").unwrap();
-        let ws = WorkspaceEnv::from_option(None);
-        let root_display = dir.path().to_string_lossy().to_string();
 
-        let live = search_tree(dir.path(), &root_display, &ws, &matcher, &None, 100, &|| false);
+        let live = search_tree(dir.path(), &matcher, &None, 100, &|| false);
         assert_eq!(live.hits.len(), 1, "uncancelled search finds the match");
 
         let stopped =
-            search_tree(dir.path(), &root_display, &ws, &matcher, &None, 100, &|| true);
+            search_tree(dir.path(), &matcher, &None, 100, &|| true);
         assert!(stopped.hits.is_empty(), "cancelled search yields nothing");
     }
 }

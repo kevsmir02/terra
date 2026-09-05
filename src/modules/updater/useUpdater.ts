@@ -2,7 +2,6 @@ import { getVersion } from "@tauri-apps/api/app";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useCallback, useState } from "react";
-import { IS_LINUX } from "@/lib/platform";
 import {
   isNewer,
   selectAsset,
@@ -81,11 +80,8 @@ export function useUpdater() {
         setStatus({ kind: "uptodate" });
         return;
       }
-      let pair: AssetPair | null = null;
-      if (IS_LINUX) {
-        const kind = await invoke<PackageKind>("updater_package_kind");
-        pair = selectAsset(kind, latest.assets);
-      }
+      const kind = await invoke<PackageKind>("updater_package_kind");
+      const pair = selectAsset(kind, latest.assets);
       setStatus({
         kind: "available",
         info: {

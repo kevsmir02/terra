@@ -1,14 +1,11 @@
 import "../styles/globals.css";
 
-import { USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { ThemeProvider } from "@/modules/theme";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import ReactDOM from "react-dom/client";
 import { SettingsApp } from "./SettingsApp";
 
-if (USE_CUSTOM_WINDOW_CONTROLS) {
-  document.documentElement.dataset.chrome = "borderless";
-}
+document.documentElement.dataset.chrome = "borderless";
 
 ReactDOM.createRoot(
   document.getElementById("settings-root") as HTMLElement,

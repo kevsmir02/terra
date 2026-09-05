@@ -30,8 +30,6 @@ pub struct LspExit {
 }
 
 pub struct LspSession {
-    #[cfg(windows)]
-    _job: Option<crate::modules::proc::job::ProcessJob>,
     child: Arc<SharedChild>,
     stdin: Mutex<Option<ChildStdin>>,
     pub(super) exited: Arc<AtomicBool>,
@@ -48,11 +46,9 @@ impl LspSession {
     }
 
     // Servers fork helpers (cargo check, rustc, proc-macro hosts); killing
-    // only the leader leaves them burning CPU. Unix: signal the process
-    // group. Windows: the Job Object covers the tree.
+    // only the leader leaves them burning CPU, so signal the process group.
     pub fn kill(&self) {
         *self.stdin.lock_or_recover() = None;
-        #[cfg(unix)]
         unsafe {
             libc::kill(-(self.child.id() as libc::pid_t), libc::SIGKILL);
         }
@@ -86,8 +82,6 @@ pub fn spawn(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    crate::modules::proc::hide_console(&mut cmd);
-    #[cfg(unix)]
     unsafe {
         use std::os::unix::process::CommandExt;
         cmd.pre_exec(|| {
@@ -116,19 +110,8 @@ pub fn spawn(
         "lsp: no stderr pipe".to_string()
     })?;
 
-    #[cfg(windows)]
-    let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
-        Ok(j) => Some(j),
-        Err(e) => {
-            log::warn!("lsp job-object setup failed for pid={}: {e}", child.id());
-            None
-        }
-    };
-
     let exited = Arc::new(AtomicBool::new(false));
     let session = Arc::new(LspSession {
-        #[cfg(windows)]
-        _job: job,
         child: child.clone(),
         stdin: Mutex::new(Some(stdin)),
         exited: exited.clone(),
@@ -283,7 +266,7 @@ pub fn spawn(
     Ok(session)
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

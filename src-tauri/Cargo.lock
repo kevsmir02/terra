@@ -5207,8 +5207,6 @@ dependencies = [
  "minisign-verify",
  "notify",
  "nucleo-matcher",
- "objc2",
- "objc2-foundation",
  "portable-pty",
  "proptest",
  "serde",
@@ -5231,7 +5229,6 @@ dependencies = [
  "ts-rs",
  "ureq",
  "which",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

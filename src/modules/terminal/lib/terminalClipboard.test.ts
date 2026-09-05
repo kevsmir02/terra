@@ -13,7 +13,6 @@ const web = {
 
 const original = globalThis.navigator;
 const LINUX = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15";
-const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 
 function platform(userAgent: string) {
   Object.defineProperty(globalThis, "navigator", {
@@ -42,7 +41,7 @@ describe("terminalClipboard", () => {
     });
   });
 
-  it("reads the native clipboard first on Linux", async () => {
+  it("reads the native clipboard first", async () => {
     platform(LINUX);
     native.readText.mockResolvedValue("native");
     web.readText.mockResolvedValue("web");
@@ -59,18 +58,7 @@ describe("terminalClipboard", () => {
     await expect(readTerminalClipboard()).resolves.toBe("web");
   });
 
-  it("never touches the native clipboard off Linux", async () => {
-    platform(MAC);
-    web.readText.mockResolvedValue("web");
-    const { readTerminalClipboard, writeTerminalClipboard } = await load();
-    await expect(readTerminalClipboard()).resolves.toBe("web");
-    await writeTerminalClipboard("x");
-    expect(native.readText).not.toHaveBeenCalled();
-    expect(native.writeText).not.toHaveBeenCalled();
-    expect(web.writeText).toHaveBeenCalledWith("x");
-  });
-
-  it("writes the native clipboard first on Linux", async () => {
+  it("writes the native clipboard first", async () => {
     platform(LINUX);
     native.writeText.mockResolvedValue();
     const { writeTerminalClipboard } = await load();
@@ -85,13 +73,6 @@ describe("terminalClipboard", () => {
   it("reports success after a native write", async () => {
     platform(LINUX);
     native.writeText.mockResolvedValue();
-    const { writeTerminalClipboard } = await load();
-    await expect(writeTerminalClipboard("copied")).resolves.toBe(true);
-  });
-
-  it("reports success after a web write", async () => {
-    platform(MAC);
-    web.writeText.mockResolvedValue();
     const { writeTerminalClipboard } = await load();
     await expect(writeTerminalClipboard("copied")).resolves.toBe(true);
   });
@@ -116,8 +97,9 @@ describe("terminalClipboard", () => {
   it("reports failure when no clipboard is available at all", async () => {
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
-      value: { userAgent: MAC },
+      value: { userAgent: LINUX },
     });
+    native.writeText.mockRejectedValue(new Error("no ipc"));
     const { writeTerminalClipboard } = await load();
     await expect(writeTerminalClipboard("copied")).resolves.toBe(false);
   });

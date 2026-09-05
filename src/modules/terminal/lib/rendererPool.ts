@@ -304,7 +304,7 @@ function createSlot(): Slot {
     }
 
     const readlineSequence = terminalReadlineSequence(event, {
-      isMac: IS_MAC,
+      isMac: false,
       isAlternateScreen: isAltScreen(slot),
     });
     if (readlineSequence) {
@@ -1087,8 +1087,4 @@ export function getLiveSlotForLeaf(leafId: number): Slot | null {
     ) ?? null
   );
 }
-
-const IS_MAC =
-  typeof navigator !== "undefined" &&
-  /Mac|iPhone|iPad/.test(navigator.userAgent);
 

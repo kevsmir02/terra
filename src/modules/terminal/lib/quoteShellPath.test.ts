@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/platform", () => ({ IS_WINDOWS: false }));
+import { describe, expect, it } from "vitest";
 
 import { formatDroppedPaths, quoteShellPath } from "./quoteShellPath";
 
@@ -17,12 +15,6 @@ describe("quoteShellPath", () => {
 
   it("escapes single quotes inside the path", () => {
     expect(quoteShellPath("/tmp/it's a file")).toBe(`'/tmp/it'\\''s a file'`);
-  });
-
-  it("leaves a clean Windows drive path unquoted", () => {
-    expect(quoteShellPath("C:\\Users\\me\\img.png")).toBe(
-      "C:\\Users\\me\\img.png",
-    );
   });
 
   it("quotes a path with shell metacharacters", () => {

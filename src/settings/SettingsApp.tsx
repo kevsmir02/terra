@@ -1,6 +1,5 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WindowControls } from "@/components/WindowControls";
-import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -126,9 +125,7 @@ export function SettingsApp() {
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground select-none">
       <header
         data-tauri-drag-region
-        className={`flex h-11 shrink-0 items-center border-b border-border/(--emph-strong) bg-card/(--emph-strong) ${
-          IS_MAC ? "pr-3 pl-22" : "pr-0 pl-3"
-        }`}
+        className="flex h-11 shrink-0 items-center border-b border-border/(--emph-strong) bg-card/(--emph-strong) pr-0 pl-3"
       >
         <Tabs
           value={active}
@@ -150,7 +147,7 @@ export function SettingsApp() {
             ))}
           </TabsList>
         </Tabs>
-        {USE_CUSTOM_WINDOW_CONTROLS && <WindowControls closeOnly />}
+        <WindowControls closeOnly />
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-6 pb-7 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

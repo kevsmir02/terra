@@ -6,7 +6,7 @@ Direction for this fork: what it is, what is next, and what stays out. `TERRA.md
 
 A lightweight, terminal-first IDE for a developer who runs agent harnesses (Claude Code, Codex, OpenCode and the like) in the terminal. The terminal is the product; the editor, explorer, source control, preview, language servers, and device dock exist so the agent's work can be read, verified, and touched up without leaving the window. Every surface beyond the terminal is on demand: dormant until opened, dormant again when closed. Lightweight is measured, not asserted: the eager startup bundle is budgeted per window and gated in CI, and language servers run under a memory watchdog.
 
-Terra is developed, used, and released on Linux (Fedora day to day). The macOS and Windows code paths inherited from upstream stay in the tree and keep compiling, but no work goes into them.
+Terra is developed, used, and released on Linux (Fedora day to day). The macOS and Windows code paths inherited from upstream have been removed; nothing in the tree targets another platform.
 
 ## Next
 

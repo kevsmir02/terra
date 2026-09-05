@@ -4,10 +4,10 @@ use serde_json::{json, Value};
 #[derive(Clone, Copy)]
 enum Delivery {
     // Claude returns the sequence via a `terminalSequence` JSON field (it lost
-    // /dev/tty access in v2.1.139) and emits it in-band. Cross-platform.
+    // /dev/tty access in v2.1.139) and emits it in-band.
     TerminalSequence,
     // Codex hooks can't write to the terminal, so the hook command emits
-    // the marker itself: to /dev/tty on Unix, via a CONOUT$ helper on Windows.
+    // the marker itself to /dev/tty.
     Osc,
 }
 
@@ -45,8 +45,8 @@ const AGENTS: &[AgentSpec] = &[
 ];
 
 // Substrings identifying a hook command as ours, across every form we've ever
-// emitted (legacy /dev/tty Claude, current TerminalSequence, Osc, Windows
-// helper). Used to prune our own groups before reinserting so installs are
+// emitted (legacy /dev/tty Claude, current TerminalSequence, Osc, the old
+// Windows helper). Used to prune our own groups before reinserting so installs are
 // idempotent and migrate older markers.
 //
 // The `Terax` spellings predate the rename. They must stay: pruning is what
@@ -78,19 +78,10 @@ fn hook_command(spec: &AgentSpec, event: &str) -> String {
 }
 
 // Marker to the tty, then `{}` on stdout: Codex requires a JSON no-op.
-#[cfg(unix)]
 fn osc_command(agent: &str, event: &str) -> String {
     format!(
         r#"[ -n "$TERRA_TERMINAL" ] && printf '\033]777;notify;Terra;{agent};{event}\007' > /dev/tty; printf '{{}}'"#
     )
-}
-
-#[cfg(windows)]
-fn osc_command(agent: &str, event: &str) -> String {
-    let exe = std::env::current_exe()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "terra.exe".to_string());
-    format!(r#""{exe}" __terra_notify {agent} {event}"#)
 }
 
 // The stable substring that proves a given (agent, event) hook is installed.
@@ -98,16 +89,7 @@ fn osc_command(agent: &str, event: &str) -> String {
 fn status_needle(spec: &AgentSpec, event: &str) -> String {
     match spec.delivery {
         Delivery::TerminalSequence => format!("notify;Terra;{event}"),
-        Delivery::Osc => {
-            #[cfg(unix)]
-            {
-                format!("notify;Terra;{};{event}", spec.agent)
-            }
-            #[cfg(windows)]
-            {
-                format!("__terra_notify {} {event}", spec.agent)
-            }
-        }
+        Delivery::Osc => format!("notify;Terra;{};{event}", spec.agent),
     }
 }
 
@@ -205,36 +187,6 @@ pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
     write_atomic(&path, &out)
 }
 
-// The raw OSC 777 bytes the detector parses. Kept in one place so the Windows
-// CONOUT$ path can't drift from what the Unix /dev/tty hook emits.
-#[cfg(any(windows, test))]
-fn conout_marker(agent: &str, event: &str) -> String {
-    format!("\x1b]777;notify;Terra;{agent};{event}\x07")
-}
-
-// Windows has no /dev/tty: the hook calls `terra.exe __terra_notify ...` and we
-// write the marker into the ConPTY console. GUI-subsystem release inherits no
-// console, so attach to the hook runner's first.
-#[cfg(windows)]
-pub fn emit_conout_marker(agent: &str, event: &str) {
-    use std::io::Write;
-    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
-
-    if std::env::var_os("TERRA_TERMINAL").is_none() {
-        return;
-    }
-    unsafe {
-        AttachConsole(ATTACH_PARENT_PROCESS);
-    }
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open("CONOUT$")
-    {
-        let _ = f.write_all(conout_marker(agent, event).as_bytes());
-    }
-}
-
 #[tauri::command]
 pub fn agent_hooks_status(agent: String) -> bool {
     let Ok(spec) = find(&agent) else {
@@ -293,16 +245,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn conout_marker_matches_detector_format() {
-        // Exactly the bytes pty/agent_detect parses (ESC ] 777 ; ... BEL).
-        assert_eq!(
-            conout_marker("codex", "attention"),
-            "\u{1b}]777;notify;Terra;codex;attention\u{7}"
-        );
-    }
-
-    #[cfg(unix)]
     #[test]
     fn codex_emits_four_field_dev_tty_marker() {
         let out = merge_hooks(json!({}), spec("codex"));

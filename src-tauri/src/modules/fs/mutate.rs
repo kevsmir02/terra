@@ -311,7 +311,6 @@ mod tests {
 
     // Deleting a symlink that points at a directory must remove only the link,
     // never recurse through it and wipe the target's contents.
-    #[cfg(unix)]
     #[test]
     fn delete_does_not_follow_symlink_into_target() {
         let dir = tempfile::tempdir().unwrap();

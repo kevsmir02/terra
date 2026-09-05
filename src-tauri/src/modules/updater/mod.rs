@@ -10,7 +10,6 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 use ureq::ResponseExt;
 
-use crate::modules::proc::hide_console;
 use package::PackageKind;
 
 #[derive(Clone, serde::Serialize)]
@@ -262,7 +261,6 @@ fn package_version(kind: PackageKind, path: &Path) -> Result<String, String> {
     }
     let mut cmd = Command::new(bin);
     cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::null());
-    hide_console(&mut cmd);
     let out = cmd
         .output()
         .map_err(|e| format!("could not read the package version: {e}"))?;
@@ -321,7 +319,6 @@ pub async fn updater_install(app: AppHandle, file_name: String) -> Result<(), St
 
         let mut cmd = Command::new(bin);
         cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
-        hide_console(&mut cmd);
         let out = cmd
             .output()
             .map_err(|e| format!("could not launch the installer: {e}"))?;

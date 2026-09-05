@@ -71,9 +71,6 @@ pub async fn lsp_spawn(
     on_exit: Channel<session::LspExit>,
 ) -> Result<u32, String> {
     let workspace = WorkspaceEnv::from_option(workspace);
-    if workspace.is_wsl() {
-        return Err("lsp: WSL workspaces are not supported yet".into());
-    }
     let root = authorize_spawn_cwd(&registry, Some(root.as_str()), &workspace)?
         .ok_or("lsp: workspace root is required")?;
 
@@ -164,7 +161,7 @@ pub fn lsp_kill(state: tauri::State<'_, LspState>, id: u32) {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

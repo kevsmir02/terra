@@ -16,8 +16,6 @@ use crate::modules::git::types::{
     MAX_TIMEOUT_SECS, MIN_GIT_VERSION,
 };
 use crate::modules::workspace::WorkspaceEnv;
-#[cfg(windows)]
-use crate::modules::workspace::validate_wsl_distro_name;
 
 #[derive(Clone)]
 enum Availability {
@@ -46,7 +44,6 @@ fn prune_expired_availability_entries(cache: &mut HashMap<String, AvailabilityCa
 fn workspace_cache_key(workspace: &WorkspaceEnv) -> String {
     match workspace {
         WorkspaceEnv::Local => "local".into(),
-        WorkspaceEnv::Wsl { distro } => format!("wsl:{distro}"),
     }
 }
 
@@ -260,7 +257,6 @@ where
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    crate::modules::proc::hide_console(&mut cmd);
 
     let child = Arc::new(SharedChild::spawn(&mut cmd).map_err(|e| GitError::Spawn(e.to_string()))?);
     let mut stdout_pipe = child
@@ -309,19 +305,6 @@ fn build_git_command(
     cwd: Option<&str>,
     args: &[OsString],
 ) -> Result<Command> {
-    #[cfg(windows)]
-    if let WorkspaceEnv::Wsl { distro } = _workspace {
-        validate_wsl_distro_name(distro)
-            .map_err(|_| GitError::command("unsafe WSL distro name", distro.clone()))?;
-        let mut cmd = Command::new("wsl.exe");
-        cmd.arg("-d").arg(distro);
-        if let Some(cwd) = cwd.filter(|s| !s.is_empty()) {
-            cmd.arg("--cd").arg(cwd);
-        }
-        cmd.arg("--exec").arg("git");
-        cmd.args(args);
-        return Ok(cmd);
-    }
 
     let mut cmd = Command::new("git");
     cmd.args(args);
@@ -408,17 +391,11 @@ fn drain<R: Read>(reader: &mut R, prealloc: usize) -> (Vec<u8>, bool) {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(windows)]
-    use super::build_git_command;
     use super::{
         parse_git_version, prune_expired_availability_entries, version_meets_minimum, Availability,
         AvailabilityCache, AVAILABILITY_TTL,
     };
-    #[cfg(windows)]
-    use crate::modules::workspace::WorkspaceEnv;
     use std::collections::HashMap;
-    #[cfg(windows)]
-    use std::ffi::OsString;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -460,7 +437,7 @@ mod tests {
                 },
             ),
             (
-                "wsl:Ubuntu".to_string(),
+                "stale".to_string(),
                 AvailabilityCache {
                     value: Availability::NotInstalled,
                     checked_at: Instant::now() - AVAILABILITY_TTL - Duration::from_secs(1),
@@ -471,52 +448,7 @@ mod tests {
         prune_expired_availability_entries(&mut cache);
 
         assert!(cache.contains_key("local"));
-        assert!(!cache.contains_key("wsl:Ubuntu"));
+        assert!(!cache.contains_key("stale"));
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn builds_wsl_git_command_with_cd_and_exec() {
-        let cmd = build_git_command(
-            &WorkspaceEnv::Wsl {
-                distro: "Ubuntu".into(),
-            },
-            Some("/home/vinicios/Nova pasta/repo"),
-            &[OsString::from("status"), OsString::from("--short")],
-        )
-        .expect("valid WSL distro");
-        let program = cmd.get_program().to_string_lossy().into_owned();
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(program, "wsl.exe");
-        assert_eq!(
-            args,
-            vec![
-                "-d",
-                "Ubuntu",
-                "--cd",
-                "/home/vinicios/Nova pasta/repo",
-                "--exec",
-                "git",
-                "status",
-                "--short",
-            ]
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn rejects_unsafe_wsl_distro_name_for_git_command() {
-        let err = build_git_command(
-            &WorkspaceEnv::Wsl {
-                distro: "../Ubuntu".into(),
-            },
-            None,
-            &[],
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("unsafe WSL distro name"));
-    }
 }

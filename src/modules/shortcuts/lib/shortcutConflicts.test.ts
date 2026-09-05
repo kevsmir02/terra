@@ -7,7 +7,6 @@ import {
   shortcutLabels,
 } from "./shortcutConflicts";
 
-// IS_MAC is false under vitest, so these exercise the non-mac default table.
 
 describe("sameBinding", () => {
   it("compares the key case-insensitively", () => {

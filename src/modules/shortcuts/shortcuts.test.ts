@@ -7,10 +7,6 @@ import {
   type ShortcutId,
 } from "./shortcuts";
 
-// These tests run in the vitest node environment, where the Tauri OS plugin is
-// unavailable so `IS_MAC` resolves to false. That makes the non-mac token
-// branch deterministic across host platforms.
-
 function event(over: Partial<KeyboardEvent>): KeyboardEvent {
   return {
     key: "",

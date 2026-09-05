@@ -1,5 +1,5 @@
-//! GUI-launched apps get a bare PATH on macOS, so anything Terra shells out to
-//! has to be found the way the user's own terminal would find it: language
+//! A desktop-launched app inherits a bare PATH, so anything Terra shells out
+//! to has to be found the way the user's own terminal would find it: language
 //! servers need `node`, the device dock needs `adb`. Capture the login shell
 //! env once, reuse it for both detection and spawn.
 
@@ -7,25 +7,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-#[cfg(unix)]
 const CAPTURE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Empty on Windows (full user env is inherited there) or if capture failed.
+/// Empty if capture failed.
 pub fn server_env_overlay() -> &'static HashMap<String, String> {
     static ENV: OnceLock<HashMap<String, String>> = OnceLock::new();
-    ENV.get_or_init(|| {
-        #[cfg(unix)]
-        {
-            match capture_login_env() {
-                Some(env) => env,
-                None => {
-                    log::warn!("env: login shell capture failed, using process env");
-                    HashMap::new()
-                }
-            }
-        }
-        #[cfg(windows)]
-        {
+    ENV.get_or_init(|| match capture_login_env() {
+        Some(env) => env,
+        None => {
+            log::warn!("env: login shell capture failed, using process env");
             HashMap::new()
         }
     })
@@ -44,7 +34,6 @@ pub fn resolve_binary(command: &str) -> Option<PathBuf> {
     which::which_in(command, path, cwd).ok()
 }
 
-#[cfg(unix)]
 fn capture_login_env() -> Option<HashMap<String, String>> {
     use shared_child::SharedChild;
     use std::io::Read;
@@ -102,7 +91,7 @@ fn capture_login_env() -> Option<HashMap<String, String>> {
     Some(env)
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

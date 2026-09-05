@@ -35,7 +35,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { IS_MAC } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { type GitBranchEntry, native } from "@/lib/native";
 import {
@@ -370,8 +369,8 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     return scm.status.isDetached ? "detached" : scm.status.branch;
   }, [scm.status]);
 
-  const commitShortcut = IS_MAC ? "⌘↩" : "Ctrl+Enter";
-  const generateShortcut = IS_MAC ? "⌘G" : "Ctrl+G";
+  const commitShortcut = "Ctrl+Enter";
+  const generateShortcut = "Ctrl+G";
   const canCommit =
     scm.stagedEntries.length > 0 &&
     scm.commitMessage.trim().length > 0 &&
@@ -1151,7 +1150,7 @@ const EntryRow = memo(function EntryRow({
     ? joinPath(repoRoot.replace(/\\/g, "/"), entry.path.replace(/\\/g, "/"))
     : null;
   const isDeleted = entry.statusCode === "D";
-  const revealLabel = IS_MAC ? "Reveal in Finder" : "Reveal in File Manager";
+  const revealLabel = "Reveal in File Manager";
 
   return (
     <ContextMenu>

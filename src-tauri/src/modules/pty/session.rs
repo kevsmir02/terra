@@ -35,18 +35,9 @@ const OVERFLOW_NOTICE: &[u8] =
 
 pub struct Session {
     // Field drop order is intentional. Rust drops fields top-to-bottom:
-    //   1. `_job` — on Windows, closing the Job HANDLE fires
-    //      KILL_ON_JOB_CLOSE, terminating the pwsh tree before the master
-    //      pipe drops. Without this, ClosePseudoConsole in `master`'s Drop
-    //      can block waiting for conhost to drain pending output, freezing
-    //      the Tauri worker thread that triggered the close.
-    //   2. `killer` — best-effort kill (redundant on Windows once Job
-    //      closed, but harmless and required on Unix where there is no Job).
-    //   3. `writer` — closes the input side of the master pipe.
-    //   4. `master` — last; ClosePseudoConsole on Windows. By now the child
-    //      is dead and conhost has nothing left to drain.
-    #[cfg(windows)]
-    _job: Option<crate::modules::proc::job::ProcessJob>,
+    //   1. `killer`: best-effort kill of the child.
+    //   2. `writer`: closes the input side of the master pipe.
+    //   3. `master`: last, once the child is dead.
     /// PID of the shell process. 0 means unknown; callers must skip checks when 0.
     pub shell_pid: u32,
     pub killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
@@ -68,14 +59,8 @@ impl Drop for Session {
         }
     }
 }
-// Serializes ConPTY create and close: overlapping pseudoconsole lifecycle
-// calls corrupt the new console so its shell never pumps output (issue #356).
-#[cfg(windows)]
-static CONPTY_LIFECYCLE_LOCK: Mutex<()> = Mutex::new(());
 
 pub(super) fn drop_session(session: Arc<Session>) {
-    #[cfg(windows)]
-    let _guard = CONPTY_LIFECYCLE_LOCK.lock_or_recover();
     drop(session);
 }
 
@@ -113,8 +98,6 @@ pub fn spawn(
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
-    #[cfg(windows)]
-    let _spawn_guard = CONPTY_LIFECYCLE_LOCK.lock_or_recover();
 
     let pty_system = native_pty_system();
     let size = PtySize {
@@ -141,23 +124,9 @@ pub fn spawn(
 
     let shell_pid = child.process_id().unwrap_or(0);
 
-    #[cfg(windows)]
-    let job = match child.process_id() {
-        Some(pid) => match crate::modules::proc::job::ProcessJob::create_for(pid) {
-            Ok(j) => Some(j),
-            Err(e) => {
-                log::warn!("pty job-object setup failed for pid={pid}: {e}");
-                None
-            }
-        },
-        None => None,
-    };
-
     let exited = Arc::new(AtomicBool::new(false));
 
     let session = Arc::new(Session {
-        #[cfg(windows)]
-        _job: job,
         shell_pid,
         killer: Mutex::new(killer),
         writer: writer.clone(),
@@ -287,16 +256,6 @@ pub fn spawn(
                 }
             };
             exited_w.store(true, Ordering::Release);
-            // Wait for the reader to hit EOF before taking a final snapshot of
-            // `pending`, so the last line of output never races the Exit event.
-            #[cfg(windows)]
-            {
-                let deadline = Instant::now() + Duration::from_millis(50);
-                while Instant::now() < deadline && !reader_thread.is_finished() {
-                    thread::sleep(Duration::from_millis(5));
-                }
-            }
-            #[cfg(not(windows))]
             if let Err(e) = reader_thread.join() {
                 log::error!("pty reader thread panicked: {e:?}");
             }
@@ -323,7 +282,7 @@ pub fn spawn(
     Ok((session, size))
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use portable_pty::CommandBuilder;

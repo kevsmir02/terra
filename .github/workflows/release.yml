@@ -10,26 +10,11 @@ jobs:
   publish-tauri:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-            rust-target: aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-            rust-target: x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-            rust-target: ""
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Linux build dependencies
-        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -46,15 +31,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust-target }}
+      - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
-          key: ${{ matrix.platform }}-${{ matrix.rust-target }}
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -68,13 +49,12 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Terra ${{ github.ref_name }}"
-          releaseBody: "Release build for Linux (.rpm, .deb, .AppImage) and macOS (.dmg). Windows is not released as a prebuilt bundle — build from source."
+          releaseBody: "Release build for Linux (.rpm, .deb, .AppImage)."
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
 
       - name: Fix AppImage wayland libs and re-sign
-        if: matrix.platform == 'ubuntu-22.04' && startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -128,7 +108,7 @@ jobs:
             --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Sign and upload rpm/deb for the in-app updater
-        if: matrix.platform == 'ubuntu-22.04' && startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

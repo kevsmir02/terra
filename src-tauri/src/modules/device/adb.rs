@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-use crate::modules::proc::hide_console;
 
 /// Emulator console ports are the even numbers in this range (16 slots); the
 /// adb serial of an instance is always `emulator-<console port>`.
@@ -249,7 +248,6 @@ pub fn ensure_safe_serial(serial: &str) -> Result<(), String> {
 pub fn list_avd_names(emulator: &Path) -> Result<Vec<String>, String> {
     let mut cmd = Command::new(emulator);
     cmd.arg("-list-avds");
-    hide_console(&mut cmd);
     let out = cmd
         .output()
         .map_err(|e| format!("emulator -list-avds failed: {e}"))?;
@@ -285,7 +283,6 @@ pub fn running_avds(adb: &Path, devices: &[DeviceEntry]) -> HashMap<String, Stri
     for d in devices.iter().filter(|d| d.serial.starts_with("emulator-")) {
         let mut cmd = Command::new(adb);
         cmd.args(["-s", &d.serial, "emu", "avd", "name"]);
-        hide_console(&mut cmd);
         if let Ok(out) = cmd.output() {
             if out.status.success() {
                 if let Some(name) = parse_emu_avd_name(&String::from_utf8_lossy(&out.stdout)) {
@@ -415,7 +412,6 @@ pub fn launch_avd(
     cmd.stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(log_err));
-    hide_console(&mut cmd);
     let child = cmd
         .spawn()
         .map_err(|e| format!("failed to launch AVD '{name}': {e}"))?;
@@ -443,7 +439,6 @@ pub fn create_avd(avdmanager: &Path, name: &str, package: &str) -> Result<(), St
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    hide_console(&mut cmd);
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to run avdmanager: {e}"))?;
@@ -469,7 +464,6 @@ pub fn create_avd(avdmanager: &Path, name: &str, package: &str) -> Result<(), St
 pub fn emu_kill(adb: &Path, serial: &str) -> Result<(), String> {
     let mut cmd = Command::new(adb);
     cmd.args(["-s", serial, "emu", "kill"]);
-    hide_console(&mut cmd);
     let out = cmd
         .output()
         .map_err(|e| format!("adb emu kill failed: {e}"))?;
@@ -489,7 +483,6 @@ pub fn emu_kill(adb: &Path, serial: &str) -> Result<(), String> {
 pub fn boot_completed(adb: &Path, serial: &str) -> bool {
     let mut cmd = Command::new(adb);
     cmd.args(["-s", serial, "shell", "getprop", "sys.boot_completed"]);
-    hide_console(&mut cmd);
     cmd.output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "1")
         .unwrap_or(false)
@@ -534,7 +527,6 @@ pub fn parse_devices_output(stdout: &str) -> Vec<DeviceEntry> {
 pub fn list_devices(adb: &std::path::Path) -> Result<Vec<DeviceEntry>, String> {
     let mut cmd = Command::new(adb);
     cmd.args(["devices", "-l"]);
-    hide_console(&mut cmd);
     let out = cmd
         .output()
         .map_err(|e| format!("adb devices failed: {e}"))?;
@@ -705,7 +697,6 @@ emulator-5554   device\n";
     // The fake emulator is a POSIX shell script, so the test only runs where
     // one can be executed; the argv it checks is built the same way everywhere.
     #[test]
-    #[cfg(unix)]
     fn launch_omits_gpu_flag_unless_explicitly_requested() {
         use std::os::unix::fs::PermissionsExt;
 

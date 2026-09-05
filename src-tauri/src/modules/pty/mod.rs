@@ -224,57 +224,17 @@ pub fn pty_has_foreground_job(state: tauri::State<PtyState>, id: u32) -> Result<
     if shell_pid == 0 {
         return Ok(false);
     }
-    #[cfg(unix)]
-    {
-        let leader = session.master.lock_or_recover().process_group_leader();
-        Ok(matches!(leader, Some(pid) if pid > 0 && pid as u32 != shell_pid))
-    }
-    #[cfg(windows)]
-    {
-        Ok(shell_has_children(shell_pid))
-    }
+    let leader = session.master.lock_or_recover().process_group_leader();
+    Ok(matches!(leader, Some(pid) if pid > 0 && pid as u32 != shell_pid))
 }
 
 // pgrep -P exits 0 when shell_pid has at least one child, 1 when none.
-#[cfg(unix)]
 fn shell_has_children(shell_pid: u32) -> bool {
     std::process::Command::new("pgrep")
         .args(["-P", &shell_pid.to_string()])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
-}
-
-#[cfg(windows)]
-fn shell_has_children(shell_pid: u32) -> bool {
-    use std::mem::{size_of, zeroed};
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32,
-        TH32CS_SNAPPROCESS,
-    };
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snapshot == INVALID_HANDLE_VALUE {
-            return false;
-        }
-        let mut entry: PROCESSENTRY32 = zeroed();
-        entry.dwSize = size_of::<PROCESSENTRY32>() as u32;
-        let mut found = false;
-        if Process32First(snapshot, &mut entry) != 0 {
-            loop {
-                if entry.th32ParentProcessID == shell_pid {
-                    found = true;
-                    break;
-                }
-                if Process32Next(snapshot, &mut entry) == 0 {
-                    break;
-                }
-            }
-        }
-        CloseHandle(snapshot);
-        found
-    }
 }
 
 // A fresh webview load orphans the previous frontend's sessions in this still

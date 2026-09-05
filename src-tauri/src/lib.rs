@@ -4,8 +4,6 @@ use modules::{agent, device, fs, git, lsp, pty, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
-#[cfg(target_os = "macos")]
-use tauri::PhysicalPosition;
 use tauri_plugin_window_state::StateFlags;
 use modules::sync::MutexExt;
 
@@ -122,50 +120,21 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         .always_on_top(true);
 
     // Tie lifecycle to the main window so settings minimizes/closes with it.
-    // macOS: skip parent() — child + always_on_top leaves the settings webview
-    // behind the main window except while the parent is being dragged (#33).
-    #[cfg(not(target_os = "macos"))]
     let builder = if let Some(main) = app.get_webview_window("main") {
         builder.parent(&main).map_err(|e| e.to_string())?
     } else {
         builder
     };
 
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true);
-
-    // On Linux/Windows we render our own titlebar, so drop native chrome
-    // and make the window transparent.
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    // We render our own titlebar, so drop native chrome and make the window
+    // transparent.
     let builder = builder.decorations(false).transparent(true);
 
     let window = builder.build().map_err(|e| e.to_string())?;
 
     // Some Linux compositors (GNOME/Mutter with CSD-by-default) ignore the
-    // builder-time decorations flag — re-assert it after realize.
-    #[cfg(target_os = "linux")]
-    {
-        let _ = window.set_decorations(false);
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Some(main) = app.get_webview_window("main") {
-        if let (Ok(main_pos), Ok(main_size), Ok(settings_size)) = (
-            main.outer_position(),
-            main.outer_size(),
-            window.outer_size(),
-        ) {
-            let x = main_pos.x
-                + ((main_size.width as i32).saturating_sub(settings_size.width as i32)) / 2;
-            let y = main_pos.y
-                + ((main_size.height as i32).saturating_sub(settings_size.height as i32)) / 2;
-            let _ = window.set_position(PhysicalPosition::new(x, y));
-        } else {
-            let _ = window.center();
-        }
-    }
+    // builder-time decorations flag; re-assert it after realize.
+    let _ = window.set_decorations(false);
 
     Ok(())
 }
@@ -180,27 +149,12 @@ async fn open_preview_tab(app: tauri::AppHandle, url: String) -> Result<(), Stri
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[cfg(windows)]
-    {
-        let args: Vec<String> = std::env::args().collect();
-        if args.get(1).map(String::as_str) == Some("__terra_notify") {
-            if let (Some(agent), Some(event)) = (args.get(2), args.get(3)) {
-                agent::emit_conout_marker(agent, event);
-            }
-            use std::io::Write;
-            let mut out = std::io::stdout();
-            let _ = out.write_all(b"{}");
-            let _ = out.flush();
-            std::process::exit(0);
-        }
-    }
 
     let launch = parse_launch_target();
     let cli_dir = launch.dir.clone();
     workspace::init_launch_cwd(cli_dir.as_deref());
 
     let builder = tauri::Builder::default();
-    #[cfg(target_os = "linux")]
     let builder = builder.plugin(tauri_plugin_clipboard_manager::init());
     builder
         .plugin(tauri_plugin_process::init())
@@ -236,17 +190,6 @@ pub fn run() {
                             handle.try_state::<workspace::WorkspaceRegistry>()
                         {
                             authorize_os_paths(&registry, paths);
-                        }
-                    }
-                    // macOS skips parent() for the settings window, so tie its
-                    // lifecycle to the main window here instead.
-                    #[cfg(target_os = "macos")]
-                    if matches!(
-                        event,
-                        WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
-                    ) {
-                        if let Some(settings) = handle.get_webview_window("settings") {
-                            let _ = settings.close();
                         }
                     }
                 });
@@ -328,9 +271,6 @@ pub fn run() {
             updater::updater_package_kind,
             updater::updater_download,
             updater::updater_install,
-            workspace::wsl_list_distros,
-            workspace::wsl_default_distro,
-            workspace::wsl_home,
             workspace::workspace_authorize,
             workspace::workspace_current_dir,
             get_launch_dir,
@@ -354,54 +294,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            match event {
-                // Servers exit on stdin EOF, but destructors are not guaranteed
-                // on process exit; kill explicitly.
-                tauri::RunEvent::Exit => {
-                    if let Some(state) = app.try_state::<lsp::LspState>() {
-                        state.kill_all();
-                    }
-                    if let Some(state) = app.try_state::<device::DeviceState>() {
-                        state.kill_all();
-                        // Only tears down emulators Terra started; ones the
-                        // user launched elsewhere are left running.
-                        state.kill_launched_avds();
-                    }
+            // Servers exit on stdin EOF, but destructors are not guaranteed
+            // on process exit; kill explicitly.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<lsp::LspState>() {
+                    state.kill_all();
                 }
-                // macOS delivers "Open With" files here, not as argv (cold and
-                // warm start, several at once). Seed the drain-once state and
-                // emit; canonicalize so the /tmp -> /private/tmp symlink can't
-                // defeat openFileTab's path dedupe against a CLI launch.
-                #[cfg(target_os = "macos")]
-                tauri::RunEvent::Opened { urls } => {
-                    let entries = urls
-                        .iter()
-                        .filter_map(|u| u.to_file_path().ok())
-                        .filter_map(|p| std::fs::canonicalize(p).ok())
-                        .filter(|p| p.is_file())
-                        .map(LaunchEntry::File)
-                        .collect();
-                    let target = resolve_launch_target(entries);
-                    if target.files.is_empty() {
-                        return;
-                    }
-                    if let Some(registry) = app.try_state::<workspace::WorkspaceRegistry>() {
-                        authorize_os_paths(&registry, &target.files);
-                    }
-                    if let Some(dir) = &target.dir {
-                        if let Some(registry) = app.try_state::<workspace::WorkspaceRegistry>() {
-                            let _ = registry.authorize(dir);
-                        }
-                        if let Some(state) = app.try_state::<LaunchDir>() {
-                            *state.0.lock_or_recover() = Some(dir.clone());
-                        }
-                    }
-                    if let Some(state) = app.try_state::<LaunchFiles>() {
-                        *state.0.lock_or_recover() = target.files.clone();
-                    }
-                    let _ = app.emit("terra:open-file", target.files);
+                if let Some(state) = app.try_state::<device::DeviceState>() {
+                    state.kill_all();
+                    // Only tears down emulators Terra started; ones the
+                    // user launched elsewhere are left running.
+                    state.kill_launched_avds();
                 }
-                _ => {}
             }
         });
 }

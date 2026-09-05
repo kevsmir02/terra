@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { WindowControls } from "@/components/WindowControls";
-import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { NotificationBell } from "@/modules/agents";
 import type { Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
@@ -103,9 +102,7 @@ export function Header({
     <div
       ref={rootRef}
       data-tauri-drag-region
-      className={`terra-chrome flex h-10 shrink-0 items-center gap-2 border-b border-border/(--emph-strong) bg-card select-none ${
-        IS_MAC ? "pr-2 pl-20" : "pr-0 pl-2"
-      }`}
+      className="terra-chrome flex h-10 shrink-0 items-center gap-2 border-b border-border/(--emph-strong) bg-card select-none pr-0 pl-2"
     >
       <div className="flex shrink-0 items-center gap-0.5">
         <Button
@@ -128,14 +125,10 @@ export function Header({
           <HugeiconsIcon icon={CommandIcon} size={14} strokeWidth={1.75} />
         </Button>
 
-        {!IS_MAC && (
-          <NotificationBell onActivate={onActivateAgent} />
-        )}
+        <NotificationBell onActivate={onActivateAgent} />
       </div>
 
-      {!IS_MAC && <span className="mx-1 h-full w-px shrink-0 bg-border/(--emph-strong)" />}
-
-      {IS_MAC && <span className="mr-1 h-full w-px shrink-0 bg-border/(--emph-strong)" />}
+      <span className="mx-1 h-full w-px shrink-0 bg-border/(--emph-strong)" />
 
       <div
         className="flex min-w-0 flex-1 items-center gap-2"
@@ -163,21 +156,10 @@ export function Header({
 
       <SearchInline ref={searchRef} target={searchTarget} compact={compact} />
 
-      {IS_MAC && (
-        <>
-          <NotificationBell onActivate={onActivateAgent} />
-          {settingsButton}
-        </>
-      )}
+      {settingsButton}
 
-      {!IS_MAC && settingsButton}
-
-      {USE_CUSTOM_WINDOW_CONTROLS && (
-        <>
-          <span className="ml-1 h-5 w-px shrink-0 bg-border/(--emph-strong)" />
-          <WindowControls />
-        </>
-      )}
+      <span className="ml-1 h-5 w-px shrink-0 bg-border/(--emph-strong)" />
+      <WindowControls />
     </div>
   );
 }

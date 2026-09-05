@@ -123,8 +123,6 @@ struct Teardown {
     child: Option<Child>,
     sockets: Arc<SocketRegistry>,
     reservation: Arc<SerialReservation>,
-    #[cfg(windows)]
-    _job: Option<crate::modules::proc::job::ProcessJob>,
 }
 
 impl ShutdownOps for Teardown {
@@ -185,14 +183,6 @@ impl DeviceSession {
         reservation: Arc<SerialReservation>,
     ) -> Result<Self, String> {
         let child = super::server::spawn_server(&adb, &jar, &serial, video_port, control_port)?;
-        #[cfg(windows)]
-        let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
-            Ok(j) => Some(j),
-            Err(e) => {
-                log::warn!("[device] job-object setup failed for pid={}: {e}", child.id());
-                None
-            }
-        };
         let stopping = Arc::new(AtomicBool::new(false));
         let sockets = Arc::new(SocketRegistry::default());
 
@@ -234,8 +224,6 @@ impl DeviceSession {
                 child: Some(child),
                 sockets,
                 reservation,
-                #[cfg(windows)]
-                _job: job,
             }),
         })
     }
@@ -532,7 +520,6 @@ mod tests {
     // so on Windows only the peer closing wakes the reader (see the read loop
     // tests below, which model adb doing exactly that).
     #[test]
-    #[cfg(not(windows))]
     fn socket_registry_close_all_unblocks_a_blocked_reader() {
         let (mut client, _server) = connected_pair();
         let registry = Arc::new(SocketRegistry::default());
@@ -571,8 +558,6 @@ mod tests {
             child: None,
             sockets: Arc::new(SocketRegistry::default()),
             reservation: state.reserve_serial("emulator-5554").unwrap(),
-            #[cfg(windows)]
-            _job: None,
         });
 
         session.shutdown();
@@ -797,8 +782,6 @@ mod tests {
             child: None,
             sockets: Arc::clone(&sockets),
             reservation: state.reserve_serial("emulator-5554").unwrap(),
-            #[cfg(windows)]
-            _job: None,
         });
 
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();

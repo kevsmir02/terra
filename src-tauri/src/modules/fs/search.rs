@@ -126,7 +126,7 @@ pub fn search(
             .unwrap_or_default();
         let is_dir = dent.file_type().map(|t| t.is_dir()).unwrap_or(false);
         cands.push(SearchHit {
-            path: display_path(path, &root_path, root, workspace),
+            path: to_canon(path),
             rel,
             name,
             is_dir,
@@ -251,27 +251,6 @@ pub fn list_files(
 
     files.sort_by_key(|a| a.to_lowercase());
     Ok(ListFilesResult { files, truncated })
-}
-
-fn display_path(
-    path: &std::path::Path,
-    root_path: &std::path::Path,
-    root_display: &str,
-    workspace: &WorkspaceEnv,
-) -> String {
-    if workspace.is_wsl() {
-        if let Ok(rel) = path.strip_prefix(root_path) {
-            let rel = to_canon(rel);
-            return if rel.is_empty() {
-                root_display.to_string()
-            } else if root_display.ends_with('/') {
-                format!("{root_display}{rel}")
-            } else {
-                format!("{root_display}/{rel}")
-            };
-        }
-    }
-    to_canon(path)
 }
 
 #[cfg(test)]
