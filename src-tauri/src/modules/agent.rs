@@ -6,7 +6,7 @@ enum Delivery {
     // Claude returns the sequence via a `terminalSequence` JSON field (it lost
     // /dev/tty access in v2.1.139) and emits it in-band. Cross-platform.
     TerminalSequence,
-    // Codex/Gemini hooks can't write to the terminal, so the hook command emits
+    // Codex hooks can't write to the terminal, so the hook command emits
     // the marker itself: to /dev/tty on Unix, via a CONOUT$ helper on Windows.
     Osc,
 }
@@ -16,7 +16,6 @@ struct AgentSpec {
     dir: &'static str,
     file: &'static str,
     events: &'static [(&'static str, &'static str)],
-    matcher: bool,
     delivery: Delivery,
 }
 
@@ -30,7 +29,6 @@ const AGENTS: &[AgentSpec] = &[
             ("Notification", "attention"),
             ("Stop", "finished"),
         ],
-        matcher: false,
         delivery: Delivery::TerminalSequence,
     },
     AgentSpec {
@@ -42,52 +40,9 @@ const AGENTS: &[AgentSpec] = &[
             ("PermissionRequest", "attention"),
             ("Stop", "finished"),
         ],
-        matcher: false,
-        delivery: Delivery::Osc,
-    },
-    AgentSpec {
-        agent: "gemini",
-        dir: ".gemini",
-        file: "settings.json",
-        events: &[
-            ("BeforeAgent", "working"),
-            ("Notification", "attention"),
-            ("AfterAgent", "finished"),
-        ],
-        matcher: true,
         delivery: Delivery::Osc,
     },
 ];
-
-const PI_EXTENSION_DIR: &str = ".pi/agent/extensions";
-const PI_EXTENSION_FILE: &str = "terra-notifications.ts";
-const PI_EXTENSION_MARKER: &str = "terra-pi-notifications-v1";
-// Pre-rename names. pi loads every file in the extensions dir, so leaving the
-// old one behind would emit a second notification for each event.
-const LEGACY_PI_EXTENSION_FILE: &str = "terax-notifications.ts";
-const LEGACY_PI_EXTENSION_MARKER: &str = "terax-pi-notifications-v1";
-const PI_STATUS_NEEDLES: [&str; 6] = [
-    PI_EXTENSION_MARKER,
-    "agent_start",
-    "agent_settled",
-    "notify;Terra;pi;${event}",
-    "emit(\"working\")",
-    "emit(\"finished\")",
-];
-const PI_EXTENSION: &str = r#"// terra-pi-notifications-v1
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-
-export default function (pi: ExtensionAPI) {
-  const emit = (event: "working" | "finished") => {
-    if (process.env.TERRA_TERMINAL) {
-      process.stdout.write(`\u001b]777;notify;Terra;pi;${event}\u0007`);
-    }
-  };
-
-  pi.on("agent_start", () => emit("working"));
-  pi.on("agent_settled", () => emit("finished"));
-}
-"#;
 
 // Substrings identifying a hook command as ours, across every form we've ever
 // emitted (legacy /dev/tty Claude, current TerminalSequence, Osc, Windows
@@ -122,7 +77,7 @@ fn hook_command(spec: &AgentSpec, event: &str) -> String {
     }
 }
 
-// Marker to the tty, then `{}` on stdout: Codex/Gemini require a JSON no-op.
+// Marker to the tty, then `{}` on stdout: Codex requires a JSON no-op.
 #[cfg(unix)]
 fn osc_command(agent: &str, event: &str) -> String {
     format!(
@@ -196,13 +151,9 @@ fn merge_hooks(mut root: Value, spec: &AgentSpec) -> Value {
         }
         let arr = arr.as_array_mut().unwrap();
         arr.retain(|group| !is_ours(group) && !is_empty_group(group));
-        let mut group = json!({
+        arr.push(json!({
             "hooks": [ { "type": "command", "command": hook_command(spec, marker) } ]
-        });
-        if spec.matcher {
-            group["matcher"] = json!("*");
-        }
-        arr.push(group);
+        }));
     }
     root
 }
@@ -227,23 +178,6 @@ fn settings_path(spec: &AgentSpec) -> Result<std::path::PathBuf, String> {
     home_path(spec.dir, spec.file)
 }
 
-fn pi_extension_path() -> Result<std::path::PathBuf, String> {
-    home_path(PI_EXTENSION_DIR, PI_EXTENSION_FILE)
-}
-
-fn pi_extension_contents(
-    existing: Option<&str>,
-    path: &std::path::Path,
-) -> Result<&'static str, String> {
-    if existing.is_some_and(|s| !s.trim().is_empty() && !s.contains(PI_EXTENSION_MARKER)) {
-        return Err(format!(
-            "{} is not managed by Terra; refusing to overwrite",
-            path.display()
-        ));
-    }
-    Ok(PI_EXTENSION)
-}
-
 fn write_atomic(path: &std::path::Path, contents: &str) -> Result<(), String> {
     let tmp = path.with_extension("terra-tmp");
     std::fs::write(&tmp, contents).map_err(|e| format!("write {}: {e}", tmp.display()))?;
@@ -253,54 +187,8 @@ fn write_atomic(path: &std::path::Path, contents: &str) -> Result<(), String> {
     })
 }
 
-fn pi_extension_write_path(path: &std::path::Path) -> Result<std::path::PathBuf, String> {
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            std::fs::canonicalize(path).map_err(|e| format!("resolve {}: {e}", path.display()))
-        }
-        Ok(_) => Ok(path.to_path_buf()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(path.to_path_buf()),
-        Err(e) => Err(format!("inspect {}: {e}", path.display())),
-    }
-}
-
-/// Drops the pre-rename extension, but only when it still carries our marker —
-/// a file the user has since made their own is left alone.
-fn remove_legacy_pi_extension(dir: &std::path::Path) {
-    let legacy = dir.join(LEGACY_PI_EXTENSION_FILE);
-    if std::fs::symlink_metadata(&legacy).is_err() {
-        return;
-    }
-    if std::fs::read_to_string(&legacy)
-        .is_ok_and(|s| s.contains(LEGACY_PI_EXTENSION_MARKER) || s.contains(PI_EXTENSION_MARKER))
-    {
-        let _ = std::fs::remove_file(&legacy);
-    }
-}
-
-fn enable_pi_extension_at(path: &std::path::Path) -> Result<(), String> {
-    let dir = path.parent().unwrap();
-    std::fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-    remove_legacy_pi_extension(dir);
-    let existing = match std::fs::read_to_string(path) {
-        Ok(s) if s == PI_EXTENSION => return Ok(()),
-        Ok(s) => Some(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
-    let contents = pi_extension_contents(existing.as_deref(), path)?;
-    write_atomic(&pi_extension_write_path(path)?, contents)
-}
-
-fn enable_pi_extension() -> Result<(), String> {
-    enable_pi_extension_at(&pi_extension_path()?)
-}
-
 #[tauri::command]
 pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
-    if agent == "pi" {
-        return enable_pi_extension();
-    }
     let spec = find(&agent)?;
     let path = settings_path(spec)?;
     let dir = path.parent().unwrap();
@@ -349,16 +237,6 @@ pub fn emit_conout_marker(agent: &str, event: &str) {
 
 #[tauri::command]
 pub fn agent_hooks_status(agent: String) -> bool {
-    if agent == "pi" {
-        return pi_extension_path()
-            .ok()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .is_some_and(|content| {
-                PI_STATUS_NEEDLES
-                    .iter()
-                    .all(|needle| content.contains(needle))
-            });
-    }
     let Ok(spec) = find(&agent) else {
         return false;
     };
@@ -407,7 +285,7 @@ mod tests {
 
     #[test]
     fn is_idempotent_per_agent() {
-        for agent in ["claude", "codex", "gemini"] {
+        for agent in ["claude", "codex"] {
             let s = spec(agent);
             let once = merge_hooks(json!({}), s);
             let twice = merge_hooks(once.clone(), s);
@@ -419,8 +297,8 @@ mod tests {
     fn conout_marker_matches_detector_format() {
         // Exactly the bytes pty/agent_detect parses (ESC ] 777 ; ... BEL).
         assert_eq!(
-            conout_marker("gemini", "attention"),
-            "\u{1b}]777;notify;Terra;gemini;attention\u{7}"
+            conout_marker("codex", "attention"),
+            "\u{1b}]777;notify;Terra;codex;attention\u{7}"
         );
     }
 
@@ -437,77 +315,6 @@ mod tests {
         // Codex Stop rejects empty/non-JSON stdout; the hook must emit a no-op.
         assert!(stop.contains("printf '{}'"));
         assert!(!stop.contains("terminalSequence"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn gemini_uses_matcher_and_named_marker() {
-        let out = merge_hooks(json!({}), spec("gemini"));
-        assert_eq!(out["hooks"]["BeforeAgent"][0]["matcher"], "*");
-        assert!(command(&out, "AfterAgent", 0).contains("notify;Terra;gemini;finished"));
-        assert!(command(&out, "Notification", 0).contains("notify;Terra;gemini;attention"));
-    }
-
-    #[test]
-    fn pi_extension_emits_named_working_and_finished_markers() {
-        let path = std::path::Path::new("/x/terra-notifications.ts");
-        let extension = pi_extension_contents(None, path).unwrap();
-        for needle in PI_STATUS_NEEDLES {
-            assert!(extension.contains(needle), "missing {needle}");
-        }
-        assert!(extension.contains("process.env.TERRA_TERMINAL"));
-        assert!(extension.contains("process.stdout.write"));
-    }
-
-    #[test]
-    fn pi_extension_only_replaces_terra_owned_file() {
-        let path = std::path::Path::new("/x/terra-notifications.ts");
-        assert!(pi_extension_contents(Some("export const mine = true;"), path).is_err());
-        assert!(pi_extension_contents(Some(PI_EXTENSION), path).is_ok());
-        assert!(pi_extension_contents(Some("  \n"), path).is_ok());
-    }
-
-    #[test]
-    fn pi_extension_install_is_atomic_idempotent_and_preserves_foreign_files() {
-        let dir = std::env::temp_dir().join(format!("terra-pi-extension-{}", std::process::id()));
-        let path = dir.join(PI_EXTENSION_FILE);
-        let _ = std::fs::remove_dir_all(&dir);
-
-        enable_pi_extension_at(&path).unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), PI_EXTENSION);
-        enable_pi_extension_at(&path).unwrap();
-
-        std::fs::write(&path, "export const mine = true;").unwrap();
-        assert!(enable_pi_extension_at(&path).is_err());
-        assert_eq!(
-            std::fs::read_to_string(&path).unwrap(),
-            "export const mine = true;"
-        );
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn pi_extension_install_preserves_symlink() {
-        use std::os::unix::fs::symlink;
-
-        let dir =
-            std::env::temp_dir().join(format!("terra-pi-extension-symlink-{}", std::process::id()));
-        let target = dir.join("managed.ts");
-        let path = dir.join(PI_EXTENSION_FILE);
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(&target, format!("// {PI_EXTENSION_MARKER}\n")).unwrap();
-        symlink(&target, &path).unwrap();
-
-        enable_pi_extension_at(&path).unwrap();
-
-        assert!(std::fs::symlink_metadata(&path)
-            .unwrap()
-            .file_type()
-            .is_symlink());
-        assert_eq!(std::fs::read_to_string(target).unwrap(), PI_EXTENSION);
-        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

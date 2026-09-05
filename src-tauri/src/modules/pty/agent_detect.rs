@@ -5,10 +5,10 @@ const ST_FINAL: u8 = b'\\';
 
 const OSC_MAX: usize = 2048;
 
-const DEFAULT_AGENTS: &[&str] = &["claude", "codex", "gemini", "pi"];
+const DEFAULT_AGENTS: &[&str] = &["claude", "codex", "opencode"];
 
 // OSC 777 markers our agent hooks emit. Legacy 3-field `notify;Terra;<event>`
-// (Claude) or 4-field `notify;Terra;<agent>;<event>` (Codex/Gemini/Pi).
+// (Claude) or 4-field `notify;Terra;<agent>;<event>` (Codex).
 //
 // `notify;Terax;` is the pre-rename spelling. Hooks live in the user's own
 // agent config (~/.claude/settings.json and friends), so installs predating
@@ -293,9 +293,9 @@ mod tests {
     }
 
     #[test]
-    fn arms_on_pi_command() {
+    fn arms_on_opencode_command() {
         let mut d = AgentDetector::new();
-        assert_eq!(run(&mut d, &osc("133;C;pi")), vec![started("pi")]);
+        assert_eq!(run(&mut d, &osc("133;C;opencode")), vec![started("opencode")]);
     }
 
     #[test]
@@ -372,21 +372,8 @@ mod tests {
         assert_eq!(run(&mut d, &osc("777;notify;Terra;codex;working")), vec![started("codex")]);
         let mut g = AgentDetector::new();
         assert_eq!(
-            run(&mut g, &osc("777;notify;Terra;gemini;finished")),
-            vec![started("gemini"), Transition::Finished]
-        );
-    }
-
-    #[test]
-    fn pi_marker_self_arms_and_drives_status() {
-        let mut d = AgentDetector::new();
-        assert_eq!(
-            run(&mut d, &osc("777;notify;Terra;pi;working")),
-            vec![started("pi")]
-        );
-        assert_eq!(
-            run(&mut d, &osc("777;notify;Terra;pi;finished")),
-            vec![Transition::Finished]
+            run(&mut g, &osc("777;notify;Terra;codex;finished")),
+            vec![started("codex"), Transition::Finished]
         );
     }
 
@@ -404,10 +391,10 @@ mod tests {
     #[test]
     fn four_field_marker_drives_status_after_preexec() {
         let mut d = AgentDetector::new();
-        run(&mut d, &osc("133;C;gemini"));
-        assert_eq!(run(&mut d, &osc("777;notify;Terra;gemini;attention")), vec![Transition::Attention]);
-        assert_eq!(run(&mut d, &osc("777;notify;Terra;gemini;working")), vec![Transition::Working]);
-        assert_eq!(run(&mut d, &osc("777;notify;Terra;gemini;finished")), vec![Transition::Finished]);
+        run(&mut d, &osc("133;C;codex"));
+        assert_eq!(run(&mut d, &osc("777;notify;Terra;codex;attention")), vec![Transition::Attention]);
+        assert_eq!(run(&mut d, &osc("777;notify;Terra;codex;working")), vec![Transition::Working]);
+        assert_eq!(run(&mut d, &osc("777;notify;Terra;codex;finished")), vec![Transition::Finished]);
     }
 
     #[test]
