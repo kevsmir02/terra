@@ -12,6 +12,10 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  // Scoped to this component's own create call: `busy` from useAvds also
+  // covers launch/stop, and a cold boot can hold it for minutes, so reusing
+  // it here would pin the toggle disabled for an unrelated AVD's launch.
+  const [creating, setCreating] = useState(false);
 
   const refreshDevices = () => {
     setError(null);
@@ -93,6 +97,12 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
             </ul>
           )}
 
+          {devices.length === 0 && (
+            <div className="px-3 py-2 text-[11px] text-muted-foreground">
+              No devices connected. Plug one in via USB, or create an emulator below.
+            </div>
+          )}
+
           {avds && (
             <div className="flex flex-col gap-1 border-t border-border/(--emph-soft) px-3 py-2">
               <div className="flex items-center justify-between">
@@ -100,7 +110,8 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                 <button
                   type="button"
                   onClick={() => setShowCreate((v) => !v)}
-                  disabled={busy && showCreate}
+                  disabled={creating}
+                  aria-expanded={showCreate}
                   className="rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
                   title={showCreate ? "Cancel creating an emulator" : "Create a new emulator"}
                 >
@@ -161,14 +172,19 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                 );
               })}
               {showCreate && (
-                <CreateAvd busy={busy} onCreate={create} onCreated={() => setShowCreate(false)} />
+                <CreateAvd
+                  busy={busy}
+                  onCreate={async (name, pkg) => {
+                    setCreating(true);
+                    try {
+                      return await create(name, pkg);
+                    } finally {
+                      setCreating(false);
+                    }
+                  }}
+                  onCreated={() => setShowCreate(false)}
+                />
               )}
-            </div>
-          )}
-
-          {devices.length === 0 && avds === null && (
-            <div className="px-3 py-2 text-[11px] text-muted-foreground">
-              No devices connected.
             </div>
           )}
         </>
