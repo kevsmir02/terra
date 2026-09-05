@@ -132,11 +132,6 @@ impl Fmp4Builder {
         self.sequence_number = self.sequence_number.wrapping_add(1);
         let seq = self.sequence_number;
 
-        // ponytail: raw_stream strips PTS; we synthesize a nominal 33ms/frame
-        // (~30fps, matching max_fps=30) so the MSE buffered range is non-zero
-        // and currentTime can advance. Without tfdt + nonzero duration every
-        // fragment maps to t=0 → buffered collapses to zero length → black
-        // `<video>`. Upgrade: derive real fps from the SPS VUI / slice header.
         const NOMINAL_FRAME_DURATION_MS: u32 = 33;
 
         let mfhd = fullbox(b"mfhd", 0, 0, &seq.to_be_bytes());
@@ -213,16 +208,6 @@ pub enum Segment {
     Media(Vec<u8>),
 }
 
-#[derive(Debug, Default)]
-pub struct NalStats {
-    pub sps: u32,
-    pub pps: u32,
-    pub idr: u32,
-    pub nonidr: u32,
-    pub other: u32,
-    pub media: u64,
-}
-
 /// Turns the NAL sequence of one session into fMP4 segments: stores the first
 /// usable SPS+PPS, emits the init segment once, then one media fragment per
 /// slice. Malformed parameter sets are skipped, so the stream is simply not
@@ -235,7 +220,6 @@ pub struct StreamAssembler {
     pending: VecDeque<Vec<u8>>,
     pending_bytes: usize,
     warned_malformed: bool,
-    pub stats: NalStats,
 }
 
 impl StreamAssembler {
@@ -247,7 +231,6 @@ impl StreamAssembler {
         let Some(&header) = nal.first() else { return };
         match header & 0x1F {
             7 => {
-                self.stats.sps += 1;
                 if codec_string_from_sps(&nal).is_some() {
                     self.sps = Some(nal);
                 } else {
@@ -256,15 +239,9 @@ impl StreamAssembler {
                 }
             }
             8 => {
-                self.stats.pps += 1;
                 self.pps = Some(nal);
             }
-            t => {
-                match t {
-                    5 => self.stats.idr += 1,
-                    1 => self.stats.nonidr += 1,
-                    _ => self.stats.other += 1,
-                }
+            _ => {
                 self.emit_or_hold(nal, out);
                 return;
             }
@@ -285,7 +262,6 @@ impl StreamAssembler {
         frame.extend_from_slice(&(codec.len() as u32).to_be_bytes());
         frame.extend_from_slice(codec.as_bytes());
         frame.extend_from_slice(init);
-        log::info!("[device] init segment ready: codec={codec} bytes={}", frame.len());
         out.push(Segment::Init(frame));
         self.builder = Some(builder);
         // A stream that only ever had pending P-slices must flush nothing
@@ -301,7 +277,6 @@ impl StreamAssembler {
         match self.builder.as_mut() {
             Some(b) => {
                 out.push(Segment::Media(b.append_nal(&nal)));
-                self.stats.media += 1;
             }
             None => {
                 self.pending_bytes += nal.len();

@@ -145,12 +145,7 @@ export function openDeviceSession(opts: {
       }
 
       const ch = new Channel<Frame>();
-      let frameCount = 0;
       ch.onmessage = (frame) => {
-        frameCount++;
-        if ((frameCount & 0x7) === 0) {
-          console.info("[device] channel frames received:", frameCount, "kind=", frame.kind);
-        }
         const raw = frameBytes(frame.bytes);
         if (!raw) {
           console.warn("[device] channel: unknown frame.bytes shape; dropping");

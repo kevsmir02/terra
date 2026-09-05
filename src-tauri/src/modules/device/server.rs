@@ -63,18 +63,10 @@ pub fn push_jar_and_forward(adb: &Path, jar: &Path, serial: &str, local_port: u1
 pub fn spawn_server(adb: &Path, jar: &Path, serial: &str, local_port: u16) -> Result<std::process::Child, String> {
     push_jar_and_forward(adb, jar, serial, local_port)?;
     let mut cmd = build_server_command(adb, jar, serial, local_port);
-    cmd.stdout(std::process::Stdio::piped())
+    cmd.stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
-    log::info!(
-        "[device] scrcpy server spawning: serial={serial} local_port={local_port} adb={} jar={}",
-        adb.display(), jar.display()
-    );
     let mut child = cmd.spawn().map_err(|e| format!("scrcpy spawn failed: {e}"))?;
 
-    // DIAGNOSTIC: scrcpy's stderr carries its startup line and any fatal (version
-    // mismatch, unknown option, encoder failure). A server that dies here is
-    // *invisible* — the forwarded TCP socket never opens and run_read_loop just
-    // retries out → black `<video>`. Surface every stderr line so the cause shows.
     if let Some(stderr) = child.stderr.take() {
         std::thread::spawn(move || {
             let r = std::io::BufReader::new(stderr);
@@ -84,38 +76,6 @@ pub fn spawn_server(adb: &Path, jar: &Path, serial: &str, local_port: u16) -> Re
                     Err(_) => break,
                 }
             }
-            log::info!("[device] scrcpy-server stderr EOF (process exited)");
-        });
-    }
-
-    // DIAGNOSTIC + LATENT FIX: stdout is piped (Stdio::piped()) but the read loop
-    // reads video via the forwarded TCP socket, NOT stdout. An undrained pipe
-    // fills at ~64KB and then blocks the server's writes → the server never
-    // reaches the TCP-accept path. Drain stdout and log total bytes seen: if it
-    // is non-trivial (>>64KB), that blocking was a second black-video cause.
-    if let Some(stdout) = child.stdout.take() {
-        std::thread::spawn(move || {
-            let mut r = std::io::BufReader::new(stdout);
-            let mut total: u64 = 0;
-            let mut one_shot_logged = false;
-            let mut buf = [0u8; 4096];
-            loop {
-                match std::io::Read::read(&mut r, &mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        total += n as u64;
-                        if !one_shot_logged {
-                            one_shot_logged = true;
-                            log::info!("[device] scrcpy-server stdout: first {} bytes (head)", n);
-                        }
-                        if total.is_multiple_of(1 << 20) {
-                            log::info!("[device] scrcpy-server stdout: {total} bytes total");
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-            log::info!("[device] scrcpy-server stdout EOF after total={total} bytes");
         });
     }
     Ok(child)

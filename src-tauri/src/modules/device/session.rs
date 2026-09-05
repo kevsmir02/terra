@@ -253,7 +253,6 @@ fn run_read_loop(
     mut ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
     sockets: &SocketRegistry,
 ) {
-    log::info!("[device] read_loop start: connecting to TCP 127.0.0.1:{local_port}");
     // adb forward maps the local TCP port IMMEDIATELY (before the scrcpy server
     // has even bound its abstract socket), so `connect()` succeeds right away even
     // when the remote side isn't ready: the first `read()` then returns 0 (EOF)
@@ -261,9 +260,8 @@ fn run_read_loop(
     // not just connect.
     let mut stream: Option<std::net::TcpStream> = None;
     let mut probe = [0u8; 1];
-    for attempt in 1..=60 {
+    for _attempt in 1..=60 {
         if stopping.load(Ordering::Relaxed) {
-            log::info!("[device] read_loop: stopping before connect");
             return;
         }
         match std::net::TcpStream::connect(("127.0.0.1", local_port)) {
@@ -276,8 +274,7 @@ fn run_read_loop(
                 match s.peek(&mut probe) {
                     Ok(0) => {
                         // adb accepted our local connection but the remote
-                        // abstract socket isn't ready — close and retry.
-                        log::debug!("[device] read_loop attempt {attempt}/60: port open, remote not ready (peek=0)");
+                        // abstract socket isn't ready; close and retry.
                         drop(s);
                         std::thread::sleep(std::time::Duration::from_millis(100));
                         continue;
@@ -287,7 +284,6 @@ fn run_read_loop(
                         // either way we'll find out in the read loop. Switch back
                         // to blocking reads.
                         s.set_read_timeout(None).ok();
-                        log::info!("[device] read_loop: TCP connected + alive on attempt {attempt}/60");
                         sockets.register(&s);
                         if let Some(tx) = ready_tx.take() {
                             let _ = tx.send(());
@@ -297,8 +293,7 @@ fn run_read_loop(
                     }
                 }
             }
-            Err(e) => {
-                log::debug!("[device] read_loop attempt {attempt}/60: connect failed: {e}");
+            Err(_) => {
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
         }
@@ -307,10 +302,8 @@ fn run_read_loop(
     let mut stream = match stream {
         Some(s) => s,
         None => {
-            log::error!(
-                "[device] read_loop: TCP connect FAILED after 60×~200ms (~12s); \
-                 scrcpy server never became ready on 127.0.0.1:{local_port} — \
-                 check the 'scrcpy-server stderr' lines above"
+            log::warn!(
+                "[device] read_loop: TCP connect failed after 60 attempts (~12s), scrcpy server never became ready on 127.0.0.1:{local_port}"
             );
             return;
         }
@@ -320,30 +313,21 @@ fn run_read_loop(
     let mut read_buf = [0u8; 65536];
     let mut assembler = StreamAssembler::default();
     let mut segments: Vec<Segment> = Vec::new();
-    let mut total_bytes: u64 = 0;
-    let mut reads: u64 = 0;
 
     loop {
         if stopping.load(Ordering::Relaxed) {
-            log::info!("[device] read_loop: stopping (reads={reads} bytes={total_bytes} {:?})", assembler.stats);
             break;
         }
         let n = match stream.read(&mut read_buf) {
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => {
-                log::warn!("[device] read_loop: stream read error after {total_bytes} bytes: {e}");
+                log::warn!("[device] read_loop: stream read error: {e}");
                 break;
             }
         };
-        reads += 1;
-        total_bytes += n as u64;
 
         if n == 0 {
-            log::info!(
-                "[device] read_loop: stream EOF at {total_bytes} bytes {:?}; flushing trailing NALs",
-                assembler.stats
-            );
             for nal in split_nal_units(&buf) {
                 assembler.push(nal, &mut segments);
             }
@@ -356,12 +340,7 @@ fn run_read_loop(
             assembler.push(nal, &mut segments);
         }
         send_segments(&channel, &mut segments);
-
-        if reads.is_multiple_of(60) {
-            log::info!("[device] read_loop heartbeat: reads={reads} bytes={total_bytes} {:?}", assembler.stats);
-        }
     }
-    log::info!("[device] read_loop EXIT: reads={reads} bytes={total_bytes} {:?}", assembler.stats);
 }
 
 fn send_segments(channel: &Channel<DeviceFrame>, segments: &mut Vec<Segment>) {
