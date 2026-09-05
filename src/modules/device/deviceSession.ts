@@ -13,9 +13,14 @@ export type SessionStatus =
 
 // Wire format: [1-byte discriminator][payload], on the same raw byte channel
 // the terminal uses (see remux::FRAME_INIT / FRAME_MEDIA on the Rust side).
+const FRAME_INIT = 0;
+const FRAME_MEDIA = 1;
+
 export function splitFrame(buf: ArrayBuffer): { kind: number; payload: Uint8Array<ArrayBuffer> } | null {
   if (buf.byteLength === 0) return null;
-  return { kind: new Uint8Array(buf, 0, 1)[0], payload: new Uint8Array<ArrayBuffer>(buf, 1) };
+  const kind = new Uint8Array(buf, 0, 1)[0];
+  if (kind !== FRAME_INIT && kind !== FRAME_MEDIA) return null;
+  return { kind, payload: new Uint8Array<ArrayBuffer>(buf, 1) };
 }
 
 export type DeviceSession = {

@@ -874,6 +874,12 @@ mod tests {
         a.finish(&mut out);
 
         assert_eq!(out.len(), 2);
+        // Pin the literal wire values, not just decode_frame's interpretation
+        // of them: swapping FRAME_INIT/FRAME_MEDIA would still round-trip
+        // through decode_frame but would desync from the frontend's
+        // `kind === 0` check.
+        assert_eq!(out[0][0], 0, "init frame's leading byte must be FRAME_INIT (0)");
+        assert_eq!(out[1][0], 1, "media frame's leading byte must be FRAME_MEDIA (1)");
         match decode_frame(&out[0]) {
             Some(Frame::Init(payload)) => {
                 let len = u32::from_be_bytes(payload[0..4].try_into().unwrap()) as usize;

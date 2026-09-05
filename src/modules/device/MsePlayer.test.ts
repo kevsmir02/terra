@@ -102,17 +102,29 @@ function fakeVideo(): FakeVideo {
 
 const CODEC = "avc1.42001E";
 
+// Mirrors what splitFrame() actually hands MsePlayer off the wire: a view
+// starting at byte offset 1 into a larger (discriminator-prefixed) buffer,
+// never offset 0. pushData must anchor its DataView at payload.byteOffset,
+// not payload.buffer directly; a fixture at offset 0 would pass even if that
+// anchoring regressed, so every payload built here carries a real offset.
+function withDiscriminator(kind: number, bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  const encoded = new Uint8Array(1 + bytes.length);
+  encoded[0] = kind;
+  encoded.set(bytes, 1);
+  return encoded.subarray(1);
+}
+
 function initFrame(moov = new Uint8Array([9, 9])) {
   const codec = new TextEncoder().encode(CODEC);
-  const out = new Uint8Array(4 + codec.length + moov.length);
-  new DataView(out.buffer).setUint32(0, codec.length, false);
-  out.set(codec, 4);
-  out.set(moov, 4 + codec.length);
-  return out;
+  const inner = new Uint8Array(4 + codec.length + moov.length);
+  new DataView(inner.buffer).setUint32(0, codec.length, false);
+  inner.set(codec, 4);
+  inner.set(moov, 4 + codec.length);
+  return withDiscriminator(0, inner);
 }
 
 function fragment(tag: number) {
-  return new Uint8Array([tag, tag, tag]);
+  return withDiscriminator(1, new Uint8Array([tag, tag, tag]));
 }
 
 function quotaError() {
@@ -186,6 +198,19 @@ describe("MsePlayer append cycle", () => {
     ms.readyState = "open";
     ms.dispatchEvent(new Event("sourceopen"));
     expect(bytes(lastSourceBuffer().appended)).toEqual([[9, 9]]);
+  });
+});
+
+describe("MsePlayer init segment validation", () => {
+  it("fails with a clear message instead of throwing when the init payload is too short to carry a codec length", () => {
+    const onError = vi.fn<(message: string) => void>();
+    const player = new MsePlayer(fakeVideo(), onError);
+
+    expect(() => player.pushData(0, withDiscriminator(0, new Uint8Array([1, 2, 3])))).not.toThrow();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toMatch(/too short/i);
+    expect(lastMediaSource().sourceBuffers).toHaveLength(0);
   });
 });
 

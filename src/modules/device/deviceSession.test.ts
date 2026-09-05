@@ -116,6 +116,10 @@ describe("splitFrame", () => {
     source[1] = 99;
     expect(frame?.payload[0]).toBe(99);
   });
+
+  it("returns null for a discriminator other than init or media", () => {
+    expect(splitFrame(encodeFrame(2, [1, 2, 3]))).toBeNull();
+  });
 });
 
 describe("openDeviceSession pre-flight", () => {

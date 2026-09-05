@@ -87,6 +87,10 @@ export class MsePlayer {
       //   [4-byte BE length] [UTF-8 codec string, e.g. "avc1.42001E"] [fMP4 ftyp+moov bytes]
       // We extract the codec string here for SourceBuffer construction and feed
       // the remainder to SourceBuffer.
+      if (payload.byteLength < 4) {
+        this.fail("Init segment is too short to carry a codec length; stream is unusable");
+        return;
+      }
       const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
       const len = view.getUint32(0, /* littleEndian */ false);
       this.codecString = new TextDecoder().decode(payload.subarray(4, 4 + len));
