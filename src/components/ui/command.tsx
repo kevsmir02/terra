@@ -139,7 +139,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn("my-1.5 h-px bg-border/(--emph-medium)", className)}
+      className={cn("my-1.5 h-0 border-t border-border/(--emph-medium)", className)}
       {...props}
     />
   )

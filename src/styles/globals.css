@@ -267,7 +267,7 @@ html[data-chrome="borderless"] #settings-root {
   height: 100%;
   border-radius: var(--frame-radius, 12px);
   overflow: hidden;
-  border: var(--frame-border-width, 1px) solid var(--border);
+  border: var(--frame-border-width, 1px) var(--border-style, solid) var(--border);
   background: var(--background);
 }
 

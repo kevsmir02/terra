@@ -59,4 +59,13 @@ describe("surface classes", () => {
     expect(b).toContain("var(--chrome-transform, none)");
     expect(b).toContain("var(--ui-font-display, inherit)");
   });
+
+  it("draws the window frame in the theme's border style", () => {
+    const i = CSS.indexOf('html[data-chrome="borderless"] #root,');
+    expect(i).toBeGreaterThan(-1);
+    const rule = CSS.slice(i, CSS.indexOf("}", i));
+    expect(rule).toContain(
+      "border: var(--frame-border-width, 1px) var(--border-style, solid) var(--border)",
+    );
+  });
 });

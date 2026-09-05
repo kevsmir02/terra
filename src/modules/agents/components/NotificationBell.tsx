@@ -296,7 +296,7 @@ export function NotificationBell({ onActivate }: Props) {
               />
             ))}
             {activeCount > 0 && notifications.length > 0 ? (
-              <div className="mx-2 my-1 h-px bg-border/(--emph-medium)" />
+              <div className="mx-2 my-1 h-0 border-t border-border/(--emph-medium)" />
             ) : null}
             {notifications.map((n) => (
               <NotificationRow

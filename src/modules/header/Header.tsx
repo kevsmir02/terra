@@ -128,7 +128,7 @@ export function Header({
         <NotificationBell onActivate={onActivateAgent} />
       </div>
 
-      <span className="mx-1 h-full w-px shrink-0 bg-border/(--emph-strong)" />
+      <span className="mx-1 h-full w-0 shrink-0 border-l border-border/(--emph-strong)" />
 
       <div
         className="flex min-w-0 flex-1 items-center gap-2"
@@ -158,7 +158,7 @@ export function Header({
 
       {settingsButton}
 
-      <span className="ml-1 h-5 w-px shrink-0 bg-border/(--emph-strong)" />
+      <span className="ml-1 h-5 w-0 shrink-0 border-l border-border/(--emph-strong)" />
       <WindowControls />
     </div>
   );
