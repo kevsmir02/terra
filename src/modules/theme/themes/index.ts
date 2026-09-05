@@ -4,6 +4,7 @@ import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
 import { nothing } from "./nothing";
+import { rebar } from "./rebar";
 import { stardew } from "./stardew";
 import { terraDefault } from "./terra-default";
 import { windowsXp } from "./windows-xp";
@@ -16,12 +17,14 @@ export {
   kanagawaDragon,
   gruvbox,
   nothing,
+  rebar,
   windowsXp,
 };
 
 export const BUILTIN: readonly Theme[] = [
   terraDefault,
   nothing,
+  rebar,
   stardew,
   gameboy,
   kanagawa,

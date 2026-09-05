@@ -1,28 +1,39 @@
 import type { Theme } from "../types";
 
-// Nothing OS: pure monochrome, dot-matrix type, one precise red.
+// Nothing OS: monochrome void, one red signal, dots you can actually see.
 //
-// The previous pass described that identity but never showed it. DotGothic16
-// was assigned to `display`, and Terra's chrome renders `sans`, so the
-// signature face appeared nowhere. `borderStyle: "dotted"` was set, which is
-// the right idea, but the border sat at #232320 on #0a0a0a where the texture
-// was invisible. `sidebar` was byte-identical to `background` in both
-// variants, so there was no surface hierarchy at all. And `primary` was red
-// but nothing prominent used it, so the accent that should carry the whole
-// theme never appeared on screen.
+// The theme has always described itself correctly and rendered something else.
+// This pass fixes the three claims in its own description rather than restyling
+// it, so the values below are deliberate in ways that look arbitrary:
 //
-// This pass spends the identity instead of declaring it:
+// The dots need 2px. `borderStyle: "dotted"` does reach every border already
+// (globals.css puts `border-style: var(--border-style)` on `*` in both the base
+// and utilities layers), so scope was never the problem. Width was: at 1px, CSS
+// dotted paints 1px dots separated by 1px gaps and is indistinguishable from a
+// fainter solid line. 2px plus a border that clears 3:1 is what makes the
+// texture appear, and `emphasis.strong` at 100% is what stops the chrome from
+// drawing that border at 60% alpha.
 //
-// - DotGothic16 moves to `sans`, so tabs, sidebar, statusbar and labels all
-//   wear the dot-matrix face. That is what makes Nothing recognisable.
-// - Borders lift far enough to read, because a dotted rule only works when you
-//   can see the dots. `emphasis` is raised to match, so the texture is
-//   deliberate rather than a smudge.
-// - Surfaces get a real ladder: sidebar is the void, canvas one step up, cards
-//   and popovers above that.
-// - Greys go neutral. The old ones were slightly warm (#f0efe9, #8c8c86),
-//   which muted the red instead of letting it snap.
-// - Red is rationed: ring, cursor, primary. It is a signal, not a decoration.
+// The palette is near-monochrome on purpose. The previous one peaked at 76%
+// saturation on brightYellow, which is a muted colour palette, not the
+// "monochrome void" the description promises. Hue now sits at the threshold of
+// perception and lightness carries the separation, so the slots still
+// differentiate and blue still differs from cyan. Red is the only saturated
+// colour on screen. Because syntax derives from the ansi palette, this is also
+// what makes the editor monochrome.
+//
+// `syntax.tag` is pinned off slot 1. Left to derive it would inherit the red,
+// and in a theme where red means "attention" every tag in every file would fire
+// the signal. `invalid`, `status.deleted` and `destructive` still derive.
+//
+// DotGothic16 stays on `display` and Space Grotesk stays on `sans`. The dot
+// face was tried on `sans` and reverted in c9d32d2: it is a 16px bitmap face
+// and Terra's chrome renders at 9px to 13px, where its strokes shimmer. That
+// leaves the signature face on `--ui-font-display`, which only
+// `.terra-chrome-label` consumes, so it reaches one element until more of the
+// chrome opts into that class. Uppercase at 0.14em carries the identity in the
+// meantime, which is the half of Nothing's typography a theme can actually
+// reach.
 export const nothing: Theme = {
   id: "nothing",
   name: "Nothing",
@@ -34,167 +45,167 @@ export const nothing: Theme = {
   variants: {
     dark: {
       colors: {
-        background: "#0b0b0b",
-        foreground: "#f2f2f2",
-        card: "#151515",
-        cardForeground: "#f2f2f2",
-        popover: "#1c1c1c",
-        popoverForeground: "#f2f2f2",
+        background: "#0a0a0a",
+        foreground: "#ededeb",
+        card: "#141414",
+        cardForeground: "#ededeb",
+        popover: "#1a1a1a",
+        popoverForeground: "#ededeb",
         primary: "#d63b2e",
         primaryForeground: "#ffffff",
         secondary: "#1a1a1a",
-        secondaryForeground: "#e6e6e6",
+        secondaryForeground: "#ededeb",
         muted: "#141414",
-        mutedForeground: "#8a8a8a",
-        accent: "#181818",
-        accentForeground: "#f2f2f2",
+        mutedForeground: "#9a9a96",
+        accent: "#1f1f1f",
+        accentForeground: "#ededeb",
         destructive: "#d63b2e",
-        border: "#3a3a3a",
-        input: "#3a3a3a",
+        // Lifted from #3a3a3a, which was too dim for the dots to register.
+        border: "#6e6e6a",
+        input: "#6e6e6a",
         ring: "#d63b2e",
         radius: "0.25rem",
         borderStyle: "dotted",
         sidebar: "#000000",
-        sidebarForeground: "#f2f2f2",
+        sidebarForeground: "#ededeb",
         sidebarPrimary: "#d63b2e",
         sidebarPrimaryForeground: "#ffffff",
-        sidebarAccent: "#181818",
-        sidebarAccentForeground: "#f2f2f2",
-        sidebarBorder: "#3a3a3a",
+        sidebarAccent: "#1f1f1f",
+        sidebarAccentForeground: "#ededeb",
+        sidebarBorder: "#6e6e6a",
         sidebarRing: "#d63b2e",
       },
-      // Only a nudge above the defaults. Raising it further was tried and
-      // reverted: `border-style: dotted` lands on the surface classes, not on
-      // the panel dividers, so a heavy ladder makes every blend more opaque
-      // without buying any of the texture this theme wants. Restraint is the
-      // point of the design, so border contrast carries the dots instead.
       emphasis: {
         faint: "12%",
         subtle: "32%",
         soft: "45%",
-        medium: "55%",
-        strong: "68%",
-        bold: "88%",
+        medium: "60%",
+        strong: "100%",
+        bold: "100%",
       },
       terminal: {
-        background: "#0b0b0b",
-        foreground: "#f2f2f2",
+        background: "#0a0a0a",
+        foreground: "#ededeb",
         cursor: "#d63b2e",
-        cursorAccent: "#0b0b0b",
-        selection: "rgba(214, 59, 46, 0.32)",
+        cursorAccent: "#ffffff",
+        selection: "rgba(214, 59, 46, 0.30)",
+        fontFamily: "JetBrainsMono Nerd Font",
         ansi: [
-          "#2a2a2a",
-          "#dd4335",
-          "#6a9c8a",
-          "#e0b84a",
-          "#5a8fc2",
-          "#a878b0",
-          "#6a9c9c",
-          "#c6c6c6",
-          "#8a8a8a",
-          "#f05344",
-          "#7dae9b",
-          "#ebd06a",
-          "#6ca2d4",
-          "#b98bc1",
-          "#7daeae",
-          "#f2f2f2",
+          "#1e1e1e",
+          "#e5342a",
+          "#b6b6b3",
+          "#d2cfc7",
+          "#909aa2",
+          "#c0b7bc",
+          "#a8afaf",
+          "#e8e8e6",
+          "#7a7a76",
+          "#ff5347",
+          "#cfcfcc",
+          "#e9e6dc",
+          "#a9afb9",
+          "#d8ced3",
+          "#bfc7c7",
+          "#ffffff",
         ],
       },
+      syntax: {
+        tag: "#a8afaf",
+      },
       shape: {
-        frameWidth: "1px",
+        frameWidth: "2px",
         frameRadius: "10px",
-        chromeWidth: "1px",
-        panelWidth: "1px",
+        chromeWidth: "2px",
+        panelWidth: "2px",
       },
       type: {
         sans: "'Space Grotesk', 'Inter Variable', sans-serif",
         display: "'DotGothic16', monospace",
-        chromeTracking: "0.02em",
-        chromeTransform: "none",
+        chromeTracking: "0.14em",
+        chromeTransform: "uppercase",
         fonts: ["space-grotesk", "dotgothic16"],
       },
     },
     light: {
       colors: {
-        background: "#f7f7f7",
-        foreground: "#111111",
+        background: "#fafaf9",
+        foreground: "#0a0a0a",
         card: "#ffffff",
-        cardForeground: "#111111",
+        cardForeground: "#0a0a0a",
         popover: "#ffffff",
-        popoverForeground: "#111111",
+        popoverForeground: "#0a0a0a",
         primary: "#c8342a",
         primaryForeground: "#ffffff",
-        secondary: "#ececec",
-        secondaryForeground: "#111111",
-        muted: "#eeeeee",
-        mutedForeground: "#666666",
-        accent: "#e8e8e8",
-        accentForeground: "#111111",
+        secondary: "#f0f0ee",
+        secondaryForeground: "#0a0a0a",
+        muted: "#f0f0ee",
+        mutedForeground: "#5c5c58",
+        accent: "#eaeae8",
+        accentForeground: "#0a0a0a",
         destructive: "#c8342a",
-        border: "#b8b8b8",
-        input: "#b8b8b8",
+        // Lifted from #b8b8b8, same reason as dark.
+        border: "#8a8a86",
+        input: "#8a8a86",
         ring: "#c8342a",
         radius: "0.25rem",
         borderStyle: "dotted",
-        sidebar: "#eaeaea",
-        sidebarForeground: "#111111",
+        sidebar: "#f0f0ee",
+        sidebarForeground: "#0a0a0a",
         sidebarPrimary: "#c8342a",
         sidebarPrimaryForeground: "#ffffff",
-        sidebarAccent: "#e0e0e0",
-        sidebarAccentForeground: "#111111",
-        sidebarBorder: "#b8b8b8",
+        sidebarAccent: "#eaeae8",
+        sidebarAccentForeground: "#0a0a0a",
+        sidebarBorder: "#8a8a86",
         sidebarRing: "#c8342a",
       },
-      // Only a nudge above the defaults. Raising it further was tried and
-      // reverted: `border-style: dotted` lands on the surface classes, not on
-      // the panel dividers, so a heavy ladder makes every blend more opaque
-      // without buying any of the texture this theme wants. Restraint is the
-      // point of the design, so border contrast carries the dots instead.
       emphasis: {
         faint: "12%",
         subtle: "32%",
         soft: "45%",
-        medium: "55%",
-        strong: "68%",
-        bold: "88%",
+        medium: "60%",
+        strong: "100%",
+        bold: "100%",
       },
       terminal: {
-        background: "#f7f7f7",
-        foreground: "#111111",
+        background: "#fafaf9",
+        foreground: "#0a0a0a",
         cursor: "#c8342a",
-        cursorAccent: "#f7f7f7",
+        cursorAccent: "#ffffff",
         selection: "rgba(200, 52, 42, 0.22)",
+        fontFamily: "JetBrainsMono Nerd Font",
         ansi: [
-          "#e0e0e0",
-          "#c8342a",
-          "#2e7d5b",
-          "#976700",
-          "#2b6cb0",
-          "#7f58d3",
-          "#2c7a7b",
-          "#3a3a3a",
-          "#666666",
-          "#a82e23",
-          "#236347",
-          "#825a00",
-          "#22548a",
-          "#6b46c1",
-          "#236162",
-          "#111111",
+          "#0a0a0a",
+          "#c42419",
+          "#55554f",
+          "#6e6a5c",
+          "#4a5058",
+          "#6a5a60",
+          "#56605e",
+          "#2e2e2a",
+          "#6e6e68",
+          "#e5342a",
+          "#74746e",
+          "#8a8578",
+          "#6a7280",
+          "#8a7a82",
+          "#78827e",
+          "#141414",
         ],
       },
+      syntax: {
+        tag: "#56605e",
+      },
       shape: {
-        frameWidth: "1px",
+        frameWidth: "2px",
         frameRadius: "10px",
-        chromeWidth: "1px",
-        panelWidth: "1px",
+        chromeWidth: "2px",
+        panelWidth: "2px",
       },
       type: {
         sans: "'Space Grotesk', 'Inter Variable', sans-serif",
         display: "'DotGothic16', monospace",
-        chromeTracking: "0.02em",
-        chromeTransform: "none",
+        chromeTracking: "0.14em",
+        chromeTransform: "uppercase",
         fonts: ["space-grotesk", "dotgothic16"],
       },
     },
