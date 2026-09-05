@@ -10,7 +10,7 @@ use super::adb::{
     SystemImage, GPU_FALLBACK,
 };
 use super::control::{ControlMessage, KeyAction, TouchAction};
-use super::session::DeviceSession;
+use super::session::{DeviceExit, DeviceSession};
 use super::state::DeviceState;
 use crate::modules::sync::{MutexExt, RwLockExt};
 
@@ -300,6 +300,7 @@ pub async fn device_open(
     state: State<'_, DeviceState>,
     serial: String,
     on_frame: Channel<Response>,
+    on_exit: Channel<DeviceExit>,
 ) -> Result<u32, String> {
     ensure_safe_serial(&serial)?;
     let reservation = state.reserve_serial(&serial)?;
@@ -308,7 +309,17 @@ pub async fn device_open(
     let (video_port, control_port) = ephemeral_ports()?;
     let id = state.next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let session = tauri::async_runtime::spawn_blocking(move || {
-        DeviceSession::spawn(id, adb, jar, serial, video_port, control_port, on_frame, reservation)
+        DeviceSession::spawn(
+            id,
+            adb,
+            jar,
+            serial,
+            video_port,
+            control_port,
+            on_frame,
+            on_exit,
+            reservation,
+        )
     })
     .await
     .map_err(|e| format!("device_open join: {e}"))??;

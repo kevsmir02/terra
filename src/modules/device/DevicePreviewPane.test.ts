@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PaneFallback } from "./DevicePreviewPane";
-import { NoDevices, ServerFailed, StreamFailed, UnauthorizedDevice } from "./emptyStates";
+import { ConnectingOverlay, DisconnectedOverlay, PaneFallback } from "./DevicePreviewPane";
+import { NoDevices, ServerFailed, UnauthorizedDevice } from "./emptyStates";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue([]),
@@ -34,6 +34,13 @@ function clickButton(tree: ReactNode) {
   const button = findButton(tree);
   if (!button) throw new Error("no button in tree");
   button.props.onClick();
+}
+
+function collectText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(collectText).join("");
+  if (!isValidElement(node)) return "";
+  return collectText((node as ReactElement<{ children?: ReactNode }>).props.children);
 }
 
 let reload: ReturnType<typeof vi.fn>;
@@ -90,17 +97,26 @@ describe("PaneFallback refresh", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(reload).not.toHaveBeenCalled();
   });
+});
 
-  it("offers Reconnect with the failure message once the stream has died", () => {
+describe("the connecting overlay", () => {
+  it("names what it is connecting to", () => {
+    expect(collectText(ConnectingOverlay({ label: "Pixel 8" }))).toContain("Connecting to Pixel 8");
+  });
+});
+
+describe("the disconnected overlay", () => {
+  // The overlay sits over the frozen last frame, so its Reconnect is the only
+  // way back: nothing in the module restarts a dead mirror on its own.
+  it("names the reason and wires Reconnect to the session retry", () => {
     const onRetry = vi.fn();
-    const el = PaneFallback({
-      status: { kind: "stream-failed", message: "Video buffer is full" },
-      onRetry,
-    }) as ReactElement<{ message: string; onReconnect: () => void }>;
+    const tree = DisconnectedOverlay({
+      message: "The mirror server could not be reached",
+      onReconnect: onRetry,
+    });
 
-    expect(el.type).toBe(StreamFailed);
-    expect(el.props.message).toBe("Video buffer is full");
-    clickButton(StreamFailed(el.props));
+    expect(collectText(tree)).toContain("The mirror server could not be reached");
+    clickButton(tree);
 
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(reload).not.toHaveBeenCalled();

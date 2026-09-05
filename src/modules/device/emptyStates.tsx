@@ -189,29 +189,6 @@ export function UnauthorizedDevice({
   );
 }
 
-export function StreamFailed({
-  narrow,
-  message,
-  onReconnect,
-}: {
-  narrow?: boolean;
-  message: string;
-  onReconnect: () => void;
-}) {
-  return (
-    <Shell title="Device stream stopped" narrow={narrow}>
-      <p className="break-words">{message}</p>
-      <button
-        type="button"
-        onClick={onReconnect}
-        className="mt-2 rounded-md border border-border/(--emph-strong) bg-card px-3 py-1 text-[11px] hover:bg-accent/(--emph-medium)"
-      >
-        Reconnect
-      </button>
-    </Shell>
-  );
-}
-
 export function ServerFailed({
   narrow,
   message,

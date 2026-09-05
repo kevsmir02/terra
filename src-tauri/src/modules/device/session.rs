@@ -19,6 +19,27 @@ use crate::modules::sync::MutexExt;
 const SHUTDOWN_BUDGET: Duration = Duration::from_secs(1);
 const SHUTDOWN_POLL: Duration = Duration::from_millis(20);
 
+/// How long the reader keeps retrying the connect+probe cycle before giving up
+/// on a server that never became ready. A parameter so a test can exhaust it
+/// in milliseconds instead of the twelve seconds production waits.
+#[derive(Clone, Copy)]
+struct ConnectBudget {
+    attempts: u32,
+    interval: Duration,
+}
+
+const CONNECT_BUDGET: ConnectBudget = ConnectBudget {
+    attempts: 60,
+    interval: Duration::from_millis(100),
+};
+
+/// Why a mirror session stopped, reported to the webview so it can tell a dead
+/// stream from a frozen last frame.
+#[derive(serde::Serialize, Clone)]
+pub struct DeviceExit {
+    pub reason: String,
+}
+
 /// Handles to the video and control sockets the IO threads own, so shutdown
 /// can close them from outside and unblock a reader mid-`read`.
 #[derive(Default)]
@@ -160,6 +181,7 @@ impl DeviceSession {
         video_port: u16,
         control_port: u16,
         channel: Channel<Response>,
+        on_exit: Channel<DeviceExit>,
         reservation: Arc<SerialReservation>,
     ) -> Result<Self, String> {
         let child = super::server::spawn_server(&adb, &jar, &serial, video_port, control_port)?;
@@ -181,7 +203,15 @@ impl DeviceSession {
         let reader_sockets = sockets.clone();
         let reader_reservation = Arc::clone(&reservation);
         tauri::async_runtime::spawn_blocking(move || {
-            run_read_loop(video_port, channel, stop_reader, Some(ready_tx), &reader_sockets);
+            run_read_loop(
+                video_port,
+                channel,
+                on_exit,
+                stop_reader,
+                Some(ready_tx),
+                &reader_sockets,
+                CONNECT_BUDGET,
+            );
             reader_reservation.release();
         });
 
@@ -252,12 +282,18 @@ impl Drop for DeviceSession {
 /// the first media frame. Framing lives in the assembler; this loop only does
 /// IO. `Channel::send` is synchronous (it just queues for the webview), so no
 /// async runtime is needed in this thread.
+///
+/// When the stream dies on its own the loop reports why on `on_exit`; a stop
+/// the webview asked for is not a death, so nothing is sent once `stopping` is
+/// set (`shutdown` sets it before it closes the sockets that wake this read).
 fn run_read_loop(
     local_port: u16,
     channel: Channel<Response>,
+    on_exit: Channel<DeviceExit>,
     stopping: Arc<AtomicBool>,
     mut ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
     sockets: &SocketRegistry,
+    budget: ConnectBudget,
 ) {
     // adb forward maps the local TCP port IMMEDIATELY (before the scrcpy server
     // has even bound its abstract socket), so `connect()` succeeds right away even
@@ -266,7 +302,7 @@ fn run_read_loop(
     // not just connect.
     let mut stream: Option<std::net::TcpStream> = None;
     let mut probe = [0u8; 1];
-    for _attempt in 1..=60 {
+    for _attempt in 1..=budget.attempts {
         if stopping.load(Ordering::Relaxed) {
             return;
         }
@@ -282,7 +318,7 @@ fn run_read_loop(
                         // adb accepted our local connection but the remote
                         // abstract socket isn't ready; close and retry.
                         drop(s);
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        std::thread::sleep(budget.interval);
                         continue;
                     }
                     Ok(_) | Err(_) => {
@@ -300,7 +336,7 @@ fn run_read_loop(
                 }
             }
             Err(_) => {
-                std::thread::sleep(std::time::Duration::from_millis(100));
+                std::thread::sleep(budget.interval);
             }
         }
     }
@@ -309,8 +345,10 @@ fn run_read_loop(
         Some(s) => s,
         None => {
             log::warn!(
-                "[device] read_loop: TCP connect failed after 60 attempts (~12s), scrcpy server never became ready on 127.0.0.1:{local_port}"
+                "[device] read_loop: TCP connect failed after {} attempts, scrcpy server never became ready on 127.0.0.1:{local_port}",
+                budget.attempts
             );
+            report_exit(&on_exit, &stopping, "server-unreachable".to_string());
             return;
         }
     };
@@ -319,41 +357,66 @@ fn run_read_loop(
     let mut assembler = StreamAssembler::default();
     let mut frames: Vec<Vec<u8>> = Vec::new();
 
-    loop {
+    let reason = loop {
         if stopping.load(Ordering::Relaxed) {
-            break;
+            break None;
         }
         let n = match stream.read(&mut read_buf) {
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => {
                 log::warn!("[device] read_loop: stream read error: {e}");
-                break;
+                break Some(format!("stream-error: {e}"));
             }
         };
 
         if n == 0 {
             assembler.finish(&mut frames);
-            send_frames(&channel, &mut frames);
-            break;
+            if !send_frames(&channel, &mut frames) {
+                break None;
+            }
+            break Some("stream-ended".to_string());
         }
 
         assembler.push_bytes(&read_buf[..n], &mut frames);
-        send_frames(&channel, &mut frames);
+        if !send_frames(&channel, &mut frames) {
+            break None;
+        }
 
         // Nothing can resynchronize a packet stream once a header stops making
         // sense, so reading on would only spin on bytes the assembler drops.
         if assembler.is_corrupt() {
             log::warn!("[device] read_loop: video stream desynchronized, stopping the reader");
-            break;
+            break Some("stream-corrupt".to_string());
         }
+    };
+
+    if let Some(reason) = reason {
+        report_exit(&on_exit, &stopping, reason);
     }
 }
 
-fn send_frames(channel: &Channel<Response>, frames: &mut Vec<Vec<u8>>) {
-    for frame in frames.drain(..) {
-        let _ = channel.send(Response::new(frame));
+/// A stop the webview asked for is not a failure, so the exit is suppressed
+/// once `stopping` is set: nothing is left listening for it either way.
+fn report_exit(on_exit: &Channel<DeviceExit>, stopping: &AtomicBool, reason: String) {
+    if stopping.load(Ordering::Relaxed) {
+        return;
     }
+    if let Err(e) = on_exit.send(DeviceExit { reason }) {
+        log::debug!("[device] exit send failed (channel closed): {e}");
+    }
+}
+
+/// False once the webview dropped the frame channel: it will never read again,
+/// so the reader stops rather than decoding into a void.
+fn send_frames(channel: &Channel<Response>, frames: &mut Vec<Vec<u8>>) -> bool {
+    for frame in frames.drain(..) {
+        if let Err(e) = channel.send(Response::new(frame)) {
+            log::debug!("[device] frame send failed (channel closed): {e}");
+            return false;
+        }
+    }
+    true
 }
 
 fn run_control_loop(
@@ -530,6 +593,7 @@ mod tests {
         let state = super::super::state::DeviceState::default();
         let reservation = state.reserve_serial("emulator-5554").unwrap();
         let channel: Channel<Response> = Channel::new(|_| Ok(()));
+        let on_exit: Channel<DeviceExit> = Channel::new(|_| Ok(()));
         let missing_adb = std::env::temp_dir().join("terra-missing-adb-for-tests");
         let result = DeviceSession::spawn(
             1,
@@ -539,6 +603,7 @@ mod tests {
             27183,
             27184,
             channel,
+            on_exit,
             reservation,
         );
         assert!(result.is_err(), "spawning against a missing adb binary must fail");
@@ -627,5 +692,117 @@ mod tests {
 
         let handle = std::thread::spawn(move || rx.blocking_recv());
         assert_eq!(join_within(handle, Duration::from_secs(2)), None);
+    }
+
+    /// Collects the `reason` of every exit the read loop reports, so a test can
+    /// assert both the reason and that exactly one (or no) exit was sent.
+    fn capturing_exit_channel() -> (Channel<DeviceExit>, Arc<Mutex<Vec<String>>>) {
+        let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+        let channel = Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(json) = body {
+                let payload: serde_json::Value =
+                    serde_json::from_str(&json).expect("exit payload is json");
+                let reason = payload["reason"].as_str().expect("exit carries a reason");
+                sink.lock_or_recover().push(reason.to_string());
+            }
+            Ok(())
+        });
+        (channel, seen)
+    }
+
+    fn test_budget(attempts: u32) -> ConnectBudget {
+        ConnectBudget { attempts, interval: Duration::from_millis(10) }
+    }
+
+    #[test]
+    fn read_loop_reports_stream_ended_when_the_server_closes() {
+        use std::io::Write as _;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            // Fewer bytes than a packet header, so the assembler buffers them
+            // and stays healthy: this is about EOF, not about framing.
+            socket.write_all(&[0u8; 8]).unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+        });
+
+        let (on_exit, seen) = capturing_exit_channel();
+        run_read_loop(
+            port,
+            Channel::new(|_| Ok(())),
+            on_exit,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            &SocketRegistry::default(),
+            test_budget(20),
+        );
+
+        server.join().unwrap();
+        assert_eq!(*seen.lock_or_recover(), ["stream-ended"]);
+    }
+
+    #[test]
+    fn read_loop_reports_server_unreachable_when_nothing_listens() {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .map(|l| l.local_addr().unwrap().port())
+            .unwrap();
+
+        let (on_exit, seen) = capturing_exit_channel();
+        let started = Instant::now();
+        run_read_loop(
+            port,
+            Channel::new(|_| Ok(())),
+            on_exit,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            &SocketRegistry::default(),
+            test_budget(3),
+        );
+
+        assert_eq!(*seen.lock_or_recover(), ["server-unreachable"]);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "the retry budget must bound how long the reader waits"
+        );
+    }
+
+    #[test]
+    fn read_loop_stays_silent_when_teardown_initiated_the_stop() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stopping = Arc::new(AtomicBool::new(false));
+        let sockets = Arc::new(SocketRegistry::default());
+        let (on_exit, seen) = capturing_exit_channel();
+
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let reader_stopping = Arc::clone(&stopping);
+        let reader_sockets = Arc::clone(&sockets);
+        let handle = std::thread::spawn(move || {
+            run_read_loop(
+                port,
+                Channel::new(|_| Ok(())),
+                on_exit,
+                reader_stopping,
+                Some(ready_tx),
+                &reader_sockets,
+                test_budget(20),
+            );
+        });
+
+        let (_socket, _) = listener.accept().unwrap();
+        ready_rx.blocking_recv().expect("the reader registers its socket before reading");
+
+        // Exactly what shutdown() does, in the order it does it.
+        stopping.store(true, Ordering::Relaxed);
+        sockets.close_all();
+
+        join_within(handle, Duration::from_secs(5));
+        assert!(
+            seen.lock_or_recover().is_empty(),
+            "a webview-initiated stop is a teardown, not a session death"
+        );
     }
 }

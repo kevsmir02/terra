@@ -8,8 +8,29 @@ export type SessionStatus =
   | { kind: "no-devices" }
   | { kind: "unauthorized"; serial: string }
   | { kind: "error"; message: string }
-  | { kind: "stream-failed"; message: string }
+  | { kind: "disconnected"; message: string }
   | { kind: "streaming"; devW: number; devH: number };
+
+// Why the backend's reader stopped (session.rs: DeviceExit).
+type DeviceExit = { reason: string };
+
+const STREAM_ERROR_PREFIX = "stream-error: ";
+const GENERIC_EXIT_MESSAGE = "The device stopped streaming";
+
+const EXIT_MESSAGE: Record<string, string> = {
+  "stream-ended": GENERIC_EXIT_MESSAGE,
+  "server-unreachable": "The mirror server could not be reached",
+  "stream-corrupt": "The stream was corrupted",
+};
+
+/// A reason is a wire token; this is the line the user reads. An unrecognized
+/// token falls back to the generic line rather than leaking an internal name.
+export function exitMessage(reason: string): string {
+  if (reason.startsWith(STREAM_ERROR_PREFIX)) {
+    return reason.slice(STREAM_ERROR_PREFIX.length).trim() || GENERIC_EXIT_MESSAGE;
+  }
+  return EXIT_MESSAGE[reason] ?? GENERIC_EXIT_MESSAGE;
+}
 
 // Wire format: [1-byte discriminator][payload], on the same raw byte channel
 // the terminal uses (see remux::FRAME_INIT / FRAME_MEDIA on the Rust side).
@@ -77,15 +98,23 @@ async function waitOutAlreadyOpen(serial: string): Promise<void> {
   }
 }
 
-async function openDeviceWithRetry(serial: string, ch: Channel<ArrayBuffer>): Promise<number> {
+async function openDeviceWithRetry(
+  serial: string,
+  onFrame: Channel<ArrayBuffer>,
+  onExit: Channel<DeviceExit>,
+): Promise<number> {
   try {
-    return await invoke<number>("device_open", { serial, onFrame: ch });
+    return await invoke<number>("device_open", { serial, onFrame, onExit });
   } catch (e) {
     if (!String(e).includes("already open")) throw e;
     await waitOutAlreadyOpen(serial);
-    return await invoke<number>("device_open", { serial, onFrame: ch });
+    return await invoke<number>("device_open", { serial, onFrame, onExit });
   }
 }
+
+// A frame reaching the screen is the only proof the mirror is live, and the
+// element announces that by firing one of these with a decoded size.
+const FRAME_EVENTS = ["loadeddata", "resize"] as const;
 
 export function openDeviceSession(opts: {
   serial: string;
@@ -97,6 +126,9 @@ export function openDeviceSession(opts: {
   let handle: number | null = null;
   let bridge: DeviceControlBridge | null = null;
   let player: MsePlayer | null = null;
+  let opened = false;
+  let painted = false;
+  let announcedStreaming = false;
 
   const close = () => {
     alive = false;
@@ -109,18 +141,37 @@ export function openDeviceSession(opts: {
       handle = null;
       trackClose(serial, h);
     }
+    for (const type of FRAME_EVENTS) video?.removeEventListener(type, onFrameEvent);
     player?.dispose();
     player = null;
   };
 
+  // Held back until the session is open AND a frame has a size: reporting it
+  // when device_open resolves would call a black rectangle a live mirror.
+  const announceStreaming = () => {
+    if (!alive || !opened || !painted || announcedStreaming || !video) return;
+    announcedStreaming = true;
+    onStatus({ kind: "streaming", devW: video.videoWidth, devH: video.videoHeight });
+  };
+
+  function onFrameEvent() {
+    if (!video || video.videoWidth <= 0) return;
+    painted = true;
+    announceStreaming();
+  }
+
   // A dead decoder pipeline is torn down at once so the backend stops pushing
-  // frames nobody can show; the pane then offers a fresh session.
+  // frames nobody can show; the pane then offers a Reconnect over the frozen
+  // last frame rather than pretending it is still live.
   const onPlayerError = (message: string) => {
     if (!alive) return;
     close();
-    onStatus({ kind: "stream-failed", message });
+    onStatus({ kind: "disconnected", message });
   };
-  if (video) player = new MsePlayer(video, onPlayerError);
+  if (video) {
+    player = new MsePlayer(video, onPlayerError);
+    for (const type of FRAME_EVENTS) video.addEventListener(type, onFrameEvent);
+  }
 
   const start = async () => {
     try {
@@ -146,11 +197,20 @@ export function openDeviceSession(opts: {
         const frame = splitFrame(buf);
         if (frame) player?.pushData(frame.kind, frame.payload);
       };
+      const exitCh = new Channel<DeviceExit>();
+      exitCh.onmessage = (exit) => {
+        if (!alive) return;
+        // The backend only reports an exit it did not initiate, so this is a
+        // death: tear the local half down before naming it, and never retry
+        // on our own (docs/adr/0001-mirror-does-not-reconnect-automatically.md).
+        close();
+        onStatus({ kind: "disconnected", message: exitMessage(exit.reason) });
+      };
       const pending = pendingCloses.get(serial);
       if (pending) await boundedWait(pending, PENDING_CLOSE_BOUND_MS);
       if (!alive) return;
 
-      const h = await openDeviceWithRetry(serial, ch);
+      const h = await openDeviceWithRetry(serial, ch, exitCh);
       if (!alive) {
         trackClose(serial, h);
         return;
@@ -162,7 +222,8 @@ export function openDeviceSession(opts: {
       // any mismatch. videoWidth/videoHeight is that encoded size, and it is
       // authoritative across rotation, so it is the only correct source here.
       bridge = new DeviceControlBridge(h, video?.videoWidth || 1080, video?.videoHeight || 1920);
-      onStatus({ kind: "streaming", devW: video?.videoWidth ?? 0, devH: video?.videoHeight ?? 0 });
+      opened = true;
+      announceStreaming();
     } catch (e) {
       if (!alive) return;
       const msg = String(e);
