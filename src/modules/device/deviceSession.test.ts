@@ -105,8 +105,8 @@ function open(video: FakeVideo = fakeVideo()) {
   return { onStatus, session, video };
 }
 
-/// Waits for the `opens`-th device_open, then decodes a frame, which is the
-/// only thing that may promote the session to `streaming`.
+// Waits for the `opens`-th device_open, then decodes a frame, which is the
+// only thing that may promote the session to `streaming`.
 async function awaitStreaming(opened: Opened, opens = 1) {
   await vi.waitFor(() => expect(calls("device_open")).toHaveLength(opens), { timeout: 2000 });
   opened.video.fire("loadeddata");

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 
-/// Android `KEYCODE_*` values injected verbatim via the scrcpy control socket.
+// Android `KEYCODE_*` values injected verbatim via the scrcpy control socket.
 export const DEVICE_KEYCODE = {
   HOME: 3,
   BACK: 4,
@@ -15,8 +15,10 @@ export const DEVICE_KEYCODE = {
  * device's physical size. scrcpy's `getPhysicalPoint` compares the width/height
  * carried by each touch against the current video size and *silently discards*
  * the event when they differ - no error, no log. A device that downscales via
- * `max_size` encodes below its physical resolution, so sending physical
- * dimensions drops every touch.
+ * `max_size` encodes below its physical resolution: with `max_size=1920` a
+ * 1080x2400 device encodes at 864x1920, so sending physical dimensions drops
+ * every touch. Verified against scrcpy 4.1: 864x1920 works, and 1080x2400,
+ * 880x1920 and 864x1912 are all dropped.
  *
  * The `<video>` is `object-contain`, so the picture is letterboxed inside the
  * element. Mapping against the raw element rect would skew every coordinate by
@@ -198,7 +200,7 @@ export class DeviceControlBridge {
     this.scheduleFlush();
   }
 
-  /// Number of fingers currently down. Exposed for tests and diagnostics.
+  // Number of fingers currently down. Exposed for tests and diagnostics.
   public get activePointerCount() {
     return this.activePointers.size;
   }
@@ -269,7 +271,7 @@ export class DeviceControlBridge {
     }).catch((err) => console.error("[controlBridge] send_key failed:", err));
   }
 
-  /// Android only acts on a key once it sees the matching up.
+  // Android only acts on a key once it sees the matching up.
   public pressKey(keycode: number) {
     this.sendKey(keycode, 0);
     this.sendKey(keycode, 1);

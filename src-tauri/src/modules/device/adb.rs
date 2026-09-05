@@ -130,7 +130,7 @@ pub fn resolve_adb_path() -> Result<PathBuf, String> {
     resolve_tool(
         "adb",
         "platform-tools",
-        "adb not found on PATH or in the Android SDK, install Android Platform Tools, or set ANDROID_HOME",
+        "adb not found on PATH or in the Android SDK. Install Android Platform Tools, or set ANDROID_HOME",
     )
 }
 
@@ -138,7 +138,7 @@ pub fn resolve_emulator_path() -> Result<PathBuf, String> {
     resolve_tool(
         "emulator",
         "emulator",
-        "emulator not found on PATH or in the Android SDK, install the Android Emulator package, or set ANDROID_HOME",
+        "emulator not found on PATH or in the Android SDK. Install the Android Emulator package, or set ANDROID_HOME",
     )
 }
 
@@ -167,7 +167,7 @@ pub fn resolve_avdmanager_path() -> Result<PathBuf, String> {
             return Ok(found);
         }
     }
-    Err("avdmanager not found, install the Android SDK Command-line Tools".to_string())
+    Err("avdmanager not found. Install the Android SDK Command-line Tools".to_string())
 }
 
 /// Enumerate installed system images by walking `<sdk>/system-images`, which is

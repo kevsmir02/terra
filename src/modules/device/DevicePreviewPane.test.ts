@@ -5,6 +5,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectingOverlay, DisconnectedOverlay, PaneFallback } from "./DevicePreviewPane";
 import { NoDevices, ServerFailed, UnauthorizedDevice } from "./emptyStates";
+import type { DeviceEntry } from "./generated/DeviceEntry";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue([]),
@@ -99,15 +100,19 @@ describe("PaneFallback refresh", () => {
   });
 });
 
+// The overlay names the device itself, so the test has to hand it one rather
+// than a label string.
+const PIXEL: DeviceEntry = { serial: "emulator-5554", state: "device", model: "Pixel_8" };
+
 describe("the connecting overlay", () => {
   it("names what it is connecting to", () => {
-    expect(collectText(ConnectingOverlay({ label: "Pixel 8" }))).toContain("Connecting to Pixel 8");
+    expect(collectText(ConnectingOverlay({ device: PIXEL }))).toContain("Connecting to Pixel 8");
   });
 
   // A reviewer asked for this on Task 8: without it a screen reader never
   // learns the pane transitioned into connecting.
   it("announces the state change to assistive tech", () => {
-    const el = ConnectingOverlay({ label: "Pixel 8" }) as ReactElement<{
+    const el = ConnectingOverlay({ device: PIXEL }) as ReactElement<{
       role?: string;
       "aria-live"?: string;
     }>;

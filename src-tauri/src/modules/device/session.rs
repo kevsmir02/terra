@@ -251,9 +251,10 @@ impl DeviceSession {
         }
     }
 
-    /// `None` once the session has been shut down: the sender is dropped
-    /// first thing in `shutdown`, which is also what unblocks a control loop
-    /// parked in `blocking_recv`.
+    /// `None` once the session has been shut down: `shutdown` stores the stop
+    /// flag first, then drops the sender, which is what unblocks a control loop
+    /// parked in `blocking_recv`. The flag has to land first so every IO thread
+    /// the drop or the socket close wakes already reads the stop as deliberate.
     pub fn control_tx(&self) -> Option<&mpsc::Sender<ControlMessage>> {
         self.control_tx.as_ref()
     }
@@ -371,10 +372,6 @@ fn run_read_loop(
         };
 
         if n == 0 {
-            assembler.finish(&mut frames);
-            if !send_frames(&channel, &mut frames) {
-                break None;
-            }
             break Some("stream-ended".to_string());
         }
 
@@ -402,17 +399,14 @@ fn report_exit(on_exit: &Channel<DeviceExit>, stopping: &AtomicBool, reason: Str
     if stopping.load(Ordering::Relaxed) {
         return;
     }
-    if let Err(e) = on_exit.send(DeviceExit { reason }) {
-        log::debug!("[device] exit send failed (channel closed): {e}");
-    }
+    let _ = on_exit.send(DeviceExit { reason });
 }
 
 /// False once the webview dropped the frame channel: it will never read again,
 /// so the reader stops rather than decoding into a void.
 fn send_frames(channel: &Channel<Response>, frames: &mut Vec<Vec<u8>>) -> bool {
     for frame in frames.drain(..) {
-        if let Err(e) = channel.send(Response::new(frame)) {
-            log::debug!("[device] frame send failed (channel closed): {e}");
+        if channel.send(Response::new(frame)).is_err() {
             return false;
         }
     }
@@ -766,6 +760,59 @@ mod tests {
         assert!(
             started.elapsed() < Duration::from_secs(2),
             "the retry budget must bound how long the reader waits"
+        );
+    }
+
+    /// `read_loop_stays_silent_when_teardown_initiated_the_stop` pins the
+    /// reader's half; this pins `shutdown`'s, so reordering it to close the
+    /// sockets before storing `stopping` fails here instead of shipping a
+    /// spurious "the device stopped streaming" on every close.
+    #[test]
+    fn shutdown_delivers_no_exit_to_a_live_reader() {
+        let state = DeviceState::default();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let sockets = Arc::new(SocketRegistry::default());
+        let (on_exit, seen) = capturing_exit_channel();
+
+        let (tx, _rx) = mpsc::channel(1);
+        let mut session = DeviceSession::stub(1, "emulator-5554", tx);
+        session.teardown = Some(Teardown {
+            adb: std::env::temp_dir().join("terra-missing-adb-for-tests"),
+            serial: "emulator-5554".into(),
+            video_port: port,
+            control_port: port.wrapping_add(1),
+            child: None,
+            sockets: Arc::clone(&sockets),
+            reservation: state.reserve_serial("emulator-5554").unwrap(),
+            #[cfg(windows)]
+            _job: None,
+        });
+
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let reader_stopping = Arc::clone(&session.stopping);
+        let reader_sockets = Arc::clone(&sockets);
+        let handle = std::thread::spawn(move || {
+            run_read_loop(
+                port,
+                Channel::new(|_| Ok(())),
+                on_exit,
+                reader_stopping,
+                Some(ready_tx),
+                &reader_sockets,
+                test_budget(20),
+            );
+        });
+
+        let (_socket, _) = listener.accept().unwrap();
+        ready_rx.blocking_recv().expect("the reader registers its socket before reading");
+
+        session.shutdown();
+
+        join_within(handle, Duration::from_secs(5));
+        assert!(
+            seen.lock_or_recover().is_empty(),
+            "closing a session must not reach the webview as a session death"
         );
     }
 

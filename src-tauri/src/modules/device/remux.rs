@@ -1,8 +1,12 @@
+use std::collections::VecDeque;
+
+use super::timeline::FrameTimeline;
+
 /// Split an Annex-B byte stream into individual NAL unit byte strings (without
 /// the start codes). Recognizes both the 4-byte `00 00 00 01` start code and
 /// the 3-byte `00 00 01` start code per the H.264 spec. Pure function so the
 /// parser is unit-testable without a live scrcpy socket.
-fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
+fn split_nal_units(bytes: &[u8]) -> Vec<&[u8]> {
     let mut nals = Vec::new();
     let mut i = 0usize;
     let mut unit_start: Option<usize> = None;
@@ -25,10 +29,10 @@ fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
     nals
 }
 
-fn push_nonempty(nals: &mut Vec<Vec<u8>>, bytes: &[u8], start: Option<usize>, end: usize) {
+fn push_nonempty<'a>(nals: &mut Vec<&'a [u8]>, bytes: &'a [u8], start: Option<usize>, end: usize) {
     if let Some(start) = start {
         if start < end {
-            nals.push(bytes[start..end].to_vec());
+            nals.push(&bytes[start..end]);
         }
     }
 }
@@ -168,39 +172,36 @@ impl Fmp4Builder {
     }
 }
 
-use std::collections::VecDeque;
-
-use super::timeline::FrameTimeline;
-
 /// Access units that arrive before SPS+PPS are held for the post-bootstrap
 /// flush; a stream that never produces a usable SPS must not grow that queue
-/// forever.
-pub const MAX_PENDING_SLICES: usize = 256;
+/// forever. Both caps are hard ceilings: `hold` trims the front, whole
+/// key-frame-led runs at a time, until the queue is at or under both.
+pub(crate) const MAX_PENDING_SLICES: usize = 256;
 
 /// Byte-size counterpart to `MAX_PENDING_SLICES`: a handful of high-resolution
 /// frames can blow past a lightweight memory budget well before the count cap.
-pub const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
 
 /// Every packet the server writes with `send_frame_meta=true` is prefixed by
 /// `[u64 BE pts_and_flags][u32 BE payload size]`.
 const PACKET_HEADER_BYTES: usize = 12;
 
 /// Session-meta packet: the 12-byte header stands alone, with no payload.
-pub const PACKET_FLAG_SESSION: u64 = 1 << 63;
+pub(crate) const PACKET_FLAG_SESSION: u64 = 1 << 63;
 
 /// The payload is the codec config (Annex-B SPS+PPS), not a frame.
-pub const PACKET_FLAG_CONFIG: u64 = 1 << 62;
+pub(crate) const PACKET_FLAG_CONFIG: u64 = 1 << 62;
 
 /// The payload is a random access point.
-pub const PACKET_FLAG_KEY_FRAME: u64 = 1 << 61;
+pub(crate) const PACKET_FLAG_KEY_FRAME: u64 = 1 << 61;
 
 /// The low 61 bits of `pts_and_flags` are the capture PTS in microseconds.
-pub const PACKET_PTS_MASK: u64 = (1 << 61) - 1;
+pub(crate) const PACKET_PTS_MASK: u64 = (1 << 61) - 1;
 
 /// A single access unit far larger than any 1920-wide keyframe: a declared
 /// size above this means the stream is desynchronized, not that a huge frame
 /// arrived, so buffering it would only burn memory on garbage.
-pub const MAX_PACKET_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_PACKET_BYTES: usize = 16 * 1024 * 1024;
 
 /// NAL type (low 5 bits of the header byte) 5 = IDR (coded slice of an IDR
 /// picture), the only slice type a decoder can start rendering from cleanly.
@@ -308,13 +309,6 @@ impl StreamAssembler {
         self.buf.drain(..consumed);
     }
 
-    /// End of stream. Explicit packet sizes mean a trailing partial packet is
-    /// unusable rather than a frame that only needs flushing, so this releases
-    /// the buffer instead of emitting anything.
-    pub fn finish(&mut self, _out: &mut Vec<Vec<u8>>) {
-        self.buf = Vec::new();
-    }
-
     fn enter_corrupt_state(&mut self) {
         self.corrupt = true;
         self.buf = Vec::new();
@@ -327,25 +321,30 @@ impl StreamAssembler {
             self.handle_config(payload, out);
             return;
         }
-        let nals: Vec<Vec<u8>> = split_nal_units(payload)
+        let nals: Vec<&[u8]> = split_nal_units(payload)
             .into_iter()
             .filter(|nal| !nal.is_empty() && nal[0] & 0x1F != NAL_TYPE_AUD)
             .collect();
         if nals.is_empty() {
             return;
         }
-        let bytes = nals.iter().map(Vec::len).sum();
         // The flag is authoritative; the IDR scan only covers a capture that
         // did not set it, since eviction must never keep a headless GOP.
         let key_frame = pts_and_flags & PACKET_FLAG_KEY_FRAME != 0
             || nals.iter().any(|nal| is_idr(nal));
-        let unit = PendingUnit {
-            nals,
+        let pts_us = pts_and_flags & PACKET_PTS_MASK;
+        // The bootstrapped path muxes straight out of the packet buffer; only
+        // a held unit has to outlive it, so only a held unit is copied.
+        if let Some(builder) = self.builder.as_mut() {
+            out.push(builder.append_access_unit(&nals, key_frame, pts_us));
+            return;
+        }
+        self.hold(PendingUnit {
+            bytes: nals.iter().map(|nal| nal.len()).sum(),
+            nals: nals.into_iter().map(<[u8]>::to_vec).collect(),
             key_frame,
-            pts_us: pts_and_flags & PACKET_PTS_MASK,
-            bytes,
-        };
-        self.emit_or_hold(unit, out);
+            pts_us,
+        });
     }
 
     /// The init segment is emitted exactly once: MSE cannot swap an initialized
@@ -358,13 +357,13 @@ impl StreamAssembler {
         for nal in split_nal_units(payload) {
             match nal.first().map(|header| header & 0x1F) {
                 Some(7) => {
-                    if codec_string_from_sps(&nal).is_some() {
-                        self.sps = Some(nal);
+                    if codec_string_from_sps(nal).is_some() {
+                        self.sps = Some(nal.to_vec());
                     } else {
                         self.warn_malformed("SPS", nal.len());
                     }
                 }
-                Some(8) => self.pps = Some(nal),
+                Some(8) => self.pps = Some(nal.to_vec()),
                 _ => {}
             }
         }
@@ -373,7 +372,7 @@ impl StreamAssembler {
 
     fn bootstrap(&mut self, out: &mut Vec<Vec<u8>>) {
         let (Some(sps), Some(pps)) = (self.sps.as_deref(), self.pps.as_deref()) else { return };
-        let Some(builder) = Fmp4Builder::from_parameter_sets(sps, pps) else {
+        let Some(mut builder) = Fmp4Builder::from_parameter_sets(sps, pps) else {
             self.warn_malformed("SPS+PPS", sps.len() + pps.len());
             self.sps = None;
             self.pps = None;
@@ -387,32 +386,47 @@ impl StreamAssembler {
         frame.extend_from_slice(codec.as_bytes());
         frame.extend_from_slice(init);
         out.push(frame);
-        self.builder = Some(builder);
         // A stream that only ever had pending delta frames must flush nothing
         // rather than lead with garbage the decoder cannot start from.
-        self.evict_to_newest_keyframe();
+        self.evict_leading_delta_frames();
+        let pending = std::mem::take(&mut self.pending);
         self.pending_bytes = 0;
-        for unit in std::mem::take(&mut self.pending) {
-            self.emit_or_hold(unit, out);
+        for unit in pending {
+            out.push(builder.append_access_unit(&unit.nals, unit.key_frame, unit.pts_us));
+        }
+        self.builder = Some(builder);
+    }
+
+    /// Queue one access unit for the post-bootstrap flush, then hold both caps.
+    fn hold(&mut self, unit: PendingUnit) {
+        self.pending_bytes += unit.bytes;
+        self.pending.push_back(unit);
+        if self.over_pending_cap() {
+            self.evict_to_cap();
         }
     }
 
-    fn emit_or_hold(&mut self, unit: PendingUnit, out: &mut Vec<Vec<u8>>) {
-        match self.builder.as_mut() {
-            Some(b) => out.push(b.append_access_unit(&unit.nals, unit.key_frame, unit.pts_us)),
-            None => {
-                self.pending_bytes += unit.bytes;
-                self.pending.push_back(unit);
-                if self.pending.len() > MAX_PENDING_SLICES || self.pending_bytes > MAX_PENDING_BYTES {
-                    self.evict_to_newest_keyframe();
-                }
-            }
+    fn over_pending_cap(&self) -> bool {
+        self.pending.len() > MAX_PENDING_SLICES || self.pending_bytes > MAX_PENDING_BYTES
+    }
+
+    /// Trims the front until both caps hold. Leading delta frames go first,
+    /// since they are unplayable without the GOP they were cut from; past
+    /// that only dropping the oldest key frame (and the run behind it) can
+    /// shrink a queue that is all key frames, which is what a stream that
+    /// never bootstraps produces.
+    fn evict_to_cap(&mut self) {
+        self.evict_leading_delta_frames();
+        while self.over_pending_cap() {
+            let Some(dropped) = self.pending.pop_front() else { break };
+            self.pending_bytes -= dropped.bytes;
+            self.evict_leading_delta_frames();
         }
     }
 
     /// Drops from the front of `pending` until it leads with a key frame (or is
     /// empty), so the flush after bootstrap never starts mid-GOP.
-    fn evict_to_newest_keyframe(&mut self) {
+    fn evict_leading_delta_frames(&mut self) {
         while let Some(front) = self.pending.front() {
             if front.key_frame {
                 break;
@@ -795,7 +809,7 @@ mod tests {
     }
 
     #[test]
-    fn assembler_bounds_pending_units_before_bootstrap() {
+    fn assembler_flushes_at_most_the_count_cap_after_bootstrap() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
         for _ in 0..(MAX_PENDING_SLICES + 50) {
@@ -803,9 +817,40 @@ mod tests {
         }
         a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         let media = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Media(_)))).count();
-        // Every held unit is itself a key frame, so eviction never finds a
-        // delta front to drop: the cap only bites a non-keyframe head.
-        assert_eq!(media, MAX_PENDING_SLICES + 50);
+        // Every held unit is a key frame, so eviction has to drop key-frame-led
+        // runs to hold the cap: the flush replays the newest cap-worth of them.
+        assert_eq!(media, MAX_PENDING_SLICES);
+    }
+
+    /// A stream that never bootstraps (a bad CONFIG packet, or none) keeps
+    /// producing key frames; if only a delta front could be evicted the queue
+    /// would grow at capture rate for the life of the session.
+    #[test]
+    fn assembler_bounds_a_key_frame_only_stream_past_both_caps() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        let mut idr = vec![0u8; 32 * 1024];
+        idr[0] = IDR[0];
+        for i in 0..320u64 {
+            a.push_bytes(&packet(KEY, i * 33_333, &nal_stream(&[&idr])), &mut out);
+        }
+
+        assert!(out.is_empty(), "nothing may be emitted before bootstrap");
+        assert!(a.pending.len() <= MAX_PENDING_SLICES, "count cap must bite on key frames too");
+        assert!(a.pending_bytes <= MAX_PENDING_BYTES, "byte cap must bite on key frames too");
+        assert_eq!(
+            a.pending_bytes,
+            a.pending.iter().map(|u| u.bytes).sum::<usize>(),
+            "the byte total must stay exact across evictions"
+        );
+
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
+        assert_eq!(
+            trun_of(media_payload(&out[1])).3,
+            SAMPLE_FLAGS_KEY_FRAME,
+            "the flush must still lead with a key frame"
+        );
     }
 
     #[test]
@@ -885,7 +930,6 @@ mod tests {
         let mut out = Vec::new();
         a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
-        a.finish(&mut out);
 
         assert_eq!(out.len(), 2);
         // Pin the literal wire values, not just decode_frame's interpretation
@@ -922,7 +966,8 @@ mod tests {
 
     #[test]
     fn split_nal_units_finds_two_units_with_4byte_start_codes() {
-        let nals = split_nal_units(&annexb_fixture());
+        let bytes = annexb_fixture();
+        let nals = split_nal_units(&bytes);
         assert_eq!(nals.len(), 2);
         assert_eq!(nals[0], vec![0x65, 0xAA, 0xBB, 0xCC]);
         assert_eq!(nals[1], vec![0x68, 0xDD, 0xEE]);
@@ -1035,7 +1080,6 @@ mod tests {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
         a.push_bytes(&stream, &mut out);
-        a.finish(&mut out);
 
         assert!(a.is_bootstrapped());
         assert_eq!(out.len(), 5);
@@ -1180,7 +1224,6 @@ mod tests {
         assert_eq!(out.len(), 1, "nothing may be emitted from a desynchronized stream");
         // The terminal state is sticky: later bytes are dropped without parsing.
         a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
-        a.finish(&mut out);
         assert!(a.is_corrupt());
         assert_eq!(out.len(), 1);
     }
@@ -1197,15 +1240,15 @@ mod tests {
         assert!(!a.is_corrupt(), "the limit itself must be accepted, not rejected");
     }
 
+    /// Sizes are explicit, so a trailing partial packet is never a frame that
+    /// only needs flushing: it stays in the buffer and dies with the session.
     #[test]
-    fn assembler_drops_a_truncated_trailing_packet_on_finish() {
+    fn assembler_never_muxes_a_truncated_trailing_packet() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
         a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         let truncated = packet(KEY, 0, &nal_stream(&[&IDR]));
         a.push_bytes(&truncated[..truncated.len() - 3], &mut out);
-        assert_eq!(out.len(), 1);
-        a.finish(&mut out);
         assert_eq!(out.len(), 1, "half an access unit must never be muxed");
     }
 }

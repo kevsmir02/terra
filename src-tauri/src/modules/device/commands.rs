@@ -304,11 +304,13 @@ pub async fn device_open(
 ) -> Result<u32, String> {
     ensure_safe_serial(&serial)?;
     let reservation = state.reserve_serial(&serial)?;
-    let adb = resolve_adb_path()?;
-    let jar = state.jar_path(&app)?;
     let (video_port, control_port) = ephemeral_ports()?;
     let handle = state.next_handle.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // Both resolutions walk the filesystem, so they belong off the IPC thread;
+    // the serial checks above stay on it so a bad or duplicate open fails fast.
     let session = tauri::async_runtime::spawn_blocking(move || {
+        let adb = resolve_adb_path()?;
+        let jar = app.state::<DeviceState>().jar_path(&app)?;
         DeviceSession::spawn(
             handle,
             adb,

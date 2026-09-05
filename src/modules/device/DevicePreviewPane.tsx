@@ -27,7 +27,7 @@ export function PaneFallback({ status, onRetry }: { status: FallbackStatus; onRe
 
 const OVERLAY = "absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center";
 
-export function ConnectingOverlay({ label }: { label: string }) {
+export function ConnectingOverlay({ device }: { device: DeviceEntry }) {
   return (
     <div
       className={cn(OVERLAY, "pointer-events-none bg-background/(--emph-bold)")}
@@ -41,7 +41,7 @@ export function ConnectingOverlay({ label }: { label: string }) {
         className="animate-spin text-muted-foreground"
       />
       <p className="max-w-full break-words text-[11px] text-muted-foreground">
-        Connecting to {label}
+        Connecting to {deviceDisplayName(device)}
       </p>
     </div>
   );
@@ -77,33 +77,12 @@ export function DisconnectedOverlay({
 // effect cleanup closes its session first; the new instance's start() waits
 // out that close (deviceSession.ts) before opening the same serial again, so
 // a fast remount never races the backend's own close teardown.
-export function DevicePreviewPane({
-  device,
-  label,
-}: {
-  device: DeviceEntry;
-  label?: string;
-}) {
+export function DevicePreviewPane({ device }: { device: DeviceEntry }) {
   const [attempt, setAttempt] = useState(0);
-  return (
-    <SessionPane
-      key={attempt}
-      device={device}
-      label={label}
-      onRetry={() => setAttempt((n) => n + 1)}
-    />
-  );
+  return <SessionPane key={attempt} device={device} onRetry={() => setAttempt((n) => n + 1)} />;
 }
 
-function SessionPane({
-  device,
-  label,
-  onRetry,
-}: {
-  device: DeviceEntry;
-  label?: string;
-  onRetry: () => void;
-}) {
+function SessionPane({ device, onRetry }: { device: DeviceEntry; onRetry: () => void }) {
   const { serial } = device;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<DeviceSession | null>(null);
@@ -170,9 +149,7 @@ function SessionPane({
           onPointerCancel={(e) => sessionRef.current?.bridge?.handlePointerCancel(e)}
           onWheel={(e) => sessionRef.current?.bridge?.handleWheel(e)}
         />
-        {status.kind === "connecting" && (
-          <ConnectingOverlay label={label ?? deviceDisplayName(device)} />
-        )}
+        {status.kind === "connecting" && <ConnectingOverlay device={device} />}
         {status.kind === "disconnected" && (
           <DisconnectedOverlay message={status.message} onReconnect={onRetry} />
         )}

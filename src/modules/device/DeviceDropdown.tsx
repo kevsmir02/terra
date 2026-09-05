@@ -173,7 +173,6 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
               })}
               {showCreate && (
                 <CreateAvd
-                  busy={busy}
                   onCreate={async (name, pkg) => {
                     setCreating(true);
                     try {

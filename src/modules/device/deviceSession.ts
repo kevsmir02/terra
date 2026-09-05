@@ -25,8 +25,8 @@ const EXIT_MESSAGE: Record<string, string> = {
   "stream-corrupt": "The stream was corrupted",
 };
 
-/// A reason is a wire token; this is the line the user reads. An unrecognized
-/// token falls back to the generic line rather than leaking an internal name.
+// A reason is a wire token; this is the line the user reads. An unrecognized
+// token falls back to the generic line rather than leaking an internal name.
 export function exitMessage(reason: string): string {
   if (reason.startsWith(STREAM_ERROR_PREFIX)) {
     return reason.slice(STREAM_ERROR_PREFIX.length).trim() || GENERIC_EXIT_MESSAGE;
