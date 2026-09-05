@@ -12,10 +12,12 @@ overrides:
   # deduplicate onto a resolution pnpm had picked anyway.
   #
   # react-scan -> react-doctor -> conf -> ajv
-  fast-uri: "^3.1.5"
+  fast-uri: "^3.1.6"
   # @rolldown/plugin-babel -> vite
   postcss: "^8.5.23"
-  nanoid: "^3.3.17"
+  nanoid: "^3.3.18"
+  # @rolldown/plugin-babel -> @babel/core 8; shadcn already resolves the patched one
+  browserslist: "^4.28.7"
   # shadcn. Terra consumes exactly one file from that package,
   # `shadcn/tailwind.css`, imported by src/styles/globals.css. Its CLI is run as
   # `pnpm dlx shadcn add`, which fetches its own copy, so none of the code below
@@ -26,6 +28,8 @@ overrides:
   js-yaml: "^4.3.1"
   hono: "^4.13.0"
   "@hono/node-server": "^2.1.0"
+  # shadcn -> @modelcontextprotocol/sdk -> express -> body-parser
+  qs: "^6.16.0"
 allowBuilds:
   esbuild: true
   msgpackr-extract: false
