@@ -156,11 +156,11 @@ export class MsePlayer {
 
     if (intent.seekTo !== undefined) {
       this.video.currentTime = intent.seekTo;
-      // Only warn for the rare case where the playhead was orphaned outside
-      // every buffered range: a live-catch-up seek from within a continuous
-      // range is routine (e.g. every stream start) and not worth logging.
-      const outsideEveryRange = buffered.length > 0 && !buffered.some((r) => currentTime >= r.start && currentTime <= r.end);
-      if (outsideEveryRange && !this.warnedPlayheadDrift) {
+      // Only warn for a heal (the playhead was orphaned outside every
+      // buffered range): a live catch-up is routine (e.g. every stream
+      // start) and not worth logging. The policy says which rule fired,
+      // so this never re-derives it from the buffered ranges itself.
+      if (intent.seekReason === "heal" && !this.warnedPlayheadDrift) {
         this.warnedPlayheadDrift = true;
         console.warn("[device] MSE: playhead fell outside the buffered ranges, seeking to", intent.seekTo);
       }

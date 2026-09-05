@@ -14,7 +14,7 @@ describe("playbackPolicy", () => {
 
   it("seeks to just behind live once the lag threshold is crossed", () => {
     const state: PlaybackState = { currentTime: 5, buffered: [{ start: 0, end: 10 }] };
-    expect(playbackPolicy(state)).toEqual({ seekTo: 9.9 });
+    expect(playbackPolicy(state)).toEqual({ seekTo: 9.9, seekReason: "live" });
   });
 
   it("evicts exactly the configured window behind the playhead", () => {
@@ -25,6 +25,7 @@ describe("playbackPolicy", () => {
     expect(intent.evictBefore).toBe(17.5);
     expect(state.currentTime - (intent.evictBefore as number)).toBe(12);
     expect(intent.seekTo).toBeUndefined();
+    expect(intent.seekReason).toBeUndefined();
   });
 
   it("takes no action at stream start when the buffer barely leads the playhead", () => {
@@ -35,7 +36,7 @@ describe("playbackPolicy", () => {
   it("seeks to just behind live at stream start once the buffer leads by more than the lag threshold", () => {
     const state: PlaybackState = { currentTime: 0, buffered: [{ start: 0, end: 3 }] };
     const intent = playbackPolicy(state);
-    expect(intent).toEqual({ seekTo: 2.9 });
+    expect(intent).toEqual({ seekTo: 2.9, seekReason: "live" });
     expect(intent.evictBefore).toBeUndefined();
   });
 
@@ -49,7 +50,22 @@ describe("playbackPolicy", () => {
         { start: 3.9, end: 4 },
       ],
     };
-    expect(playbackPolicy(state)).toEqual({ seekTo: 3.9 });
+    expect(playbackPolicy(state)).toEqual({ seekTo: 3.9, seekReason: "heal" });
+  });
+
+  it("tags a live-catch-up seek as 'live' even when the playhead also sits in a gap", () => {
+    // The playhead (6) is outside every range (falls in the gap between 5
+    // and 8), which on its own would look like a heal. But it is also more
+    // than the lag threshold behind the live edge (20), and rule 2 takes
+    // priority over rule 3, so this must be tagged "live", not "heal".
+    const state: PlaybackState = {
+      currentTime: 6,
+      buffered: [
+        { start: 0, end: 5 },
+        { start: 8, end: 20 },
+      ],
+    };
+    expect(playbackPolicy(state)).toEqual({ seekTo: 19.9, seekReason: "live" });
   });
 
   it("does not heal when the playhead sits exactly on a range end", () => {
@@ -66,9 +82,9 @@ describe("playbackPolicy", () => {
   });
 
   it("does not heal when the playhead sits outside every range but nothing lies ahead of it", () => {
+    // currentTime (10) is ahead of the only range's end (5), so it is
+    // outside every range, but there is no later range to heal into.
     const state: PlaybackState = { currentTime: 10, buffered: [{ start: 0, end: 5 }] };
-    // 10 is behind live by only... wait live edge is 5, currentTime is ahead of it.
-    // This exercises "outside every range, no range ahead" with no lag-seek either.
     expect(playbackPolicy(state)).toEqual({});
   });
 
@@ -76,6 +92,7 @@ describe("playbackPolicy", () => {
     const state: PlaybackState = { currentTime: 29, buffered: [{ start: 0, end: 40 }] };
     const intent = playbackPolicy(state);
     expect(intent.seekTo).toBe(39.9);
+    expect(intent.seekReason).toBe("live");
     expect(intent.evictBefore).toBe(17);
   });
 

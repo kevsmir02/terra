@@ -12,6 +12,9 @@ export type PlaybackState = {
 
 export type PlaybackIntent = {
   seekTo?: number;
+  // Which rule produced seekTo, so the caller can tell a routine live
+  // catch-up from an anomalous heal without re-deriving the rule itself.
+  seekReason?: "live" | "heal";
   evictBefore?: number;
 };
 
@@ -43,11 +46,13 @@ export function playbackPolicy(
   const lastRange = buffered[buffered.length - 1];
   const liveEdge = lastRange.end;
   let seekTo: number | undefined;
+  let seekReason: "live" | "heal" | undefined;
 
   if (liveEdge - currentTime > policy.liveLagThresholdSeconds) {
     // Behind by more than the lag threshold is a stall: rejoin near live
     // instead of playing out the backlog in real time.
     seekTo = Math.max(liveEdge - policy.liveTargetOffsetSeconds, lastRange.start);
+    seekReason = "live";
   } else {
     const insideAny = buffered.some((r) => currentTime >= r.start && currentTime <= r.end);
     if (!insideAny) {
@@ -57,7 +62,10 @@ export function playbackPolicy(
           nextStart = r.start;
         }
       }
-      if (nextStart !== undefined) seekTo = nextStart;
+      if (nextStart !== undefined) {
+        seekTo = nextStart;
+        seekReason = "heal";
+      }
     }
   }
 
@@ -69,7 +77,10 @@ export function playbackPolicy(
   }
 
   const intent: PlaybackIntent = {};
-  if (seekTo !== undefined) intent.seekTo = seekTo;
+  if (seekTo !== undefined) {
+    intent.seekTo = seekTo;
+    intent.seekReason = seekReason;
+  }
   if (evictBefore !== undefined) intent.evictBefore = evictBefore;
   return intent;
 }

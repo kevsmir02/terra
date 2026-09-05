@@ -326,6 +326,24 @@ describe("MsePlayer live catch-up (rule 2)", () => {
 
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it("does not warn when a live catch-up seek happens to also sit in a buffered gap", () => {
+    // The playhead falls in the gap between the two ranges, which on its
+    // own would look like a heal, but it is far enough behind the live
+    // edge that rule 2 (live catch-up) fires instead of rule 3 (heal).
+    const { player, sb, video } = setup();
+    sb.ranges = [
+      [0, 5],
+      [8, 20],
+    ];
+    video.currentTime = 6;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    player.pushData(1, fragment(1));
+
+    expect(video.currentTime).toBe(20 - PLAYBACK_POLICY.liveTargetOffsetSeconds);
+    expect(warn).not.toHaveBeenCalled();
+  });
 });
 
 describe("MsePlayer append failures", () => {
