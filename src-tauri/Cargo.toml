@@ -44,7 +44,7 @@ which = "8.0.4"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 tokio = "1"
 minisign-verify = "0.2"
-base64 = "0.22"
+base64 = "0.23"
 
 [dev-dependencies]
 proptest = "1"
