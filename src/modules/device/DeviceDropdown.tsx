@@ -125,9 +125,9 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                 const booting = boot?.name === avd.name;
                 const runningSerial = avd.serial;
                 // Mirror the device-list gate above: a serial adb hasn't
-                // reported as "device" yet (e.g. still "offline" right after
-                // boot) has no live session, so picking it must be a no-op
-                // rather than a silent dead click.
+                // reported ready yet (e.g. still "offline" right after boot)
+                // has no live session, so picking it must be a no-op rather
+                // than a silent dead click.
                 const readyDevice = runningSerial
                   ? devices?.find((d) => d.serial === runningSerial && isReady(d))
                   : undefined;
