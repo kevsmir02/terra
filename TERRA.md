@@ -6,7 +6,7 @@ Terra loads `TERRA.md` from the workspace root as agent memory (similar to AGENT
 
 **Terra** is a lightweight, terminal-first IDE for developers who spend their day in agent harnesses (Claude Code, Codex, Gemini CLI, Pi, OpenCode, Antigravity and the like) rather than typing code by hand. Tauri 2 + Rust (`portable-pty`) backend, React 19 + TypeScript + xterm.js (webgl) client.
 
-The terminal is the product. Everything else (editor, explorer, source control, preview, device mirror, language servers, services) exists so the user can read, verify, and touch up what an agent produced without leaving the window. Each of those surfaces is **on demand**: dormant until opened or enabled, dormant again when closed.
+The terminal is the product. Everything else (editor, explorer, source control, preview, device mirror, language servers) exists so the user can read, verify, and touch up what an agent produced without leaving the window. Each of those surfaces is **on demand**: dormant until opened or enabled, dormant again when closed.
 
 Lightweight is measured, not asserted. The eager startup graph, the total client bundle, and idle work all have gates (see **Budgets**), and Terra stays small by keeping features dormant rather than by refusing them. Heavy IDE machinery (debuggers, refactoring engines, project-wide indexers, package-manager UIs, document hosts) is out of scope; `ROADMAP.md` is the authority on direction and lists what is deliberately out.
 
@@ -22,8 +22,8 @@ A feature has two states, and both are designed:
 Patterns already in the tree, to copy rather than reinvent:
 
 - Frontend surfaces load through `*Lazy.tsx` wrappers (`EditorStackLazy`, `GitDiffStackLazy`, `GitHistoryStackLazy`, `MarkdownStackLazy`, `CommandPaletteLazy`, `DeviceDockLazy`, `SourceControlPanelLazy`, the Settings sections, the block `ShellInput`). `src/app/eager-budget.test.ts` locks the heavy stacks out of both windows' eager graphs and `pnpm size:eager` measures the real startup set from the built HTML.
-- Rust commands spawn nothing until called. Long-lived things (PTYs, LSP servers, device sessions, services, watchers) live in a `*State` and die on close and on exit.
-- Polling exists only while something is live and someone is looking: the services pill polls only while a service is running and the window is focused (`services/lib/pillGate.ts`), the LSP memory watchdog only while a server runs, the AVD boot poll only while a launch is in flight.
+- Rust commands spawn nothing until called. Long-lived things (PTYs, LSP servers, device sessions, watchers) live in a `*State` and die on close and on exit.
+- Polling exists only while something is live and someone is looking: the LSP memory watchdog only while a server runs, the AVD boot poll only while a launch is in flight.
 - Opt-in persists in the settings store (`lspActivation`: `enabled` / `dismissed` / unset), and the UI offers a feature only where its tool exists.
 
 A new feature is done when its dormant state costs nothing on the list above, the eager budgets are unchanged, it tears down on close, disable, and exit, and a test locks the invariant (the module stays out of the eager graph, or its state is empty when disabled).
@@ -80,7 +80,6 @@ Production-grade or it does not ship. A change is done when all of these hold:
 - `history::*`: shell-history-backed suggestions for the block shell input.
 - `lsp::*`: language server process host. A dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). A per-server memory watchdog kills a server over its RSS budget after a startup grace. All sessions killed on `RunEvent::Exit`.
 - `device::*`: Android device and emulator mirroring (see **Device module**).
-- `services::*`: optional local hosting stack (databases, mail, web, project sites) on Docker or Podman; probed from the Settings tab and polled only while a service is running. The runtime is invoked argv-style, and project roots handed to it as mounts pass `authorize_mounts` against the registry.
 - `agent::*`: installs the agent notification hooks (see **agents/** below). `updater::*`: package-aware update flow around `tauri-plugin-updater`; `updater_download` is the only outbound HTTP client in the app (HTTPS only, hosts allowlisted to the GitHub release hosts, every redirect hop checked, body capped at 512 MB, connect and global timeouts bounded, each rule a free function with tests). There is no general-purpose fetch; a new network-facing command copies that shape. `open_settings_window` (optional `tab` arg deep-links a section), `open_preview_tab`, `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
 - `migrate::migrate_legacy_app_dirs`: not a command. Runs before the builder, because the store and webview open their identifier-scoped trees during plugin init.
 
@@ -150,10 +149,9 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 - **preview/**: dev-server preview tab. Detection is Rust-side on the PTY byte stream (`pty/url_detect.rs`); the frontend keeps the detected URL per leaf in `devServerStore.ts` and renders a one-click `DevServerChip` on the terminal pane, cleared on shell exit.
 - **tabs/**: `useTabs` is the source of truth for tab list + active id. `useWorkspaceCwd` derives explorer root + inherited cwd for new tabs from the active tab. `basename` splits on both `/` and `\`.
 - **header/**: top bar + inline search (`SearchInline` adapts to terminal vs editor via `SearchTarget`). `WindowControls` rendered when `USE_CUSTOM_WINDOW_CONTROLS` is true (Linux + Windows; macOS uses native traffic lights).
-- **statusbar/**: bottom bar, `CwdBreadcrumb` (Unix paths, Windows drive letters, and home `~` segments via `pathUtils.segmentsFromCwd`), the LSP pill, the lazy services pill.
+- **statusbar/**: bottom bar, `CwdBreadcrumb` (Unix paths, Windows drive letters, and home `~` segments via `pathUtils.segmentsFromCwd`), the LSP pill, the diagnostics badge.
 - **shortcuts/**: keymap registry (`shortcuts.ts`) + `useGlobalShortcuts`. Handlers live in `App.tsx` and are passed in by id (`tab.new`, ...). `metaKey || ctrlKey` for cross-platform Cmd/Ctrl. Recording a chord previews the actions that already claim it.
 - **settings/**: settings store (`store.ts` via `tauri-plugin-store`), preferences hook, settings window opener. Settings is its own webview window with its own eager budget; sections beyond the first load lazily.
-- **services/**: status and controls for the optional local hosting stack; `lib/pillGate.ts` is the pure policy deciding whether and how often the pill polls.
 - **sidebar/**: activity bar + collapsible side panels (explorer, source control, git history).
 - **source-control/**: git status / stage / commit panel and diff workflow.
 - **git-history/**: commit graph rail, refs, per-commit file diffs.

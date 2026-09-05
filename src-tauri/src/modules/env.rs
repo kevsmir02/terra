@@ -1,7 +1,7 @@
 //! GUI-launched apps get a bare PATH on macOS, so anything Terra shells out to
 //! has to be found the way the user's own terminal would find it: language
-//! servers need `node`, the services stack needs `docker` or `podman`. Capture
-//! the login shell env once, reuse it for both detection and spawn.
+//! servers need `node`, the device dock needs `adb`. Capture the login shell
+//! env once, reuse it for both detection and spawn.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
