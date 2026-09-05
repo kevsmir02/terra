@@ -166,10 +166,8 @@ export function openDeviceSession(opts: {
       // Touch coordinates must be in the ENCODED VIDEO space, not the
       // device's physical space: scrcpy compares the width/height on each
       // touch against its current video size and silently drops the event on
-      // any mismatch. `max_size=1920` downscales a 1080x2400 panel to
-      // 864x1920, so the physical size from `wm size` drops every touch.
-      // videoWidth/videoHeight is that encoded size, and it is authoritative
-      // across rotation, so it is the only correct source here.
+      // any mismatch. videoWidth/videoHeight is that encoded size, and it is
+      // authoritative across rotation, so it is the only correct source here.
       bridge = new DeviceControlBridge(h, video?.videoWidth || 1080, video?.videoHeight || 1920);
       onStatus({ kind: "streaming", devW: video?.videoWidth ?? 0, devH: video?.videoHeight ?? 0 });
     } catch (e) {

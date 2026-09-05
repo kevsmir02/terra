@@ -16,10 +16,9 @@ export const DEVICE_KEYCODE = {
  * `videoWidth`/`videoHeight` MUST be the encoded video dimensions, not the
  * device's physical size. scrcpy's `getPhysicalPoint` compares the width/height
  * carried by each touch against the current video size and *silently discards*
- * the event when they differ — no error, no log. With `max_size=1920` a
- * 1080x2400 device encodes at 864x1920, so sending physical dimensions drops
- * every touch. Verified against scrcpy 4.1: 864x1920 works, and 1080x2400,
- * 880x1920 and 864x1912 are all dropped.
+ * the event when they differ - no error, no log. A device that downscales via
+ * `max_size` encodes below its physical resolution, so sending physical
+ * dimensions drops every touch.
  *
  * The `<video>` is `object-contain`, so the picture is letterboxed inside the
  * element. Mapping against the raw element rect would skew every coordinate by

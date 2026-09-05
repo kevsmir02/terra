@@ -371,45 +371,12 @@ pub(crate) async fn device_send_touch_impl(
         buttons,
     };
 
-    let serial = {
-        let sessions = state.sessions.read_or_recover();
-        let session = sessions.get(&handle).ok_or("session not found")?;
-        let Some(tx) = session.control_tx() else {
-            return Err("session closed".into());
-        };
-        if tx.try_send(msg).is_ok() {
-            return Ok(());
-        }
-        session.serial.clone()
+    let sessions = state.sessions.read_or_recover();
+    let session = sessions.get(&handle).ok_or("session not found")?;
+    let Some(tx) = session.control_tx() else {
+        return Err("session closed".into());
     };
-
-    log::warn!("[device] control_tx channel send failed for touch event, using adb shell input fallback");
-    if matches!(act, TouchAction::Down | TouchAction::Move) {
-        // x/y arrive in the encoded-video space scrcpy requires, but
-        // `input tap` addresses the physical panel — scale across or the tap
-        // lands short on any device where max_size downscaled the stream.
-        let (tx, ty) = to_physical(&serial, x, y, width, height).await;
-        run_adb_shell(&serial, &["input", "tap", &tx.to_string(), &ty.to_string()]).await?;
-    }
-    Ok(())
-}
-
-/// Convert a point from the encoded-video space into physical display pixels.
-/// Falls back to the input unchanged when the physical size can't be read.
-async fn to_physical(serial: &str, x: u32, y: u32, width: u16, height: u16) -> (u32, u32) {
-    if width == 0 || height == 0 {
-        return (x, y);
-    }
-    match screen_size(serial.to_string()).await {
-        Ok((pw, ph)) => (
-            (x as u64 * pw as u64 / width as u64) as u32,
-            (y as u64 * ph as u64 / height as u64) as u32,
-        ),
-        Err(e) => {
-            log::warn!("[device] physical size unavailable for fallback tap: {e}");
-            (x, y)
-        }
-    }
+    tx.try_send(msg).map_err(|_| "device control channel is not accepting input".to_string())
 }
 
 #[tauri::command]
@@ -438,20 +405,12 @@ pub(crate) async fn device_send_key_impl(
         metastate,
     };
 
-    let serial = {
-        let sessions = state.sessions.read_or_recover();
-        let session = sessions.get(&handle).ok_or("session not found")?;
-        let Some(tx) = session.control_tx() else {
-            return Err("session closed".into());
-        };
-        if tx.try_send(msg).is_ok() {
-            return Ok(());
-        }
-        session.serial.clone()
+    let sessions = state.sessions.read_or_recover();
+    let session = sessions.get(&handle).ok_or("session not found")?;
+    let Some(tx) = session.control_tx() else {
+        return Err("session closed".into());
     };
-
-    log::warn!("[device] control_tx channel send failed for key event, using adb shell input fallback");
-    run_adb_shell(&serial, &["input", "keyevent", &keycode.to_string()]).await
+    tx.try_send(msg).map_err(|_| "device control channel is not accepting input".to_string())
 }
 
 #[tauri::command]
@@ -490,94 +449,18 @@ pub(crate) async fn device_send_scroll_impl(
         buttons: 0,
     };
 
-    {
-        let sessions = state.sessions.read_or_recover();
-        let session = sessions.get(&handle).ok_or("session not found")?;
-        let Some(tx) = session.control_tx() else {
-            return Err("session closed".into());
-        };
-        if tx.try_send(msg).is_ok() {
-            return Ok(());
-        }
-    }
-
-    // Unlike touch and key there is no faithful `adb shell input` equivalent
-    // for a wheel tick; approximating it with a swipe would fire unintended
-    // gestures, so a dropped scroll is preferable to a wrong one.
-    log::warn!("[device] control_tx channel send failed for scroll event; dropping");
-    Ok(())
-}
-
-async fn screen_size(serial: String) -> Result<(u32, u32), String> {
-    ensure_safe_serial(&serial)?;
-    let adb = resolve_adb_path()?;
-    let output = tauri::async_runtime::spawn_blocking(move || {
-        std::process::Command::new(&adb)
-            .args(["-s", &serial, "shell", "wm", "size"])
-            .output()
-            .map_err(|e| format!("adb wm size: {e}"))
-    })
-    .await
-    .map_err(|e| format!("join: {e}"))??;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).into());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_wm_size(&stdout).ok_or_else(|| format!("parse wm size: {}", stdout.trim()))
-}
-
-/// `wm size` prints `Physical size: WxH`, optionally followed by an
-/// `Override size:` line; the first line is the panel the fallback tap targets.
-fn parse_wm_size(stdout: &str) -> Option<(u32, u32)> {
-    let line = stdout.lines().next()?;
-    let (_, size) = line.rsplit_once(": ")?;
-    let (w, h) = size.trim().split_once('x')?;
-    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
-}
-
-async fn run_adb_shell(serial: &str, args: &[&str]) -> Result<(), String> {
-    ensure_safe_serial(serial)?;
-    let adb = resolve_adb_path()?;
-    let serial = serial.to_string();
-    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut cmd = std::process::Command::new(adb);
-        cmd.args(["-s", &serial, "shell"]);
-        for a in &args {
-            cmd.arg(a);
-        }
-        let out = cmd.output().map_err(|e| format!("adb shell: {e}"))?;
-        if !out.status.success() {
-            return Err(format!(
-                "adb shell exited {}: {}",
-                out.status.code().unwrap_or(-1),
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("adb shell join: {e}"))?
+    let sessions = state.sessions.read_or_recover();
+    let session = sessions.get(&handle).ok_or("session not found")?;
+    let Some(tx) = session.control_tx() else {
+        return Err("session closed".into());
+    };
+    tx.try_send(msg).map_err(|_| "device control channel is not accepting input".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
-
-    #[test]
-    fn parse_wm_size_reads_the_physical_line_first() {
-        assert_eq!(parse_wm_size("Physical size: 1080x2400\n"), Some((1080, 2400)));
-        assert_eq!(
-            parse_wm_size("Physical size: 1080x2400\nOverride size: 720x1600\n"),
-            Some((1080, 2400))
-        );
-        assert_eq!(parse_wm_size("Override size: 720x1600\n"), Some((720, 1600)));
-        assert_eq!(parse_wm_size(""), None);
-        assert_eq!(parse_wm_size("error: device offline"), None);
-        assert_eq!(parse_wm_size("Physical size: 1080xtall"), None);
-    }
 
     #[test]
     fn ephemeral_ports_returns_two_distinct_ports() {
@@ -640,51 +523,42 @@ mod tests {
         }
     }
 
-    // No faithful `adb shell input` equivalent exists, so a dead channel must
-    // drop the wheel tick rather than surface an error or fake a swipe.
     #[tokio::test]
-    async fn scroll_drops_when_tx_closed() {
+    async fn touch_reports_error_when_channel_closed() {
         let state = DeviceState::default();
         let (tx, rx) = mpsc::channel(10);
         drop(rx);
 
-        let session = DeviceSession::stub(1, "invalid_serial_test", tx);
+        let session = DeviceSession::stub(1, "dummy_serial", tx);
+        state.sessions.write_or_recover().insert(1, session);
+
+        let res = device_send_touch_impl(&state, 1, 1, 0, 100, 200, 1080, 1920).await;
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn key_reports_error_when_channel_closed() {
+        let state = DeviceState::default();
+        let (tx, rx) = mpsc::channel(10);
+        drop(rx);
+
+        let session = DeviceSession::stub(1, "dummy_serial", tx);
+        state.sessions.write_or_recover().insert(1, session);
+
+        let res = device_send_key_impl(&state, 1, 0, 66, 0).await;
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn scroll_reports_error_when_channel_closed() {
+        let state = DeviceState::default();
+        let (tx, rx) = mpsc::channel(10);
+        drop(rx);
+
+        let session = DeviceSession::stub(1, "dummy_serial", tx);
         state.sessions.write_or_recover().insert(1, session);
 
         let res = device_send_scroll_impl(&state, 1, 100, 200, 1080, 1920, 0, -3).await;
-        assert!(res.is_ok());
-    }
-
-    #[tokio::test]
-    async fn touch_fallback_when_tx_closed() {
-        let state = DeviceState::default();
-        let (tx, rx) = mpsc::channel(10);
-        drop(rx); // Close receiver to trigger try_send error
-
-        let session = DeviceSession::stub(1, "invalid_serial_test", tx);
-        state.sessions.write_or_recover().insert(1, session);
-
-        // Up action when tx is closed does not call adb shell, so returns Ok(())
-        let res_up = device_send_touch_impl(&state, 1, 1, 0, 100, 200, 1080, 1920).await;
-        assert!(res_up.is_ok());
-
-        // Down action when tx is closed triggers fallback (run_adb_shell), which attempts adb execution
-        let res_down = device_send_touch_impl(&state, 1, 0, 0, 100, 200, 1080, 1920).await;
-        // Since adb shell with invalid_serial_test fails, it should return Err containing adb error
-        assert!(res_down.is_err());
-    }
-
-    #[tokio::test]
-    async fn key_fallback_when_tx_closed() {
-        let state = DeviceState::default();
-        let (tx, rx) = mpsc::channel(10);
-        drop(rx); // Close receiver to trigger try_send error
-
-        let session = DeviceSession::stub(1, "invalid_serial_test", tx);
-        state.sessions.write_or_recover().insert(1, session);
-
-        // Key action triggers fallback (run_adb_shell), which attempts adb execution
-        let res = device_send_key_impl(&state, 1, 0, 66, 0).await;
         assert!(res.is_err());
     }
 }
