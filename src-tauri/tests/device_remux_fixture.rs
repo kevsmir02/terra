@@ -30,8 +30,7 @@ fn device_remux_fixture_produces_valid_init_and_fragment() {
     assert_eq!(pps[0] & 0x1F, 8);
     assert_eq!(idr[0] & 0x1F, 5);
 
-    let mut builder = Fmp4Builder::new("avc1.42c029".into());
-    builder.set_init_segment(sps, pps);
+    let mut builder = Fmp4Builder::from_parameter_sets(sps, pps).expect("fixture SPS+PPS are usable");
 
     let init = builder.init_segment();
     assert!(!init.is_empty(), "init segment must be non-empty");

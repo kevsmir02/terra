@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU32;
-use std::sync::{Mutex, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 
 use tauri::Manager;
 
@@ -17,12 +17,38 @@ pub struct LaunchedAvd {
     pub child: std::process::Child,
 }
 
+/// Exclusive claim on one serial for the lifetime of a mirror session. Opening
+/// a serial pkills any scrcpy server on the device, so two live sessions on one
+/// serial would kill each other mid-stream.
+pub struct SerialReservation {
+    open: Arc<Mutex<HashSet<String>>>,
+    serial: String,
+    released: AtomicBool,
+}
+
+impl SerialReservation {
+    /// Release-once: every session-end path may call this without freeing a
+    /// serial that a newer session has since reserved.
+    pub fn release(&self) {
+        if !self.released.swap(true, Ordering::AcqRel) {
+            self.open.lock_or_recover().remove(&self.serial);
+        }
+    }
+}
+
+impl Drop for SerialReservation {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+
 pub struct DeviceState {
     pub sessions: RwLock<HashMap<u32, DeviceSession>>,
     pub next_id: AtomicU32,
     pub jar_path: Mutex<Option<PathBuf>>,
     /// Keyed by adb serial (`emulator-<port>`).
     pub launched: Mutex<HashMap<String, LaunchedAvd>>,
+    open_serials: Arc<Mutex<HashSet<String>>>,
 }
 
 impl Default for DeviceState {
@@ -32,14 +58,26 @@ impl Default for DeviceState {
             next_id: AtomicU32::new(1),
             jar_path: Mutex::new(None),
             launched: Mutex::new(HashMap::new()),
+            open_serials: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 }
 
 impl DeviceState {
-    #[allow(dead_code)]
     pub(super) fn take(&self, id: u32) -> Option<DeviceSession> {
         self.sessions.write_or_recover().remove(&id)
+    }
+
+    pub fn reserve_serial(&self, serial: &str) -> Result<Arc<SerialReservation>, String> {
+        let mut open = self.open_serials.lock_or_recover();
+        if !open.insert(serial.to_string()) {
+            return Err(format!("device {serial} is already open"));
+        }
+        Ok(Arc::new(SerialReservation {
+            open: Arc::clone(&self.open_serials),
+            serial: serial.to_string(),
+            released: AtomicBool::new(false),
+        }))
     }
 
     pub fn kill_all(&self) {
@@ -60,8 +98,7 @@ impl DeviceState {
 
     pub fn track_launched(&self, serial: String, name: String, child: std::process::Child) {
         self.launched
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert(serial, LaunchedAvd { name, child });
     }
 
@@ -108,5 +145,75 @@ impl DeviceState {
             .map_err(|e| format!("resolving bundled scrcpy-server JAR: {e}"))?;
         *self.jar_path.lock_or_recover() = Some(resolved.clone());
         Ok(resolved)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn idle_child() -> std::process::Child {
+        let mut cmd = if cfg!(windows) {
+            let mut c = std::process::Command::new("cmd.exe");
+            c.args(["/C", "exit 0"]);
+            c
+        } else {
+            std::process::Command::new("true")
+        };
+        cmd.spawn().expect("spawn idle child")
+    }
+
+    #[test]
+    fn reserve_serial_twice_fails_with_already_open() {
+        let state = DeviceState::default();
+        let _held = state.reserve_serial("emulator-5554").expect("first reservation");
+        let err = state.reserve_serial("emulator-5554").err().expect("second reservation must fail");
+        assert_eq!(err, "device emulator-5554 is already open");
+        assert!(state.reserve_serial("emulator-5556").is_ok(), "other serials stay free");
+    }
+
+    #[test]
+    fn release_then_reserve_succeeds() {
+        let state = DeviceState::default();
+        let held = state.reserve_serial("emulator-5554").unwrap();
+        held.release();
+        assert!(state.reserve_serial("emulator-5554").is_ok());
+    }
+
+    #[test]
+    fn dropping_reservation_releases_it() {
+        let state = DeviceState::default();
+        drop(state.reserve_serial("emulator-5554").unwrap());
+        assert!(state.reserve_serial("emulator-5554").is_ok());
+    }
+
+    #[test]
+    fn stale_release_does_not_free_a_newer_reservation() {
+        let state = DeviceState::default();
+        let old = state.reserve_serial("emulator-5554").unwrap();
+        old.release();
+        let _newer = state.reserve_serial("emulator-5554").unwrap();
+        old.release();
+        drop(old);
+        assert!(state.reserve_serial("emulator-5554").is_err(), "the newer session still owns the serial");
+    }
+
+    #[test]
+    fn track_launched_survives_a_poisoned_lock() {
+        let state = Arc::new(DeviceState::default());
+        let poisoner = Arc::clone(&state);
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoner.launched.lock().unwrap();
+            panic!("poison it");
+        })
+        .join();
+        assert!(state.launched.lock().is_err(), "precondition: the mutex is poisoned");
+
+        state.track_launched("emulator-5554".into(), "Pixel_8".into(), idle_child());
+
+        assert!(state.is_managed("emulator-5554"));
+        let mut avd = state.take_launched("emulator-5554").expect("entry present");
+        let _ = avd.child.wait();
     }
 }

@@ -10,27 +10,27 @@ pub fn split_nal_units(bytes: &[u8]) -> Vec<Vec<u8>> {
         let is3 = bytes[i] == 0 && bytes[i + 1] == 0 && bytes[i + 2] == 0x01;
         let is4 = i + 3 < bytes.len() && bytes[i] == 0 && bytes[i + 1] == 0 && bytes[i + 2] == 0 && bytes[i + 3] == 0x01;
         if is4 {
-            if let Some(start) = unit_start {
-                nals.push(bytes[start..i].to_vec());
-            }
+            push_nonempty(&mut nals, bytes, unit_start, i);
             unit_start = Some(i + 4);
             i += 4;
         } else if is3 {
-            if let Some(start) = unit_start {
-                nals.push(bytes[start..i].to_vec());
-            }
+            push_nonempty(&mut nals, bytes, unit_start, i);
             unit_start = Some(i + 3);
             i += 3;
         } else {
             i += 1;
         }
     }
-    if let Some(start) = unit_start {
-        if start < bytes.len() {
-            nals.push(bytes[start..].to_vec());
+    push_nonempty(&mut nals, bytes, unit_start, bytes.len());
+    nals
+}
+
+fn push_nonempty(nals: &mut Vec<Vec<u8>>, bytes: &[u8], start: Option<usize>, end: usize) {
+    if let Some(start) = start {
+        if start < end {
+            nals.push(bytes[start..end].to_vec());
         }
     }
-    nals
 }
 
 /// Pop complete NAL units from the front of `buf`, leaving the trailing
@@ -66,7 +66,9 @@ pub fn drain_complete_nals(buf: &mut Vec<u8>) -> Vec<Vec<u8>> {
         let (p, l) = sc[k];
         let start = p + l;
         let end = sc[k + 1].0;
-        out.push(buf[start..end].to_vec());
+        if start < end {
+            out.push(buf[start..end].to_vec());
+        }
     }
     let tail = sc[sc.len() - 1].0;
     let keep = buf[tail..].to_vec();
@@ -95,20 +97,25 @@ pub struct Fmp4Builder {
     decode_time: u64,
 }
 
+/// `avc1.PPCCLL` from an SPS NAL (header byte + profile_idc +
+/// constraint flags + level_idc). None when the NAL is too short to carry them.
+pub fn codec_string_from_sps(sps: &[u8]) -> Option<String> {
+    match sps {
+        [_, profile, compat, level, ..] => Some(format!("avc1.{profile:02x}{compat:02x}{level:02x}")),
+        _ => None,
+    }
+}
+
 impl Fmp4Builder {
-    pub fn new(codec_string: String) -> Self {
-        Self { codec_string, init_segment: Vec::new(), sequence_number: 0, decode_time: 0 }
+    /// `sps`/`pps` are raw NAL payloads without the Annex-B start code but with
+    /// the 1-byte NAL header. None for parameter sets that cannot fill an avcC.
+    pub fn from_parameter_sets(sps: &[u8], pps: &[u8]) -> Option<Self> {
+        let codec_string = codec_string_from_sps(sps)?;
+        let init_segment = build_init(sps, pps)?;
+        Some(Self { codec_string, init_segment, sequence_number: 0, decode_time: 0 })
     }
 
     pub fn codec_string(&self) -> &str { &self.codec_string }
-
-    /// Build and cache the fMP4 init segment (`ftyp`+`moov`) from the first
-    /// SPS+PPS NALs. `sps`/`pps` are the raw NAL payloads *without* the Annex-B
-    /// start code but *with* the 1-byte NAL header (e.g. `0x67 …` for SPS), so
-    /// `sps[1]` is `profile_idc` per ISO 14496-15.
-    pub fn set_init_segment(&mut self, sps: &[u8], pps: &[u8]) {
-        self.init_segment = build_init(sps, pps);
-    }
 
     pub fn init_segment(&self) -> &[u8] { &self.init_segment }
 
@@ -182,6 +189,150 @@ impl Fmp4Builder {
     }
 }
 
+use std::collections::VecDeque;
+
+/// Slices that arrive before SPS+PPS are held for the post-bootstrap flush;
+/// a stream that never produces a usable SPS must not grow that queue forever.
+pub const MAX_PENDING_SLICES: usize = 256;
+
+/// Byte-size counterpart to `MAX_PENDING_SLICES`: a handful of high-resolution
+/// slices can blow past a lightweight memory budget well before the count cap.
+pub const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
+
+/// NAL type (low 5 bits of the header byte) 5 = IDR (coded slice of an IDR
+/// picture), the only slice type a decoder can start rendering from cleanly.
+fn is_idr(nal: &[u8]) -> bool {
+    nal.first().is_some_and(|b| b & 0x1F == 5)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Segment {
+    /// `[u32 BE codec length][codec string][ftyp+moov]`, sent once.
+    Init(Vec<u8>),
+    /// `moof+mdat` for one NAL.
+    Media(Vec<u8>),
+}
+
+#[derive(Debug, Default)]
+pub struct NalStats {
+    pub sps: u32,
+    pub pps: u32,
+    pub idr: u32,
+    pub nonidr: u32,
+    pub other: u32,
+    pub media: u64,
+}
+
+/// Turns the NAL sequence of one session into fMP4 segments: stores the first
+/// usable SPS+PPS, emits the init segment once, then one media fragment per
+/// slice. Malformed parameter sets are skipped, so the stream is simply not
+/// bootstrapped yet rather than panicking or emitting a broken avcC.
+#[derive(Default)]
+pub struct StreamAssembler {
+    builder: Option<Fmp4Builder>,
+    sps: Option<Vec<u8>>,
+    pps: Option<Vec<u8>>,
+    pending: VecDeque<Vec<u8>>,
+    pending_bytes: usize,
+    warned_malformed: bool,
+    pub stats: NalStats,
+}
+
+impl StreamAssembler {
+    pub fn is_bootstrapped(&self) -> bool {
+        self.builder.is_some()
+    }
+
+    pub fn push(&mut self, nal: Vec<u8>, out: &mut Vec<Segment>) {
+        let Some(&header) = nal.first() else { return };
+        match header & 0x1F {
+            7 => {
+                self.stats.sps += 1;
+                if codec_string_from_sps(&nal).is_some() {
+                    self.sps = Some(nal);
+                } else {
+                    self.warn_malformed("SPS", nal.len());
+                    return;
+                }
+            }
+            8 => {
+                self.stats.pps += 1;
+                self.pps = Some(nal);
+            }
+            t => {
+                match t {
+                    5 => self.stats.idr += 1,
+                    1 => self.stats.nonidr += 1,
+                    _ => self.stats.other += 1,
+                }
+                self.emit_or_hold(nal, out);
+                return;
+            }
+        }
+        if self.builder.is_some() {
+            return;
+        }
+        let (Some(sps), Some(pps)) = (self.sps.as_deref(), self.pps.as_deref()) else { return };
+        let Some(builder) = Fmp4Builder::from_parameter_sets(sps, pps) else {
+            self.warn_malformed("SPS+PPS", sps.len() + pps.len());
+            self.sps = None;
+            self.pps = None;
+            return;
+        };
+        let codec = builder.codec_string();
+        let init = builder.init_segment();
+        let mut frame = Vec::with_capacity(4 + codec.len() + init.len());
+        frame.extend_from_slice(&(codec.len() as u32).to_be_bytes());
+        frame.extend_from_slice(codec.as_bytes());
+        frame.extend_from_slice(init);
+        log::info!("[device] init segment ready: codec={codec} bytes={}", frame.len());
+        out.push(Segment::Init(frame));
+        self.builder = Some(builder);
+        // A stream that only ever had pending P-slices must flush nothing
+        // rather than lead with garbage the decoder cannot start from.
+        self.evict_to_newest_keyframe();
+        self.pending_bytes = 0;
+        for slice in std::mem::take(&mut self.pending) {
+            self.emit_or_hold(slice, out);
+        }
+    }
+
+    fn emit_or_hold(&mut self, nal: Vec<u8>, out: &mut Vec<Segment>) {
+        match self.builder.as_mut() {
+            Some(b) => {
+                out.push(Segment::Media(b.append_nal(&nal)));
+                self.stats.media += 1;
+            }
+            None => {
+                self.pending_bytes += nal.len();
+                self.pending.push_back(nal);
+                if self.pending.len() > MAX_PENDING_SLICES || self.pending_bytes > MAX_PENDING_BYTES {
+                    self.evict_to_newest_keyframe();
+                }
+            }
+        }
+    }
+
+    /// Drops from the front of `pending` until it leads with an IDR (or is
+    /// empty), so the flush after bootstrap never starts mid-GOP.
+    fn evict_to_newest_keyframe(&mut self) {
+        while let Some(front) = self.pending.front() {
+            if is_idr(front) {
+                break;
+            }
+            let dropped = self.pending.pop_front().expect("front just checked Some");
+            self.pending_bytes -= dropped.len();
+        }
+    }
+
+    fn warn_malformed(&mut self, what: &str, len: usize) {
+        if !self.warned_malformed {
+            self.warned_malformed = true;
+            log::warn!("[device] ignoring malformed {what} ({len} bytes); waiting for a usable one");
+        }
+    }
+}
+
 // ---- ISO 14496-12 box builders ------------------------------------------------
 
 /// `[u32 BE size][4-char type][payload]`.
@@ -203,7 +354,7 @@ fn fullbox(btype: &[u8; 4], version: u8, flags: u32, payload: &[u8]) -> Vec<u8> 
 }
 
 /// `ftyp(major="iso5", minor=0x200, compat=["iso5","iso6","mp41"]) + moov(...)`.
-fn build_init(sps: &[u8], pps: &[u8]) -> Vec<u8> {
+fn build_init(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
     let mut ftyp_p = Vec::with_capacity(20);
     ftyp_p.extend_from_slice(b"iso5"); // major_brand
     ftyp_p.extend_from_slice(&0x200u32.to_be_bytes()); // minor_version
@@ -212,15 +363,15 @@ fn build_init(sps: &[u8], pps: &[u8]) -> Vec<u8> {
     ftyp_p.extend_from_slice(b"mp41");
     let ftyp = box_(b"ftyp", &ftyp_p);
 
-    let moov = build_moov(sps, pps);
+    let moov = build_moov(sps, pps)?;
 
     let mut init = Vec::with_capacity(ftyp.len() + moov.len());
     init.extend_from_slice(&ftyp);
     init.extend_from_slice(&moov);
-    init
+    Some(init)
 }
 
-fn build_moov(sps: &[u8], pps: &[u8]) -> Vec<u8> {
+fn build_moov(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
     // mvhd (version 0)
     let mut mvhd_p = Vec::with_capacity(100);
     mvhd_p.extend_from_slice(&0u32.to_be_bytes()); // creation_time
@@ -301,7 +452,7 @@ fn build_moov(sps: &[u8], pps: &[u8]) -> Vec<u8> {
     let dinf = box_(b"dinf", &dref);
 
     // stsd > avc1 > avcC
-    let avc1 = build_avc1(sps, pps);
+    let avc1 = build_avc1(sps, pps)?;
     let mut stsd_p = Vec::with_capacity(4 + avc1.len());
     stsd_p.extend_from_slice(&1u32.to_be_bytes()); // entry_count
     stsd_p.extend_from_slice(&avc1);
@@ -349,7 +500,7 @@ fn build_moov(sps: &[u8], pps: &[u8]) -> Vec<u8> {
     // the moov declares a regular (non-fragmented) movie and the browser silently
     // rejects all moof+mdat media fragments. Contains a trex per track.
     moov_p.extend_from_slice(&build_mvex());
-    box_(b"moov", &moov_p)
+    Some(box_(b"moov", &moov_p))
 }
 
 /// `mvex` + one `trex` for track_ID=1. Chrome requires this to know the movie
@@ -367,7 +518,7 @@ fn build_mvex() -> Vec<u8> {
 }
 
 /// `avc1` VisualSampleEntry containing an `avcC` (AVCDecoderConfigurationRecord).
-fn build_avc1(sps: &[u8], pps: &[u8]) -> Vec<u8> {
+fn build_avc1(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
     let mut p = Vec::with_capacity(78 + 42);
     // SampleEntry: reserved[6] + data_reference_index = 1
     p.extend_from_slice(&[0u8; 6]);
@@ -386,30 +537,244 @@ fn build_avc1(sps: &[u8], pps: &[u8]) -> Vec<u8> {
     p.extend_from_slice(&0x0018u16.to_be_bytes()); // depth = 24
     p.extend_from_slice(&0xFFFFu16.to_be_bytes()); // pre_defined = -1
     // child box: avcC
-    p.extend_from_slice(&build_avcc(sps, pps));
-    box_(b"avc1", &p)
+    p.extend_from_slice(&build_avcc(sps, pps)?);
+    Some(box_(b"avc1", &p))
 }
 
-/// `avcC` (AVCDecoderConfigurationRecord, ISO 14496-15).
-fn build_avcc(sps: &[u8], pps: &[u8]) -> Vec<u8> {
+/// `avcC` (AVCDecoderConfigurationRecord, ISO 14496-15). None when the SPS
+/// cannot supply profile/compat/level, the PPS is empty, or a length overflows
+/// the record's u16 fields.
+fn build_avcc(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
+    let [_, profile, compat, level, ..] = sps else { return None };
+    if pps.is_empty() {
+        return None;
+    }
+    let sps_len = u16::try_from(sps.len()).ok()?;
+    let pps_len = u16::try_from(pps.len()).ok()?;
     let mut p = Vec::with_capacity(34);
     p.push(1u8); // configurationVersion
-    p.push(sps[1]); // AVCProfileIndication = profile_idc
-    p.push(sps[2]); // profile_compatibility
-    p.push(sps[3]); // AVCLevelIndication = level_idc
+    p.push(*profile); // AVCProfileIndication = profile_idc
+    p.push(*compat); // profile_compatibility
+    p.push(*level); // AVCLevelIndication = level_idc
     p.push(0xFF); // reserved(6)=0x3F + lengthSizeMinusOne(2)=3 → 4-byte NAL length
     p.push(0xE1); // reserved(3)=0x7 + numOfSequenceParameterSets = 1
-    p.extend_from_slice(&(sps.len() as u16).to_be_bytes()); // SPS length (BE)
+    p.extend_from_slice(&sps_len.to_be_bytes());
     p.extend_from_slice(sps); // SPS NAL (incl. 0x67 header byte)
     p.push(1u8); // numOfPictureParameterSets = 1
-    p.extend_from_slice(&(pps.len() as u16).to_be_bytes()); // PPS length (BE)
+    p.extend_from_slice(&pps_len.to_be_bytes());
     p.extend_from_slice(pps); // PPS NAL (incl. 0x68 header byte)
-    box_(b"avcC", &p)
+    Some(box_(b"avcC", &p))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SPS_HIGH_31: [u8; 8] = [0x67, 0x64, 0x00, 0x1f, 0xac, 0xd9, 0x40, 0x50];
+    const PPS: [u8; 6] = [0x68, 0xce, 0x01, 0xa8, 0x35, 0xc8];
+    const IDR: [u8; 5] = [0x65, 0x88, 0x84, 0x00, 0x33];
+
+    fn init_codec(frame: &[u8]) -> String {
+        let n = u32::from_be_bytes(frame[0..4].try_into().unwrap()) as usize;
+        String::from_utf8(frame[4..4 + n].to_vec()).unwrap()
+    }
+
+    #[test]
+    fn codec_string_from_sps_rejects_sps_shorter_than_four_bytes() {
+        assert_eq!(codec_string_from_sps(&[]), None);
+        assert_eq!(codec_string_from_sps(&[0x67]), None);
+        assert_eq!(codec_string_from_sps(&[0x67, 0x64, 0x00]), None);
+    }
+
+    #[test]
+    fn codec_string_from_sps_derives_profile_compat_level() {
+        assert_eq!(codec_string_from_sps(&SPS_HIGH_31).as_deref(), Some("avc1.64001f"));
+        assert_eq!(codec_string_from_sps(&[0x67, 0x42, 0xc0, 0x29]).as_deref(), Some("avc1.42c029"));
+    }
+
+    #[test]
+    fn from_parameter_sets_refuses_short_sps_and_empty_pps() {
+        assert!(Fmp4Builder::from_parameter_sets(&[0x67], &PPS).is_none());
+        assert!(Fmp4Builder::from_parameter_sets(&[0x67, 0x64, 0x00], &PPS).is_none());
+        assert!(Fmp4Builder::from_parameter_sets(&SPS_HIGH_31, &[]).is_none());
+        let oversized = vec![0x67u8; u16::MAX as usize + 1];
+        assert!(Fmp4Builder::from_parameter_sets(&oversized, &PPS).is_none());
+    }
+
+    #[test]
+    fn from_parameter_sets_builds_init_for_valid_sets() {
+        let b = Fmp4Builder::from_parameter_sets(&SPS_HIGH_31, &PPS).expect("valid SPS+PPS");
+        assert_eq!(b.codec_string(), "avc1.64001f");
+        assert_eq!(&b.init_segment()[4..8], b"ftyp");
+    }
+
+    #[test]
+    fn drain_skips_empty_nal_between_adjacent_start_codes() {
+        let mut buf = vec![0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x65, 0xAA, 0x00, 0x00, 0x01];
+        let drained = drain_complete_nals(&mut buf);
+        assert!(drained.iter().all(|n| !n.is_empty()), "got {drained:?}");
+        assert_eq!(drained, vec![vec![0x65, 0xAA]]);
+    }
+
+    #[test]
+    fn split_nal_units_skips_empty_nal_between_adjacent_start_codes() {
+        let bytes = [0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x68, 0xDD];
+        assert_eq!(split_nal_units(&bytes), vec![vec![0x68, 0xDD]]);
+    }
+
+    #[test]
+    fn assembler_ignores_one_byte_sps_and_never_bootstraps() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(vec![0x67], &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        a.push(IDR.to_vec(), &mut out);
+        assert!(out.is_empty(), "no segment may be emitted from a malformed SPS");
+        assert!(!a.is_bootstrapped());
+    }
+
+    #[test]
+    fn assembler_ignores_three_byte_sps_and_never_bootstraps() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(vec![0x67, 0x64, 0x00], &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        a.push(IDR.to_vec(), &mut out);
+        assert!(out.is_empty());
+        assert!(!a.is_bootstrapped());
+    }
+
+    #[test]
+    fn assembler_tolerates_empty_nal() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(Vec::new(), &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn assembler_bootstraps_then_streams_media() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        assert!(a.is_bootstrapped());
+        a.push(IDR.to_vec(), &mut out);
+        assert_eq!(out.len(), 2);
+        match &out[0] {
+            Segment::Init(frame) => assert_eq!(init_codec(frame), "avc1.64001f"),
+            other => panic!("expected init first, got {other:?}"),
+        }
+        assert!(matches!(&out[1], Segment::Media(m) if &m[4..8] == b"moof"));
+        // A repeated SPS/PPS mid-stream must not re-emit the init segment.
+        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn assembler_recovers_when_a_valid_sps_follows_a_malformed_one() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(vec![0x67, 0x64], &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        assert!(a.is_bootstrapped());
+        assert!(matches!(&out[0], Segment::Init(_)));
+    }
+
+    #[test]
+    fn assembler_flushes_pending_slices_after_bootstrap_in_order() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(IDR.to_vec(), &mut out);
+        a.push(vec![0x61, 0x01], &mut out);
+        assert!(out.is_empty());
+        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        assert_eq!(out.len(), 3);
+        assert!(matches!(&out[0], Segment::Init(_)));
+        assert!(matches!(&out[1], Segment::Media(_)));
+        assert!(matches!(&out[2], Segment::Media(_)));
+    }
+
+    const P_SLICE: [u8; 2] = [0x61, 0x01];
+
+    #[test]
+    fn assembler_bounds_pending_slices_before_bootstrap() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        for _ in 0..(MAX_PENDING_SLICES + 50) {
+            a.push(IDR.to_vec(), &mut out);
+        }
+        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        let media = out.iter().filter(|s| matches!(s, Segment::Media(_))).count();
+        // Every pushed slice is itself an IDR, so eviction never finds a
+        // non-keyframe front to drop: the cap only bites a non-keyframe head.
+        assert_eq!(media, MAX_PENDING_SLICES + 50);
+    }
+
+    #[test]
+    fn assembler_cap_keeps_the_newest_keyframe_led_run() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        let idr_at = 200;
+        for i in 0..(MAX_PENDING_SLICES + 1) {
+            if i == idr_at {
+                a.push(IDR.to_vec(), &mut out);
+            } else {
+                a.push(P_SLICE.to_vec(), &mut out);
+            }
+        }
+        assert_eq!(a.pending.len(), MAX_PENDING_SLICES + 1 - idr_at);
+        assert_eq!(a.pending.front(), Some(&IDR.to_vec()));
+    }
+
+    #[test]
+    fn assembler_cap_clears_a_queue_with_no_keyframe() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        for _ in 0..(MAX_PENDING_SLICES + 1) {
+            a.push(P_SLICE.to_vec(), &mut out);
+        }
+        assert!(a.pending.is_empty());
+        assert_eq!(a.pending_bytes, 0);
+    }
+
+    #[test]
+    fn assembler_byte_budget_evicts_before_the_count_cap() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        let big_slice = vec![0x61u8; 3 * 1024 * 1024];
+        for _ in 0..3 {
+            a.push(big_slice.clone(), &mut out);
+        }
+        assert!(a.pending.is_empty(), "byte budget must evict before the 256-slice count cap is ever reached");
+    }
+
+    #[test]
+    fn assembler_flush_after_bootstrap_skips_leading_non_keyframes() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push(P_SLICE.to_vec(), &mut out);
+        a.push(P_SLICE.to_vec(), &mut out);
+        a.push(IDR.to_vec(), &mut out);
+        a.push(P_SLICE.to_vec(), &mut out);
+        assert!(out.is_empty());
+        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        a.push(PPS.to_vec(), &mut out);
+        assert_eq!(out.len(), 3);
+        assert!(matches!(&out[0], Segment::Init(_)));
+        match &out[1] {
+            Segment::Media(m) => assert_eq!(&m[108..], IDR.as_slice(), "flush must lead with the IDR, not a stale P-slice"),
+            other => panic!("expected media, got {other:?}"),
+        }
+        match &out[2] {
+            Segment::Media(m) => assert_eq!(&m[108..], P_SLICE.as_slice()),
+            other => panic!("expected media, got {other:?}"),
+        }
+    }
 
     fn annexb_fixture() -> Vec<u8> {
         let mut v = Vec::new();
@@ -476,7 +841,7 @@ mod tests {
     ///     + mdat header(8) + mdat body.
     #[test]
     fn append_nal_advances_tfdt_and_emits_nonzero_duration() {
-        let mut b = Fmp4Builder::new("avc1.42c01e".to_string());
+        let mut b = Fmp4Builder::from_parameter_sets(&SPS_HIGH_31, &PPS).unwrap();
         let nal = vec![0x65u8, 0x88, 0x84, 0x00, 0x33]; // an IDR-ish slice NAL
         let f1 = b.append_nal(&nal);
         let f2 = b.append_nal(&nal);

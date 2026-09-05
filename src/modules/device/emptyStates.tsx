@@ -189,11 +189,49 @@ export function UnauthorizedDevice({
   );
 }
 
-export function ServerFailed({ narrow, message }: { narrow?: boolean; message: string }) {
+export function StreamFailed({
+  narrow,
+  message,
+  onReconnect,
+}: {
+  narrow?: boolean;
+  message: string;
+  onReconnect: () => void;
+}) {
+  return (
+    <Shell title="Device stream stopped" narrow={narrow}>
+      <p className="break-words">{message}</p>
+      <button
+        type="button"
+        onClick={onReconnect}
+        className="mt-2 rounded-md border border-border/(--emph-strong) bg-card px-3 py-1 text-[11px] hover:bg-accent/(--emph-medium)"
+      >
+        Reconnect
+      </button>
+    </Shell>
+  );
+}
+
+export function ServerFailed({
+  narrow,
+  message,
+  onRetry,
+}: {
+  narrow?: boolean;
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <Shell title="Device preview failed to start" narrow={narrow}>
       <p className="break-words">{message}</p>
       <p className="mt-1">Possibly unsupported Android version for the bundled scrcpy server; check the JAR version in About.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-2 rounded-md border border-border/(--emph-strong) bg-card px-3 py-1 text-[11px] hover:bg-accent/(--emph-medium)"
+      >
+        Retry
+      </button>
     </Shell>
   );
 }

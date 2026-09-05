@@ -1,43 +1,165 @@
 use std::io::Read;
+use std::net::{Shutdown, TcpStream};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdout};
+use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use tauri::ipc::Channel;
 use tokio::sync::mpsc;
 
 use super::control::{serialize_control_message, ControlMessage};
-use super::remux::{drain_complete_nals, split_nal_units, Fmp4Builder};
+use super::remux::{drain_complete_nals, split_nal_units, Segment, StreamAssembler};
+use super::state::SerialReservation;
+use crate::modules::sync::MutexExt;
+
+/// Closing the sockets tells the device-side server to exit on its own; this
+/// is how long the local adb client gets to follow before it is killed.
+const SHUTDOWN_BUDGET: Duration = Duration::from_secs(1);
+const SHUTDOWN_POLL: Duration = Duration::from_millis(20);
 
 #[derive(serde::Serialize, Clone)]
 pub struct DeviceFrame {
     /// 0 = init segment (ftyp+moov), 1 = media fragment (moof+mdat).
     pub kind: u8,
-    /// Raw fMP4 bytes — the webview appends these to a `SourceBuffer`.
+    /// Raw fMP4 bytes; the webview appends these to a `SourceBuffer`.
     pub bytes: Vec<u8>,
+}
+
+/// Handles to the video and control sockets the IO threads own, so shutdown
+/// can close them from outside and unblock a reader mid-`read`.
+#[derive(Default)]
+struct SocketRegistry {
+    inner: Mutex<Sockets>,
+}
+
+#[derive(Default)]
+struct Sockets {
+    closed: bool,
+    live: Vec<TcpStream>,
+}
+
+impl SocketRegistry {
+    fn register(&self, stream: &TcpStream) {
+        let clone = match stream.try_clone() {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("[device] socket handle clone failed; shutdown will rely on killing adb: {e}");
+                return;
+            }
+        };
+        let mut inner = self.inner.lock_or_recover();
+        if inner.closed {
+            let _ = clone.shutdown(Shutdown::Both);
+            return;
+        }
+        inner.live.push(clone);
+    }
+
+    fn close_all(&self) {
+        let mut inner = self.inner.lock_or_recover();
+        inner.closed = true;
+        for s in inner.live.drain(..) {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+    }
+}
+
+enum ChildPoll {
+    Absent,
+    Running,
+    Exited,
+}
+
+trait ShutdownOps {
+    fn close_sockets(&mut self);
+    fn poll_child(&mut self) -> ChildPoll;
+    fn kill_child(&mut self);
+    fn remove_forwards(&mut self);
+    fn sleep(&mut self, interval: Duration) {
+        std::thread::sleep(interval);
+    }
+}
+
+/// Sockets first so the server exits by itself, then a bounded wait for the
+/// local adb client, a kill only if it outlives that, and the forwards last.
+fn drive_shutdown<O: ShutdownOps>(ops: &mut O, budget: Duration, interval: Duration) {
+    ops.close_sockets();
+    let deadline = Instant::now() + budget;
+    loop {
+        match ops.poll_child() {
+            ChildPoll::Absent | ChildPoll::Exited => break,
+            ChildPoll::Running if Instant::now() >= deadline => {
+                ops.kill_child();
+                break;
+            }
+            ChildPoll::Running => ops.sleep(interval),
+        }
+    }
+    ops.remove_forwards();
+}
+
+/// Everything a session owns that outlives the webview handle. Taken out of
+/// the session exactly once, which is what makes `shutdown` idempotent.
+struct Teardown {
+    adb: PathBuf,
+    serial: String,
+    local_port: u16,
+    child: Option<Child>,
+    sockets: Arc<SocketRegistry>,
+    reservation: Arc<SerialReservation>,
+    #[cfg(windows)]
+    _job: Option<crate::modules::proc::job::ProcessJob>,
+}
+
+impl ShutdownOps for Teardown {
+    fn close_sockets(&mut self) {
+        self.sockets.close_all();
+    }
+
+    fn poll_child(&mut self) -> ChildPoll {
+        match self.child.as_mut() {
+            None => ChildPoll::Absent,
+            Some(child) => match child.try_wait() {
+                Ok(None) => ChildPoll::Running,
+                Ok(Some(_)) | Err(_) => ChildPoll::Exited,
+            },
+        }
+    }
+
+    fn kill_child(&mut self) {
+        if let Some(child) = self.child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
+    fn remove_forwards(&mut self) {
+        for port in [self.local_port, self.local_port + 1] {
+            let _ = Command::new(&self.adb)
+                .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{port}")])
+                .output();
+        }
+    }
 }
 
 pub struct DeviceSession {
     pub id: u32,
     pub serial: String,
-    pub local_port: u16,
-    pub adb: PathBuf,
-    /// Owns the `adb shell app_process ...` process. Dropping kills it.
-    pub server_child: Option<Child>,
-    /// The stdout pipe of the adb process; this is the raw Annex-B H.264 stream.
-    pub video_stream: Option<ChildStdout>,
-    pub stopping: Arc<AtomicBool>,
     pub control_tx: mpsc::Sender<ControlMessage>,
+    stopping: Arc<AtomicBool>,
+    teardown: Option<Teardown>,
 }
 
 impl DeviceSession {
-    /// Spawn a session: pushes the JAR, forwards the port, starts the server,
-    /// takes the stdout pipe for the read loop, and starts a blocking-IO thread
-    /// that reads Annex-B NALs, builds the fMP4 init segment from the first
-    /// SPS+PPS, and emits `DeviceFrame` events on `channel`.
+    /// Spawn a session: pushes the JAR, forwards the ports, starts the server,
+    /// and starts the blocking-IO threads that read Annex-B NALs into fMP4
+    /// `DeviceFrame`s on `channel` and write control messages back.
     ///
-    /// `local_port` is chosen by the caller from the OS ephemeral range.
+    /// `local_port` is chosen by the caller from the OS ephemeral range. The
+    /// reservation is released when the reader exits, on shutdown, or if this
+    /// spawn fails.
     pub fn spawn(
         id: u32,
         adb: PathBuf,
@@ -45,48 +167,72 @@ impl DeviceSession {
         serial: String,
         local_port: u16,
         channel: Channel<DeviceFrame>,
+        reservation: Arc<SerialReservation>,
     ) -> Result<Self, String> {
         let child = super::server::spawn_server(&adb, &jar, &serial, local_port)?;
+        #[cfg(windows)]
+        let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
+            Ok(j) => Some(j),
+            Err(e) => {
+                log::warn!("[device] job-object setup failed for pid={}: {e}", child.id());
+                None
+            }
+        };
         let stopping = Arc::new(AtomicBool::new(false));
-        let stop_clone = stopping.clone();
+        let sockets = Arc::new(SocketRegistry::default());
 
         let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
         let control_port = local_port + 1;
-        let stop_control = stopping.clone();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
 
+        let stop_reader = stopping.clone();
+        let reader_sockets = sockets.clone();
+        let reader_reservation = Arc::clone(&reservation);
         tauri::async_runtime::spawn_blocking(move || {
-            run_read_loop(local_port, channel, stop_clone, Some(ready_tx));
+            run_read_loop(local_port, channel, stop_reader, Some(ready_tx), &reader_sockets);
+            reader_reservation.release();
         });
 
+        let stop_control = stopping.clone();
+        let control_sockets = sockets.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            run_control_loop(control_port, &mut rx, stop_control, ready_rx);
+            run_control_loop(control_port, &mut rx, stop_control, ready_rx, &control_sockets);
         });
 
         Ok(Self {
             id,
-            serial,
-            local_port,
-            adb,
-            server_child: Some(child),
-            video_stream: None,
-            stopping,
+            serial: serial.clone(),
             control_tx: tx,
+            stopping,
+            teardown: Some(Teardown {
+                adb,
+                serial,
+                local_port,
+                child: Some(child),
+                sockets,
+                reservation,
+                #[cfg(windows)]
+                _job: job,
+            }),
         })
+    }
+
+    #[cfg(test)]
+    pub(super) fn stub(id: u32, serial: &str, control_tx: mpsc::Sender<ControlMessage>) -> Self {
+        Self {
+            id,
+            serial: serial.to_string(),
+            control_tx,
+            stopping: Arc::new(AtomicBool::new(false)),
+            teardown: None,
+        }
     }
 
     pub fn shutdown(&mut self) {
         self.stopping.store(true, Ordering::Relaxed);
-        if let Some(mut child) = self.server_child.take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-        let _ = std::process::Command::new(&self.adb)
-            .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{}", self.local_port)])
-            .output();
-        let _ = std::process::Command::new(&self.adb)
-            .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{}", self.local_port + 1)])
-            .output();
+        let Some(mut teardown) = self.teardown.take() else { return };
+        drive_shutdown(&mut teardown, SHUTDOWN_BUDGET, SHUTDOWN_POLL);
+        teardown.reservation.release();
     }
 }
 
@@ -97,15 +243,15 @@ impl Drop for DeviceSession {
 }
 
 /// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)`, split
-/// it into NAL units, bootstrap an `Fmp4Builder` from the first SPS+PPS (deriving the
-/// `avc1.*` codec string), then emit every slice NAL as an fMP4 media fragment on
-/// `channel`. `Channel::send` is synchronous (it just queues for the webview),
-/// so no async runtime is needed in this thread.
+/// it into NAL units and feed them through a `StreamAssembler`, forwarding each
+/// resulting segment on `channel`. `Channel::send` is synchronous (it just queues
+/// for the webview), so no async runtime is needed in this thread.
 fn run_read_loop(
     local_port: u16,
     channel: Channel<DeviceFrame>,
     stopping: Arc<AtomicBool>,
     mut ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    sockets: &SocketRegistry,
 ) {
     log::info!("[device] read_loop start: connecting to TCP 127.0.0.1:{local_port}");
     // adb forward maps the local TCP port IMMEDIATELY (before the scrcpy server
@@ -142,6 +288,7 @@ fn run_read_loop(
                         // to blocking reads.
                         s.set_read_timeout(None).ok();
                         log::info!("[device] read_loop: TCP connected + alive on attempt {attempt}/60");
+                        sockets.register(&s);
                         if let Some(tx) = ready_tx.take() {
                             let _ = tx.send(());
                         }
@@ -171,47 +318,17 @@ fn run_read_loop(
 
     let mut buf: Vec<u8> = Vec::new();
     let mut read_buf = [0u8; 65536];
-
-    let mut builder: Option<Fmp4Builder> = None; // Some once SPS+PPS seen.
-    let mut sps: Option<Vec<u8>> = None;
-    let mut pps: Option<Vec<u8>> = None;
-    let mut pending_slices: Vec<Vec<u8>> = Vec::new(); // slices that arrived before init.
-
-    // DIAGNOSTIC counters per run_loop lifetime.
+    let mut assembler = StreamAssembler::default();
+    let mut segments: Vec<Segment> = Vec::new();
     let mut total_bytes: u64 = 0;
     let mut reads: u64 = 0;
-    let mut nals_sps: u32 = 0;
-    let mut nals_pps: u32 = 0;
-    let mut nals_idr: u32 = 0;
-    let mut nals_nonidr: u32 = 0;
-    let mut nals_other: u32 = 0;
-    let mut media_sent: u64 = 0;
-
-    let emit_init = |builder: &Fmp4Builder, channel: &Channel<DeviceFrame>| {
-        let cs = builder.codec_string();
-        let mut frame = Vec::with_capacity(4 + cs.len() + builder.init_segment().len());
-        frame.extend_from_slice(&(cs.len() as u32).to_be_bytes());
-        frame.extend_from_slice(cs.as_bytes());
-        frame.extend_from_slice(builder.init_segment());
-        let frame_len = frame.len();
-        let _ = channel.send(DeviceFrame { kind: 0, bytes: frame });
-        log::info!("[device] read_loop: EMIT INIT segment codec={cs} bytes={frame_len}");
-    };
-    let emit_media = |builder: &mut Fmp4Builder, channel: &Channel<DeviceFrame>, nal: &[u8], media_sent: &mut u64| {
-        let frag = builder.append_nal(nal);
-        let _ = channel.send(DeviceFrame { kind: 1, bytes: frag });
-        *media_sent += 1;
-    };
 
     loop {
         if stopping.load(Ordering::Relaxed) {
-            log::info!("[device] read_loop: stopping (reads={reads} bytes={total_bytes} \
-                       sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
-                       other={nals_other} media_sent={media_sent})");
+            log::info!("[device] read_loop: stopping (reads={reads} bytes={total_bytes} {:?})", assembler.stats);
             break;
         }
         let n = match stream.read(&mut read_buf) {
-            Ok(0) => 0, // EOF: flush below
             Ok(n) => n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => {
@@ -223,97 +340,37 @@ fn run_read_loop(
         total_bytes += n as u64;
 
         if n == 0 {
-            // End of stream: everything currently in `buf` is complete. Flush it.
             log::info!(
-                "[device] read_loop: stream EOF at {total_bytes} bytes \
-                 (sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
-                 other={nals_other}) — flushing trailing NALs"
+                "[device] read_loop: stream EOF at {total_bytes} bytes {:?}; flushing trailing NALs",
+                assembler.stats
             );
             for nal in split_nal_units(&buf) {
-                if nal.is_empty() {
-                    continue;
-                }
-                let t = nal[0] & 0x1F;
-                if let Some(b) = builder.as_mut() {
-                    if t == 7 || t == 8 {
-                        continue;
-                    }
-                    emit_media(b, &channel, &nal, &mut media_sent);
-                }
+                assembler.push(nal, &mut segments);
             }
+            send_segments(&channel, &mut segments);
             break;
         }
 
         buf.extend_from_slice(&read_buf[..n]);
-
-        // NAL types: 7 = SPS, 8 = PPS, 5 = IDR, 1 = non-IDR slice, 2 = partition A.
         for nal in drain_complete_nals(&mut buf) {
-            if nal.is_empty() {
-                continue;
-            }
-            let t = nal[0] & 0x1F;
-            match t {
-                7 => { nals_sps += 1; sps = Some(nal); }
-                8 => { nals_pps += 1; pps = Some(nal); }
-                5 => { nals_idr += 1; emit_or_pending(&mut builder, &channel, &nal, &mut pending_slices, &mut media_sent); continue; }
-                1 => { nals_nonidr += 1; emit_or_pending(&mut builder, &channel, &nal, &mut pending_slices, &mut media_sent); continue; }
-                _ => { nals_other += 1; emit_or_pending(&mut builder, &channel, &nal, &mut pending_slices, &mut media_sent); continue; }
-            }
-            // After storing SPS or PPS, try to bootstrap the init segment once
-            // both are available, then flush any pending slices.
-            if builder.is_none() {
-                if let (Some(s), Some(p)) = (sps.as_ref(), pps.as_ref()) {
-                    let codec = format!("avc1.{:02x}{:02x}{:02x}", s[1], s[2], s[3]);
-                    log::info!(
-                        "[device] read_loop: bootstrap ready — codec={codec} \
-                         sps_len={} pps_len={} total_bytes={total_bytes}",
-                        s.len(), p.len()
-                    );
-                    let mut b = Fmp4Builder::new(codec);
-                    b.set_init_segment(s, p);
-                    emit_init(&b, &channel);
-                    for ps in pending_slices.drain(..) {
-                        emit_media(&mut b, &channel, &ps, &mut media_sent);
-                    }
-                    builder = Some(b);
-                    log::info!(
-                        "[device] read_loop: bootstrap done, continuing live stream"
-                    );
-                }
-            }
+            assembler.push(nal, &mut segments);
         }
+        send_segments(&channel, &mut segments);
 
-        // Throttled heartbeat so the user can watch frames flow without log spam.
         if reads.is_multiple_of(60) {
-            log::info!(
-                "[device] read_loop heartbeat: reads={reads} bytes={total_bytes} \
-                 sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
-                 other={nals_other} media_sent={media_sent}"
-            );
+            log::info!("[device] read_loop heartbeat: reads={reads} bytes={total_bytes} {:?}", assembler.stats);
         }
     }
-    log::info!(
-        "[device] read_loop EXIT — reads={reads} bytes={total_bytes} \
-         sps={nals_sps} pps={nals_pps} idr={nals_idr} nonidr={nals_nonidr} \
-         other={nals_other} media_sent={media_sent}"
-    );
+    log::info!("[device] read_loop EXIT: reads={reads} bytes={total_bytes} {:?}", assembler.stats);
 }
 
-/// Emit a slice NAL if the init segment has been sent, else queue it for the
-/// post-bootstrap flush.
-fn emit_or_pending(
-    builder: &mut Option<Fmp4Builder>,
-    channel: &Channel<DeviceFrame>,
-    nal: &[u8],
-    pending: &mut Vec<Vec<u8>>,
-    media_sent: &mut u64,
-) {
-    if let Some(b) = builder.as_mut() {
-        let frag = b.append_nal(nal);
-        let _ = channel.send(DeviceFrame { kind: 1, bytes: frag });
-        *media_sent += 1;
-    } else {
-        pending.push(nal.to_vec());
+fn send_segments(channel: &Channel<DeviceFrame>, segments: &mut Vec<Segment>) {
+    for segment in segments.drain(..) {
+        let frame = match segment {
+            Segment::Init(bytes) => DeviceFrame { kind: 0, bytes },
+            Segment::Media(bytes) => DeviceFrame { kind: 1, bytes },
+        };
+        let _ = channel.send(frame);
     }
 }
 
@@ -322,6 +379,7 @@ fn run_control_loop(
     rx: &mut mpsc::Receiver<ControlMessage>,
     stopping: Arc<AtomicBool>,
     ready_rx: tokio::sync::oneshot::Receiver<()>,
+    sockets: &SocketRegistry,
 ) {
     use std::io::Write;
     // Wait until video_stream socket is connected first to preserve scrcpy's accept() order.
@@ -333,6 +391,7 @@ fn run_control_loop(
             return;
         }
         if let Ok(s) = std::net::TcpStream::connect(("127.0.0.1", control_port)) {
+            sockets.register(&s);
             stream = Some(s);
             break;
         }
@@ -363,8 +422,145 @@ fn run_control_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::TcpListener;
+    use std::collections::VecDeque;
+    use std::net::{TcpListener, TcpStream};
+    use std::time::Duration;
     use super::super::control::TouchAction;
+    use super::super::state::DeviceState;
+
+    struct Recorder {
+        polls: VecDeque<ChildPoll>,
+        calls: Vec<&'static str>,
+    }
+
+    impl Recorder {
+        fn new(polls: impl IntoIterator<Item = ChildPoll>) -> Self {
+            Self { polls: polls.into_iter().collect(), calls: Vec::new() }
+        }
+    }
+
+    impl ShutdownOps for Recorder {
+        fn close_sockets(&mut self) {
+            self.calls.push("close_sockets");
+        }
+        fn poll_child(&mut self) -> ChildPoll {
+            self.calls.push("poll");
+            self.polls.pop_front().unwrap_or(ChildPoll::Running)
+        }
+        fn kill_child(&mut self) {
+            self.calls.push("kill");
+        }
+        fn remove_forwards(&mut self) {
+            self.calls.push("remove_forwards");
+        }
+        fn sleep(&mut self, _: Duration) {
+            self.calls.push("sleep");
+        }
+    }
+
+    #[test]
+    fn drive_shutdown_closes_sockets_first_and_skips_kill_when_child_exits_in_time() {
+        let mut ops = Recorder::new([ChildPoll::Running, ChildPoll::Running, ChildPoll::Exited]);
+        drive_shutdown(&mut ops, Duration::from_secs(60), Duration::from_millis(1));
+        assert_eq!(
+            ops.calls,
+            ["close_sockets", "poll", "sleep", "poll", "sleep", "poll", "remove_forwards"]
+        );
+    }
+
+    #[test]
+    fn drive_shutdown_kills_a_child_still_alive_after_the_budget() {
+        let mut ops = Recorder::new([]);
+        drive_shutdown(&mut ops, Duration::ZERO, Duration::from_millis(1));
+        assert_eq!(ops.calls, ["close_sockets", "poll", "kill", "remove_forwards"]);
+    }
+
+    #[test]
+    fn drive_shutdown_without_a_child_does_not_wait() {
+        let mut ops = Recorder::new([ChildPoll::Absent]);
+        drive_shutdown(&mut ops, Duration::from_secs(60), Duration::from_millis(1));
+        assert_eq!(ops.calls, ["close_sockets", "poll", "remove_forwards"]);
+    }
+
+    fn connected_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let client = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        (client, server)
+    }
+
+    #[test]
+    fn socket_registry_close_all_unblocks_a_blocked_reader() {
+        let (mut client, _server) = connected_pair();
+        let registry = Arc::new(SocketRegistry::default());
+        registry.register(&client);
+        let reader = std::thread::spawn(move || {
+            let mut b = [0u8; 8];
+            client.read(&mut b)
+        });
+        std::thread::sleep(Duration::from_millis(30));
+        registry.close_all();
+        let result = reader.join().unwrap();
+        assert!(matches!(result, Ok(0) | Err(_)), "reader must wake once the socket is shut down");
+    }
+
+    #[test]
+    fn socket_registry_shuts_down_a_registration_that_arrives_after_close() {
+        let (client, mut server) = connected_pair();
+        let registry = SocketRegistry::default();
+        registry.close_all();
+        registry.register(&client);
+        server.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut b = [0u8; 8];
+        assert_eq!(server.read(&mut b).unwrap(), 0, "late registration must be shut down at once");
+    }
+
+    #[test]
+    fn shutdown_is_idempotent_and_releases_the_serial_once() {
+        let state = DeviceState::default();
+        let (tx, _rx) = mpsc::channel(1);
+        let mut session = DeviceSession::stub(1, "emulator-5554", tx);
+        session.teardown = Some(Teardown {
+            adb: std::env::temp_dir().join("terra-missing-adb-for-tests"),
+            serial: "emulator-5554".into(),
+            local_port: 27183,
+            child: None,
+            sockets: Arc::new(SocketRegistry::default()),
+            reservation: state.reserve_serial("emulator-5554").unwrap(),
+            #[cfg(windows)]
+            _job: None,
+        });
+
+        session.shutdown();
+        assert!(session.teardown.is_none());
+        assert!(session.stopping.load(Ordering::Relaxed));
+        let newer = state.reserve_serial("emulator-5554").expect("shutdown released the serial");
+
+        session.shutdown();
+        drop(session);
+        drop(newer);
+        assert!(state.reserve_serial("emulator-5554").is_ok());
+    }
+
+    #[test]
+    fn spawn_failure_releases_serial_reservation() {
+        let state = super::super::state::DeviceState::default();
+        let reservation = state.reserve_serial("emulator-5554").unwrap();
+        let channel: Channel<DeviceFrame> = Channel::new(|_| Ok(()));
+        let missing_adb = std::env::temp_dir().join("terra-missing-adb-for-tests");
+        let result = DeviceSession::spawn(
+            1,
+            missing_adb.clone(),
+            missing_adb,
+            "emulator-5554".into(),
+            27183,
+            channel,
+            reservation,
+        );
+        assert!(result.is_err(), "spawning against a missing adb binary must fail");
+        assert!(state.reserve_serial("emulator-5554").is_ok(), "a failed spawn must release the serial");
+    }
 
     #[test]
     fn run_control_loop_sends_messages_over_tcp() {
@@ -378,7 +574,7 @@ mod tests {
         let _ = ready_tx.send(());
 
         let handle = std::thread::spawn(move || {
-            run_control_loop(port, &mut rx, stop_clone, ready_rx);
+            run_control_loop(port, &mut rx, stop_clone, ready_rx, &SocketRegistry::default());
         });
 
         let (mut socket, _) = listener.accept().unwrap();
