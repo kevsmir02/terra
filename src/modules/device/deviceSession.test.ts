@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceControlBridge } from "./controlBridge";
-import { openDeviceSession, type SessionStatus } from "./deviceSession";
+import { openDeviceSession, splitFrame, type SessionStatus } from "./deviceSession";
 
 type FakePlayer = {
   video: unknown;
@@ -56,6 +56,10 @@ function openChannel() {
   return args.onFrame;
 }
 
+function encodeFrame(kind: number, payload: number[]): ArrayBuffer {
+  return new Uint8Array([kind, ...payload]).buffer;
+}
+
 function fakeVideo(videoWidth = 864, videoHeight = 1920) {
   return { videoWidth, videoHeight } as unknown as HTMLVideoElement;
 }
@@ -86,6 +90,34 @@ afterEach(() => {
   vi.mocked(invoke).mockReset();
 });
 
+describe("splitFrame", () => {
+  it("returns null for an empty buffer", () => {
+    expect(splitFrame(new ArrayBuffer(0))).toBeNull();
+  });
+
+  it("splits an init frame's discriminator and payload", () => {
+    const frame = splitFrame(encodeFrame(0, [10, 20, 30]));
+    expect(frame).not.toBeNull();
+    expect(frame?.kind).toBe(0);
+    expect(Array.from(frame?.payload ?? [])).toEqual([10, 20, 30]);
+  });
+
+  it("splits a media frame's discriminator and payload", () => {
+    const frame = splitFrame(encodeFrame(1, [40, 50]));
+    expect(frame).not.toBeNull();
+    expect(frame?.kind).toBe(1);
+    expect(Array.from(frame?.payload ?? [])).toEqual([40, 50]);
+  });
+
+  it("returns a payload view over the source buffer rather than a copy", () => {
+    const source = new Uint8Array([1, 7, 8, 9]);
+    const frame = splitFrame(source.buffer);
+    expect(frame?.payload.buffer).toBe(source.buffer);
+    source[1] = 99;
+    expect(frame?.payload[0]).toBe(99);
+  });
+});
+
 describe("openDeviceSession pre-flight", () => {
   it("reports no-devices when the serial is not listed and never opens a stream", async () => {
     mockBackend([]);
@@ -113,13 +145,13 @@ describe("openDeviceSession streaming", () => {
   it("opens the stream, feeds frames to the player and exposes a control bridge", async () => {
     const { session } = await streaming();
 
-    openChannel().onmessage({ kind: 1, bytes: [1, 2, 3] });
+    openChannel().onmessage(encodeFrame(1, [1, 2, 3]));
 
     expect(players).toHaveLength(1);
     expect(players[0].pushData).toHaveBeenCalledTimes(1);
-    const [kind, raw] = players[0].pushData.mock.calls[0] as [number, ArrayBuffer];
+    const [kind, payload] = players[0].pushData.mock.calls[0] as [number, Uint8Array];
     expect(kind).toBe(1);
-    expect(Array.from(new Uint8Array(raw))).toEqual([1, 2, 3]);
+    expect(Array.from(payload)).toEqual([1, 2, 3]);
     expect(session.bridge).toBeInstanceOf(DeviceControlBridge);
   });
 
@@ -132,7 +164,7 @@ describe("openDeviceSession streaming", () => {
     expect(calls("device_close")).toEqual([["device_close", { handle: HANDLE }]]);
     expect(players[0].dispose).toHaveBeenCalledTimes(1);
     expect(session.bridge).toBeNull();
-    openChannel().onmessage({ kind: 1, bytes: [1] });
+    openChannel().onmessage(encodeFrame(1, [1]));
     expect(players[0].pushData).not.toHaveBeenCalled();
     expect(onStatus.mock.calls.length).toBe(before);
   });

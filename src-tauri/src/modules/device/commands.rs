@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use tauri::ipc::Channel;
+use tauri::ipc::{Channel, Response};
 use tauri::{Emitter, Manager, State};
 
 use super::adb::{
@@ -10,7 +10,7 @@ use super::adb::{
     SystemImage, GPU_FALLBACK,
 };
 use super::control::{ControlMessage, KeyAction, TouchAction};
-use super::session::{DeviceFrame, DeviceSession};
+use super::session::DeviceSession;
 use super::state::DeviceState;
 use crate::modules::sync::{MutexExt, RwLockExt};
 
@@ -299,7 +299,7 @@ pub async fn device_open(
     app: tauri::AppHandle,
     state: State<'_, DeviceState>,
     serial: String,
-    on_frame: Channel<DeviceFrame>,
+    on_frame: Channel<Response>,
 ) -> Result<u32, String> {
     ensure_safe_serial(&serial)?;
     let reservation = state.reserve_serial(&serial)?;

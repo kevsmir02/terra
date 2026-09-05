@@ -18,7 +18,7 @@ class FakeTimeRanges {
 
 class FakeSourceBuffer extends EventTarget {
   updating = false;
-  appended: ArrayBuffer[] = [];
+  appended: Uint8Array[] = [];
   removed: Range[] = [];
   ranges: Range[] = [];
   failNext: Error[] = [];
@@ -38,7 +38,7 @@ class FakeSourceBuffer extends EventTarget {
     super.removeEventListener(type, listener);
   }
 
-  appendBuffer(buf: ArrayBuffer) {
+  appendBuffer(buf: Uint8Array) {
     if (this.updating) throw new DOMException("busy", "InvalidStateError");
     const err = this.failNext.shift();
     if (err) throw err;
@@ -108,19 +108,19 @@ function initFrame(moov = new Uint8Array([9, 9])) {
   new DataView(out.buffer).setUint32(0, codec.length, false);
   out.set(codec, 4);
   out.set(moov, 4 + codec.length);
-  return out.buffer;
+  return out;
 }
 
 function fragment(tag: number) {
-  return new Uint8Array([tag, tag, tag]).buffer;
+  return new Uint8Array([tag, tag, tag]);
 }
 
 function quotaError() {
   return new DOMException("quota", "QuotaExceededError");
 }
 
-function bytes(bufs: ArrayBuffer[]) {
-  return bufs.map((b) => Array.from(new Uint8Array(b)));
+function bytes(bufs: Uint8Array[]) {
+  return bufs.map((b) => Array.from(b));
 }
 
 function lastMediaSource() {

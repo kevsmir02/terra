@@ -82,11 +82,12 @@ fn drain_complete_nals(buf: &mut Vec<u8>) -> Vec<Vec<u8>> {
 /// with the `avcC` decoder config record) is built once from the first SPS+PPS
 /// NALs the read loop sees.
 ///
-/// CONTRACT (Rust↔TS codec-string handoff): the init segment emitted from the
-/// read loop is a `DeviceFrame { kind: 0, bytes: … }` where `bytes` is laid out
-/// as `[4-byte BE length][UTF-8 codec string, e.g. "avc1.42c029"][ftyp+moov]`.
-/// Media fragments are `DeviceFrame { kind: 1, bytes: [moof+mdat] }`. See
-/// `modules/device/MsePlayer.ts::pushData` for the consumer.
+/// CONTRACT (Rust↔TS codec-string handoff): the assembler encodes each output
+/// frame as `[discriminator byte][payload]` (`FRAME_INIT` or `FRAME_MEDIA`,
+/// see below). The init frame's payload is laid out as `[4-byte BE
+/// length][UTF-8 codec string, e.g. "avc1.42c029"][ftyp+moov]`; a media
+/// frame's payload is `[moof+mdat]`. See `modules/device/MsePlayer.ts::pushData`
+/// for the consumer.
 pub struct Fmp4Builder {
     codec_string: String,
     init_segment: Vec<u8>,
@@ -200,12 +201,31 @@ fn is_idr(nal: &[u8]) -> bool {
     nal.first().is_some_and(|b| b & 0x1F == 5)
 }
 
+/// Leading byte of every frame the assembler emits, so the frame carries its
+/// own kind across the wire instead of a side channel keying frames by shape.
+pub const FRAME_INIT: u8 = 0;
+pub const FRAME_MEDIA: u8 = 1;
+
+/// Decoded view over one encoded frame (`[discriminator][payload]`), borrowed
+/// so decoding never copies. Not used by the read loop, which only forwards
+/// the encoded bytes; this is the pure, testable contract for the format.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Segment {
+pub enum Frame<'a> {
     /// `[u32 BE codec length][codec string][ftyp+moov]`, sent once.
-    Init(Vec<u8>),
+    Init(&'a [u8]),
     /// `moof+mdat` for one NAL.
-    Media(Vec<u8>),
+    Media(&'a [u8]),
+}
+
+/// Split a frame into its discriminator and payload. `None` for an empty
+/// frame or a discriminator this build does not know.
+pub fn decode_frame(frame: &[u8]) -> Option<Frame<'_>> {
+    let (&discriminator, payload) = frame.split_first()?;
+    match discriminator {
+        FRAME_INIT => Some(Frame::Init(payload)),
+        FRAME_MEDIA => Some(Frame::Media(payload)),
+        _ => None,
+    }
 }
 
 /// Turns the NAL sequence of one session into fMP4 segments: stores the first
@@ -232,7 +252,7 @@ impl StreamAssembler {
     /// Append newly read bytes to the framing buffer and process every NAL
     /// unit that is now provably complete (bounded by two start codes). A
     /// unit split across reads waits in the buffer for the next call.
-    pub fn push_bytes(&mut self, bytes: &[u8], out: &mut Vec<Segment>) {
+    pub fn push_bytes(&mut self, bytes: &[u8], out: &mut Vec<Vec<u8>>) {
         self.buf.extend_from_slice(bytes);
         for nal in drain_complete_nals(&mut self.buf) {
             self.push(nal, out);
@@ -241,14 +261,14 @@ impl StreamAssembler {
 
     /// End of stream: the trailing NAL has no closing start code to prove it
     /// complete, so split whatever is left in the framing buffer outright.
-    pub fn finish(&mut self, out: &mut Vec<Segment>) {
+    pub fn finish(&mut self, out: &mut Vec<Vec<u8>>) {
         let remaining = std::mem::take(&mut self.buf);
         for nal in split_nal_units(&remaining) {
             self.push(nal, out);
         }
     }
 
-    fn push(&mut self, nal: Vec<u8>, out: &mut Vec<Segment>) {
+    fn push(&mut self, nal: Vec<u8>, out: &mut Vec<Vec<u8>>) {
         let Some(&header) = nal.first() else { return };
         match header & 0x1F {
             7 => {
@@ -279,11 +299,12 @@ impl StreamAssembler {
         };
         let codec = builder.codec_string();
         let init = builder.init_segment();
-        let mut frame = Vec::with_capacity(4 + codec.len() + init.len());
+        let mut frame = Vec::with_capacity(1 + 4 + codec.len() + init.len());
+        frame.push(FRAME_INIT);
         frame.extend_from_slice(&(codec.len() as u32).to_be_bytes());
         frame.extend_from_slice(codec.as_bytes());
         frame.extend_from_slice(init);
-        out.push(Segment::Init(frame));
+        out.push(frame);
         self.builder = Some(builder);
         // A stream that only ever had pending P-slices must flush nothing
         // rather than lead with garbage the decoder cannot start from.
@@ -294,10 +315,14 @@ impl StreamAssembler {
         }
     }
 
-    fn emit_or_hold(&mut self, nal: Vec<u8>, out: &mut Vec<Segment>) {
+    fn emit_or_hold(&mut self, nal: Vec<u8>, out: &mut Vec<Vec<u8>>) {
         match self.builder.as_mut() {
             Some(b) => {
-                out.push(Segment::Media(b.append_nal(&nal)));
+                let media = b.append_nal(&nal);
+                let mut frame = Vec::with_capacity(1 + media.len());
+                frame.push(FRAME_MEDIA);
+                frame.extend_from_slice(&media);
+                out.push(frame);
             }
             None => {
                 self.pending_bytes += nal.len();
@@ -657,11 +682,11 @@ mod tests {
         assert!(a.is_bootstrapped());
         a.push(IDR.to_vec(), &mut out);
         assert_eq!(out.len(), 2);
-        match &out[0] {
-            Segment::Init(frame) => assert_eq!(init_codec(frame), "avc1.64001f"),
+        match decode_frame(&out[0]) {
+            Some(Frame::Init(payload)) => assert_eq!(init_codec(payload), "avc1.64001f"),
             other => panic!("expected init first, got {other:?}"),
         }
-        assert!(matches!(&out[1], Segment::Media(m) if &m[4..8] == b"moof"));
+        assert!(matches!(decode_frame(&out[1]), Some(Frame::Media(m)) if &m[4..8] == b"moof"));
         // A repeated SPS/PPS mid-stream must not re-emit the init segment.
         a.push(SPS_HIGH_31.to_vec(), &mut out);
         a.push(PPS.to_vec(), &mut out);
@@ -676,7 +701,7 @@ mod tests {
         a.push(PPS.to_vec(), &mut out);
         a.push(SPS_HIGH_31.to_vec(), &mut out);
         assert!(a.is_bootstrapped());
-        assert!(matches!(&out[0], Segment::Init(_)));
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
     }
 
     #[test]
@@ -689,9 +714,9 @@ mod tests {
         a.push(SPS_HIGH_31.to_vec(), &mut out);
         a.push(PPS.to_vec(), &mut out);
         assert_eq!(out.len(), 3);
-        assert!(matches!(&out[0], Segment::Init(_)));
-        assert!(matches!(&out[1], Segment::Media(_)));
-        assert!(matches!(&out[2], Segment::Media(_)));
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
+        assert!(matches!(decode_frame(&out[1]), Some(Frame::Media(_))));
+        assert!(matches!(decode_frame(&out[2]), Some(Frame::Media(_))));
     }
 
     const P_SLICE: [u8; 2] = [0x61, 0x01];
@@ -705,7 +730,7 @@ mod tests {
         }
         a.push(SPS_HIGH_31.to_vec(), &mut out);
         a.push(PPS.to_vec(), &mut out);
-        let media = out.iter().filter(|s| matches!(s, Segment::Media(_))).count();
+        let media = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Media(_)))).count();
         // Every pushed slice is itself an IDR, so eviction never finds a
         // non-keyframe front to drop: the cap only bites a non-keyframe head.
         assert_eq!(media, MAX_PENDING_SLICES + 50);
@@ -761,13 +786,13 @@ mod tests {
         a.push(SPS_HIGH_31.to_vec(), &mut out);
         a.push(PPS.to_vec(), &mut out);
         assert_eq!(out.len(), 3);
-        assert!(matches!(&out[0], Segment::Init(_)));
-        match &out[1] {
-            Segment::Media(m) => assert_eq!(&m[108..], IDR.as_slice(), "flush must lead with the IDR, not a stale P-slice"),
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
+        match decode_frame(&out[1]) {
+            Some(Frame::Media(m)) => assert_eq!(&m[108..], IDR.as_slice(), "flush must lead with the IDR, not a stale P-slice"),
             other => panic!("expected media, got {other:?}"),
         }
-        match &out[2] {
-            Segment::Media(m) => assert_eq!(&m[108..], P_SLICE.as_slice()),
+        match decode_frame(&out[2]) {
+            Some(Frame::Media(m)) => assert_eq!(&m[108..], P_SLICE.as_slice()),
             other => panic!("expected media, got {other:?}"),
         }
     }
@@ -793,9 +818,9 @@ mod tests {
         a.push_bytes(&bytes, &mut out);
         a.finish(&mut out);
 
-        let init_count = out.iter().filter(|s| matches!(s, Segment::Init(_))).count();
+        let init_count = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Init(_)))).count();
         assert_eq!(init_count, 1, "a repeated SPS+PPS mid-stream must not re-emit the init segment");
-        assert!(matches!(out[0], Segment::Init(_)), "the init segment must lead the output");
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))), "the init segment must lead the output");
     }
 
     #[test]
@@ -829,15 +854,43 @@ mod tests {
         a.finish(&mut out);
 
         assert_eq!(out.len(), 3);
-        assert!(matches!(&out[0], Segment::Init(_)));
-        match &out[1] {
-            Segment::Media(m) => assert_eq!(&m[108..], IDR.as_slice(), "the first media segment must be the IDR"),
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
+        match decode_frame(&out[1]) {
+            Some(Frame::Media(m)) => assert_eq!(&m[108..], IDR.as_slice(), "the first media segment must be the IDR"),
             other => panic!("expected media, got {other:?}"),
         }
-        match &out[2] {
-            Segment::Media(m) => assert_eq!(&m[108..], P_SLICE.as_slice(), "media segments must stay in arrival order"),
+        match decode_frame(&out[2]) {
+            Some(Frame::Media(m)) => assert_eq!(&m[108..], P_SLICE.as_slice(), "media segments must stay in arrival order"),
             other => panic!("expected media, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn frame_discriminator_round_trips_init_and_media() {
+        let bytes = nal_stream(&[&SPS_HIGH_31, &PPS, &IDR]);
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&bytes, &mut out);
+        a.finish(&mut out);
+
+        assert_eq!(out.len(), 2);
+        match decode_frame(&out[0]) {
+            Some(Frame::Init(payload)) => {
+                let len = u32::from_be_bytes(payload[0..4].try_into().unwrap()) as usize;
+                assert_eq!(&payload[4..4 + len], b"avc1.64001f");
+            }
+            other => panic!("expected init frame, got {other:?}"),
+        }
+        match decode_frame(&out[1]) {
+            Some(Frame::Media(payload)) => assert_eq!(&payload[4..8], b"moof"),
+            other => panic!("expected media frame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decode_frame_rejects_empty_and_unknown_discriminators() {
+        assert_eq!(decode_frame(&[]), None);
+        assert_eq!(decode_frame(&[2, 0xAA]), None);
     }
 
     fn annexb_fixture() -> Vec<u8> {

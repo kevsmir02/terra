@@ -23,7 +23,7 @@ function describeError(e: unknown): string {
 export class MsePlayer {
   private mediaSource: MediaSource;
   private sourceBuffer: SourceBuffer | null = null;
-  private pending: ArrayBuffer[] = [];
+  private pending: Uint8Array<ArrayBuffer>[] = [];
   private codecString: string | null = null;
   private ended = false;
   private trimPending = false;
@@ -78,27 +78,24 @@ export class MsePlayer {
   };
 
   /** kind: 0 = init segment (carries the codec string in-band),
-   *        1 = media fragment bytes. */
-  pushData(kind: number, bytes: ArrayBuffer) {
+   *        1 = media fragment bytes. `payload` is a view, never copied. */
+  pushData(kind: number, payload: Uint8Array<ArrayBuffer>) {
     if (this.ended) return;
     if (kind === 0) {
       // CONTRACT (Rust↔TS codec-string handoff, see remux.rs Fmp4Builder):
-      // The init segment frame (kind=0) from the Rust read loop is laid out as:
+      // The init segment payload (kind=0) from the Rust read loop is laid out as:
       //   [4-byte BE length] [UTF-8 codec string, e.g. "avc1.42001E"] [fMP4 ftyp+moov bytes]
       // We extract the codec string here for SourceBuffer construction and feed
       // the remainder to SourceBuffer.
-      const view = new DataView(bytes);
+      const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
       const len = view.getUint32(0, /* littleEndian */ false);
-      this.codecString = new TextDecoder().decode(
-        new Uint8Array(bytes, 4, len),
-      );
-      const remainder = bytes.slice(4 + len);
-      this.pending.push(remainder);
+      this.codecString = new TextDecoder().decode(payload.subarray(4, 4 + len));
+      this.pending.push(payload.subarray(4 + len));
       if (!this.sourceBuffer && this.mediaSource.readyState === "open") {
         this.initSourceBuffer();
       }
     } else {
-      this.pending.push(bytes);
+      this.pending.push(payload);
     }
     this.flushPending();
   }

@@ -6,11 +6,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tauri::ipc::Channel;
+use tauri::ipc::{Channel, Response};
 use tokio::sync::mpsc;
 
 use super::control::{serialize_control_message, ControlMessage};
-use super::remux::{Segment, StreamAssembler};
+use super::remux::StreamAssembler;
 use super::state::SerialReservation;
 use crate::modules::sync::MutexExt;
 
@@ -18,14 +18,6 @@ use crate::modules::sync::MutexExt;
 /// is how long the local adb client gets to follow before it is killed.
 const SHUTDOWN_BUDGET: Duration = Duration::from_secs(1);
 const SHUTDOWN_POLL: Duration = Duration::from_millis(20);
-
-#[derive(serde::Serialize, Clone)]
-pub struct DeviceFrame {
-    /// 0 = init segment (ftyp+moov), 1 = media fragment (moof+mdat).
-    pub kind: u8,
-    /// Raw fMP4 bytes; the webview appends these to a `SourceBuffer`.
-    pub bytes: Vec<u8>,
-}
 
 /// Handles to the video and control sockets the IO threads own, so shutdown
 /// can close them from outside and unblock a reader mid-`read`.
@@ -152,7 +144,8 @@ pub struct DeviceSession {
 impl DeviceSession {
     /// Spawn a session: pushes the JAR, forwards the ports, starts the server,
     /// and starts the blocking-IO threads that read Annex-B NALs into fMP4
-    /// `DeviceFrame`s on `channel` and write control messages back.
+    /// frames sent raw (`[discriminator][payload]`, see `remux::decode_frame`)
+    /// on `channel` and write control messages back.
     ///
     /// `video_port` and `control_port` are chosen by the caller from the OS
     /// ephemeral range (see `commands::ephemeral_ports`) and must be distinct.
@@ -166,7 +159,7 @@ impl DeviceSession {
         serial: String,
         video_port: u16,
         control_port: u16,
-        channel: Channel<DeviceFrame>,
+        channel: Channel<Response>,
         reservation: Arc<SerialReservation>,
     ) -> Result<Self, String> {
         let child = super::server::spawn_server(&adb, &jar, &serial, video_port, control_port)?;
@@ -251,13 +244,16 @@ impl Drop for DeviceSession {
 }
 
 /// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)` and
-/// feed it through a `StreamAssembler`, forwarding each resulting segment on
-/// `channel`. Framing lives in the assembler; this loop only does IO.
-/// `Channel::send` is synchronous (it just queues for the webview), so no
+/// feed it through a `StreamAssembler`, forwarding each resulting encoded
+/// frame (`[discriminator][payload]`, see `remux::decode_frame`) on `channel`
+/// as `Response::new(frame)`. One channel keeps the frames in order, which is
+/// why there is only one: the init frame must reach the media source before
+/// the first media frame. Framing lives in the assembler; this loop only does
+/// IO. `Channel::send` is synchronous (it just queues for the webview), so no
 /// async runtime is needed in this thread.
 fn run_read_loop(
     local_port: u16,
-    channel: Channel<DeviceFrame>,
+    channel: Channel<Response>,
     stopping: Arc<AtomicBool>,
     mut ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
     sockets: &SocketRegistry,
@@ -320,7 +316,7 @@ fn run_read_loop(
 
     let mut read_buf = [0u8; 65536];
     let mut assembler = StreamAssembler::default();
-    let mut segments: Vec<Segment> = Vec::new();
+    let mut frames: Vec<Vec<u8>> = Vec::new();
 
     loop {
         if stopping.load(Ordering::Relaxed) {
@@ -336,23 +332,19 @@ fn run_read_loop(
         };
 
         if n == 0 {
-            assembler.finish(&mut segments);
-            send_segments(&channel, &mut segments);
+            assembler.finish(&mut frames);
+            send_frames(&channel, &mut frames);
             break;
         }
 
-        assembler.push_bytes(&read_buf[..n], &mut segments);
-        send_segments(&channel, &mut segments);
+        assembler.push_bytes(&read_buf[..n], &mut frames);
+        send_frames(&channel, &mut frames);
     }
 }
 
-fn send_segments(channel: &Channel<DeviceFrame>, segments: &mut Vec<Segment>) {
-    for segment in segments.drain(..) {
-        let frame = match segment {
-            Segment::Init(bytes) => DeviceFrame { kind: 0, bytes },
-            Segment::Media(bytes) => DeviceFrame { kind: 1, bytes },
-        };
-        let _ = channel.send(frame);
+fn send_frames(channel: &Channel<Response>, frames: &mut Vec<Vec<u8>>) {
+    for frame in frames.drain(..) {
+        let _ = channel.send(Response::new(frame));
     }
 }
 
@@ -529,7 +521,7 @@ mod tests {
     fn spawn_failure_releases_serial_reservation() {
         let state = super::super::state::DeviceState::default();
         let reservation = state.reserve_serial("emulator-5554").unwrap();
-        let channel: Channel<DeviceFrame> = Channel::new(|_| Ok(()));
+        let channel: Channel<Response> = Channel::new(|_| Ok(()));
         let missing_adb = std::env::temp_dir().join("terra-missing-adb-for-tests");
         let result = DeviceSession::spawn(
             1,

@@ -11,10 +11,12 @@ export type SessionStatus =
   | { kind: "stream-failed"; message: string }
   | { kind: "streaming"; devW: number; devH: number };
 
-type Frame = {
-  kind: number;
-  bytes: ArrayBuffer | Uint8Array | number[] | Record<string, number>;
-};
+// Wire format: [1-byte discriminator][payload], on the same raw byte channel
+// the terminal uses (see remux::FRAME_INIT / FRAME_MEDIA on the Rust side).
+export function splitFrame(buf: ArrayBuffer): { kind: number; payload: Uint8Array<ArrayBuffer> } | null {
+  if (buf.byteLength === 0) return null;
+  return { kind: new Uint8Array(buf, 0, 1)[0], payload: new Uint8Array<ArrayBuffer>(buf, 1) };
+}
 
 export type DeviceSession = {
   readonly bridge: DeviceControlBridge | null;
@@ -70,7 +72,7 @@ async function waitOutAlreadyOpen(serial: string): Promise<void> {
   }
 }
 
-async function openDeviceWithRetry(serial: string, ch: Channel<Frame>): Promise<number> {
+async function openDeviceWithRetry(serial: string, ch: Channel<ArrayBuffer>): Promise<number> {
   try {
     return await invoke<number>("device_open", { serial, onFrame: ch });
   } catch (e) {
@@ -78,16 +80,6 @@ async function openDeviceWithRetry(serial: string, ch: Channel<Frame>): Promise<
     await waitOutAlreadyOpen(serial);
     return await invoke<number>("device_open", { serial, onFrame: ch });
   }
-}
-
-function frameBytes(bytes: unknown): ArrayBuffer | null {
-  if (bytes instanceof ArrayBuffer) return bytes;
-  if (bytes instanceof Uint8Array) return new Uint8Array(bytes).slice().buffer;
-  if (Array.isArray(bytes)) return new Uint8Array(bytes).buffer;
-  if (bytes && typeof bytes === "object") {
-    return new Uint8Array(Object.values(bytes as Record<string, number>)).buffer;
-  }
-  return null;
 }
 
 export function openDeviceSession(opts: {
@@ -144,14 +136,10 @@ export function openDeviceSession(opts: {
         return;
       }
 
-      const ch = new Channel<Frame>();
-      ch.onmessage = (frame) => {
-        const raw = frameBytes(frame.bytes);
-        if (!raw) {
-          console.warn("[device] channel: unknown frame.bytes shape; dropping");
-          return;
-        }
-        player?.pushData(frame.kind, raw);
+      const ch = new Channel<ArrayBuffer>();
+      ch.onmessage = (buf) => {
+        const frame = splitFrame(buf);
+        if (frame) player?.pushData(frame.kind, frame.payload);
       };
       const pending = pendingCloses.get(serial);
       if (pending) await boundedWait(pending, PENDING_CLOSE_BOUND_MS);
