@@ -17,9 +17,11 @@ pub struct LaunchedAvd {
     pub child: std::process::Child,
 }
 
-/// Exclusive claim on one serial for the lifetime of a mirror session. Opening
-/// a serial pkills any scrcpy server on the device, so two live sessions on one
-/// serial would kill each other mid-stream.
+/// Exclusive claim on one serial for the lifetime of a mirror session. Each
+/// session gets its own scid and abstract socket, so two live sessions on one
+/// serial no longer collide on the wire, but they would still fight over the
+/// same touch/key input and adb forwards, so only one session per serial is
+/// allowed at a time.
 pub struct SerialReservation {
     open: Arc<Mutex<HashSet<String>>>,
     serial: String,

@@ -281,15 +281,17 @@ pub async fn device_stop_avd(state: State<'_, DeviceState>, serial: String) -> R
     .map_err(|e| format!("device_stop_avd join: {e}"))?
 }
 
-/// Pick an ephemeral localhost port for the session's adb forward. Not
-/// security-sensitive (binds 127.0.0.1 only per adb behavior); chosen via the
-/// OS ephemeral range so two sessions don't collide.
-fn ephemeral_port() -> Result<u16, String> {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .map_err(|e| format!("ephemeral_port bind: {e}"))?
-        .local_addr()
-        .map(|a| a.port())
-        .map_err(|e| format!("ephemeral_port addr: {e}"))
+/// Pick two distinct ephemeral localhost ports for the session's adb forwards
+/// (video, control). Not security-sensitive (binds 127.0.0.1 only per adb
+/// behavior). Both listeners are held open until both addresses are read, so
+/// the OS cannot hand back the same port for both.
+fn ephemeral_ports() -> Result<(u16, u16), String> {
+    let video = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| format!("ephemeral_ports bind video: {e}"))?;
+    let control =
+        std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| format!("ephemeral_ports bind control: {e}"))?;
+    let video_port = video.local_addr().map_err(|e| format!("ephemeral_ports video addr: {e}"))?.port();
+    let control_port = control.local_addr().map_err(|e| format!("ephemeral_ports control addr: {e}"))?.port();
+    Ok((video_port, control_port))
 }
 
 #[tauri::command]
@@ -303,9 +305,13 @@ pub async fn device_open(
     let reservation = state.reserve_serial(&serial)?;
     let adb = resolve_adb_path()?;
     let jar = state.jar_path(&app)?;
-    let port = ephemeral_port()?;
+    let (video_port, control_port) = ephemeral_ports()?;
     let id = state.next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let session = DeviceSession::spawn(id, adb, jar, serial, port, on_frame, reservation)?;
+    let session = tauri::async_runtime::spawn_blocking(move || {
+        DeviceSession::spawn(id, adb, jar, serial, video_port, control_port, on_frame, reservation)
+    })
+    .await
+    .map_err(|e| format!("device_open join: {e}"))??;
     state.sessions.write_or_recover().insert(id, session);
     Ok(id)
 }
@@ -366,7 +372,7 @@ pub(crate) async fn device_send_touch_impl(
     };
 
     let serial = {
-        let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+        let sessions = state.sessions.read_or_recover();
         let session = sessions.get(&handle).ok_or("session not found")?;
         if session.control_tx.try_send(msg).is_ok() {
             return Ok(());
@@ -430,7 +436,7 @@ pub(crate) async fn device_send_key_impl(
     };
 
     let serial = {
-        let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+        let sessions = state.sessions.read_or_recover();
         let session = sessions.get(&handle).ok_or("session not found")?;
         if session.control_tx.try_send(msg).is_ok() {
             return Ok(());
@@ -479,7 +485,7 @@ pub(crate) async fn device_send_scroll_impl(
     };
 
     {
-        let sessions = state.sessions.read().map_err(|e| e.to_string())?;
+        let sessions = state.sessions.read_or_recover();
         let session = sessions.get(&handle).ok_or("session not found")?;
         if session.control_tx.try_send(msg).is_ok() {
             return Ok(());
@@ -562,6 +568,12 @@ mod tests {
         assert_eq!(parse_wm_size(""), None);
         assert_eq!(parse_wm_size("error: device offline"), None);
         assert_eq!(parse_wm_size("Physical size: 1080xtall"), None);
+    }
+
+    #[test]
+    fn ephemeral_ports_returns_two_distinct_ports() {
+        let (video, control) = ephemeral_ports().expect("both listeners must bind");
+        assert_ne!(video, control, "video and control must never share a port");
     }
 
     #[tokio::test]

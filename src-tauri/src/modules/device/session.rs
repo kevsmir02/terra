@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::net::{Shutdown, TcpStream};
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -105,7 +105,8 @@ fn drive_shutdown<O: ShutdownOps>(ops: &mut O, budget: Duration, interval: Durat
 struct Teardown {
     adb: PathBuf,
     serial: String,
-    local_port: u16,
+    video_port: u16,
+    control_port: u16,
     child: Option<Child>,
     sockets: Arc<SocketRegistry>,
     reservation: Arc<SerialReservation>,
@@ -136,11 +137,7 @@ impl ShutdownOps for Teardown {
     }
 
     fn remove_forwards(&mut self) {
-        for port in [self.local_port, self.local_port + 1] {
-            let _ = Command::new(&self.adb)
-                .args(["-s", &self.serial, "forward", "--remove", &format!("tcp:{port}")])
-                .output();
-        }
+        super::server::remove_forwards(&self.adb, &self.serial, self.video_port, self.control_port);
     }
 }
 
@@ -157,19 +154,22 @@ impl DeviceSession {
     /// and starts the blocking-IO threads that read Annex-B NALs into fMP4
     /// `DeviceFrame`s on `channel` and write control messages back.
     ///
-    /// `local_port` is chosen by the caller from the OS ephemeral range. The
-    /// reservation is released when the reader exits, on shutdown, or if this
-    /// spawn fails.
+    /// `video_port` and `control_port` are chosen by the caller from the OS
+    /// ephemeral range (see `commands::ephemeral_ports`) and must be distinct.
+    /// The reservation is released when the reader exits, on shutdown, or if
+    /// this spawn fails.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         id: u32,
         adb: PathBuf,
         jar: PathBuf,
         serial: String,
-        local_port: u16,
+        video_port: u16,
+        control_port: u16,
         channel: Channel<DeviceFrame>,
         reservation: Arc<SerialReservation>,
     ) -> Result<Self, String> {
-        let child = super::server::spawn_server(&adb, &jar, &serial, local_port)?;
+        let child = super::server::spawn_server(&adb, &jar, &serial, video_port, control_port)?;
         #[cfg(windows)]
         let job = match crate::modules::proc::job::ProcessJob::create_for(child.id()) {
             Ok(j) => Some(j),
@@ -182,14 +182,13 @@ impl DeviceSession {
         let sockets = Arc::new(SocketRegistry::default());
 
         let (tx, mut rx) = mpsc::channel::<ControlMessage>(128);
-        let control_port = local_port + 1;
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
 
         let stop_reader = stopping.clone();
         let reader_sockets = sockets.clone();
         let reader_reservation = Arc::clone(&reservation);
         tauri::async_runtime::spawn_blocking(move || {
-            run_read_loop(local_port, channel, stop_reader, Some(ready_tx), &reader_sockets);
+            run_read_loop(video_port, channel, stop_reader, Some(ready_tx), &reader_sockets);
             reader_reservation.release();
         });
 
@@ -207,7 +206,8 @@ impl DeviceSession {
             teardown: Some(Teardown {
                 adb,
                 serial,
-                local_port,
+                video_port,
+                control_port,
                 child: Some(child),
                 sockets,
                 reservation,
@@ -503,7 +503,8 @@ mod tests {
         session.teardown = Some(Teardown {
             adb: std::env::temp_dir().join("terra-missing-adb-for-tests"),
             serial: "emulator-5554".into(),
-            local_port: 27183,
+            video_port: 27183,
+            control_port: 27184,
             child: None,
             sockets: Arc::new(SocketRegistry::default()),
             reservation: state.reserve_serial("emulator-5554").unwrap(),
@@ -534,6 +535,7 @@ mod tests {
             missing_adb,
             "emulator-5554".into(),
             27183,
+            27184,
             channel,
             reservation,
         );
