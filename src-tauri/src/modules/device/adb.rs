@@ -702,8 +702,13 @@ emulator-5554   device\n";
     // detected") and segfault on the cold-boot path. Measured on Mesa 26 /
     // Fedora 44: `-gpu auto` and `-gpu swiftshader_indirect` both SEGV, while
     // omitting the flag boots in ~8s. `None` must stay the default.
+    // The fake emulator is a POSIX shell script, so the test only runs where
+    // one can be executed; the argv it checks is built the same way everywhere.
     #[test]
+    #[cfg(unix)]
     fn launch_omits_gpu_flag_unless_explicitly_requested() {
+        use std::os::unix::fs::PermissionsExt;
+
         let script = std::env::temp_dir().join("terra-test-fake-emulator.sh");
         let argv_dump = std::env::temp_dir().join("terra-test-emulator-argv.txt");
         let _ = std::fs::remove_file(&argv_dump);
@@ -712,11 +717,7 @@ emulator-5554   device\n";
             format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nsleep 5\n", argv_dump.display()),
         )
         .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         let log = std::env::temp_dir().join("terra-test-nogpu.log");
         let mut launched = launch_avd(&script, "Pixel_API34", 5554, None, log).expect("spawn");

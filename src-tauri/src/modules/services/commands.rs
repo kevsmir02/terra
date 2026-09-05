@@ -623,8 +623,7 @@ mod tests {
         let mounts = authorize_mounts(&reg, &[site_at(dir.path(), "public")])?;
         let emitted = mounts.get("app").ok_or("app mount")?;
         let canonical = dir.path().canonicalize().map_err(|e| e.to_string())?;
-        let expected = canonical.to_string_lossy().into_owned();
-        assert_eq!(emitted, &expected);
+        assert_eq!(emitted, &to_canon(&canonical));
         Ok(())
     }
 
