@@ -43,6 +43,14 @@ describe("clampDockWidth", () => {
     expect(clampDockWidth(5000)).toBe(DOCK_MAX_WIDTH);
   });
 
+  // Pins the widened bound to its literal value: a relative comparison against
+  // DOCK_MAX_WIDTH alone would keep passing even if the constant regressed.
+  it("raises the maximum to 960 for a wider dock", () => {
+    expect(DOCK_MAX_WIDTH).toBe(960);
+    expect(clampDockWidth(960)).toBe(960);
+    expect(clampDockWidth(961)).toBe(960);
+  });
+
   it("rounds fractional widths from pixel drags", () => {
     expect(clampDockWidth(341.6)).toBe(342);
   });

@@ -5,8 +5,6 @@ import type React from "react";
 export const DEVICE_KEYCODE = {
   HOME: 3,
   BACK: 4,
-  VOLUME_UP: 24,
-  VOLUME_DOWN: 25,
   APP_SWITCH: 187,
 } as const;
 

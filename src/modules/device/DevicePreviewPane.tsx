@@ -1,4 +1,4 @@
-import { Loading03Icon } from "@hugeicons/core-free-icons";
+import { Loading03Icon, UsbNotConnected01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,11 @@ const OVERLAY = "absolute inset-0 flex flex-col items-center justify-center gap-
 
 export function ConnectingOverlay({ label }: { label: string }) {
   return (
-    <div className={cn(OVERLAY, "pointer-events-none bg-background/(--emph-bold)")}>
+    <div
+      className={cn(OVERLAY, "pointer-events-none bg-background/(--emph-bold)")}
+      role="status"
+      aria-live="polite"
+    >
       <HugeiconsIcon
         icon={Loading03Icon}
         size={18}
@@ -51,7 +55,12 @@ export function DisconnectedOverlay({
   onReconnect: () => void;
 }) {
   return (
-    <div className={cn(OVERLAY, "bg-background/(--emph-medium)")}>
+    <div
+      className={cn(OVERLAY, "bg-background/(--emph-medium)")}
+      role="status"
+      aria-live="polite"
+    >
+      <HugeiconsIcon icon={UsbNotConnected01Icon} size={18} strokeWidth={1.5} className="text-destructive" />
       <p className="max-w-full break-words text-[11px] font-medium text-foreground">{message}</p>
       <button
         type="button"

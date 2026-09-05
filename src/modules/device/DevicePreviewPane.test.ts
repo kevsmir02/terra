@@ -103,6 +103,17 @@ describe("the connecting overlay", () => {
   it("names what it is connecting to", () => {
     expect(collectText(ConnectingOverlay({ label: "Pixel 8" }))).toContain("Connecting to Pixel 8");
   });
+
+  // A reviewer asked for this on Task 8: without it a screen reader never
+  // learns the pane transitioned into connecting.
+  it("announces the state change to assistive tech", () => {
+    const el = ConnectingOverlay({ label: "Pixel 8" }) as ReactElement<{
+      role?: string;
+      "aria-live"?: string;
+    }>;
+    expect(el.props.role).toBe("status");
+    expect(el.props["aria-live"]).toBe("polite");
+  });
 });
 
 describe("the disconnected overlay", () => {
@@ -120,6 +131,15 @@ describe("the disconnected overlay", () => {
 
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("announces the state change to assistive tech", () => {
+    const el = DisconnectedOverlay({
+      message: "The mirror server could not be reached",
+      onReconnect: vi.fn(),
+    }) as ReactElement<{ role?: string; "aria-live"?: string }>;
+    expect(el.props.role).toBe("status");
+    expect(el.props["aria-live"]).toBe("polite");
   });
 });
 

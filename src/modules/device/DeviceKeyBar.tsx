@@ -1,18 +1,10 @@
 import { Button } from "@/components/ui/button";
-import {
-  ArrowLeft01Icon,
-  Home01Icon,
-  SquareIcon,
-  VolumeHighIcon,
-  VolumeLowIcon,
-} from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Home01Icon, SquareIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 type Keycodes = {
   HOME: number;
   BACK: number;
-  VOLUME_UP: number;
-  VOLUME_DOWN: number;
   APP_SWITCH: number;
 };
 
@@ -27,8 +19,6 @@ export function DeviceKeyBar({ keycodes, disabled, onPress }: Props) {
     { label: "Back", icon: ArrowLeft01Icon, code: keycodes.BACK },
     { label: "Home", icon: Home01Icon, code: keycodes.HOME },
     { label: "Recents", icon: SquareIcon, code: keycodes.APP_SWITCH },
-    { label: "Volume down", icon: VolumeLowIcon, code: keycodes.VOLUME_DOWN },
-    { label: "Volume up", icon: VolumeHighIcon, code: keycodes.VOLUME_UP },
   ];
 
   return (
