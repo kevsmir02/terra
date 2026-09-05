@@ -10,7 +10,7 @@ The terminal is the product. Everything else (editor, explorer, source control, 
 
 Lightweight is measured, not asserted. The eager startup graph, the total client bundle, and idle work all have gates (see **Budgets**), and Terra stays small by keeping features dormant rather than by refusing them. Heavy IDE machinery (debuggers, refactoring engines, project-wide indexers, package-manager UIs, document hosts) is out of scope; `ROADMAP.md` is the authority on direction and lists what is deliberately out.
 
-Cross-platform parity (macOS, Linux, Windows, WSL) and security by default (every disk and process access gated by the workspace registry) hold for every feature.
+Terra is a personal fork of Terax, maintained by one person for their own use: no other contributors, no support commitment, and docs that describe the system rather than a process for outsiders. It is developed, tested, and released on Linux only (Fedora day to day). The macOS, Windows, and WSL code paths inherited from upstream stay in the tree behind `#[cfg(...)]` and must keep compiling, but no feature work targets them. Security by default (every disk and process access gated by the workspace registry) holds for every feature.
 
 ## On demand
 
@@ -48,10 +48,10 @@ Production-grade or it does not ship. A change is done when all of these hold:
   - Frontend: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm build && pnpm size:eager`, `pnpm knip`, `pnpm audit --prod` and `pnpm audit`.
   - Rust: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cargo nextest run --locked` (local fallback: `cargo test --locked`), `cargo audit`, then `git diff --exit-code src/modules/device/generated` (the `ts-rs` export must be committed).
   - `pnpm lint` runs with `--error-on-warnings`: a deliberate exception carries `// biome-ignore <rule>: <reason>`. Accepted Rust advisories live in `src-tauri/.cargo/audit.toml` with their rationale; anything unlisted fails.
-- **Invariant locked.** A change to a core subsystem (terminal/shell spawn, workspace authorization, git, fs, IPC, the dormant state of a feature) ships with a test that fails when the invariant breaks. `docs/contributing/testing.md` has the contract.
+- **Invariant locked.** A change to a core subsystem (terminal/shell spawn, workspace authorization, git, fs, IPC, the dormant state of a feature, and pure logic with wide reach such as cwd inheritance, tab-tree transforms, and OSC parsing) ships with a test that fails when the invariant breaks. Test the deny path and the edge, not the happy path; `fs::authorization_tests`, `workspace::auth_tests`, and `src/app/eager-budget.test.ts` are the models. UI rendering, themes, and anything the type-checker already guarantees need no test.
 - **Correct under stress.** Edge cases, failure modes, and concurrent access handled. Every boundary (IPC, fs, network, OSC) validates its input.
 - **Within budget.** See **Budgets**. A dormant feature costs nothing.
-- **Cross-platform.** macOS, Linux, Windows, WSL considered; platform code behind `#[cfg(...)]`, paths handled per the frontend conventions below.
+- **Linux first.** Platform code stays behind `#[cfg(...)]` and the macOS and Windows arms keep compiling (CI still runs the Rust tests there), but nothing is verified on them and no change is held back for their sake. Paths still follow the frontend conventions below.
 - **Polished.** Every UI state considered (loading, empty, error, disconnected, disabled), keyboard-first, themed through the central engine.
 - **Architected.** New or changed logic lives in pure, dependency-light functions (functional core); Tauri commands and React components stay thin (imperative shell).
 - **Documented.** `TERRA.md` updated when an invariant, gate, or module boundary changed. A decision that would otherwise be re-litigated gets an ADR in `docs/adr/` (numbered, append-only; a superseded record is marked, never deleted).
@@ -70,9 +70,9 @@ Production-grade or it does not ship. A change is done when all of these hold:
 
 ### Two-process model
 
-**Rust (`src-tauri/`)** owns all OS access. The webview never touches the FS, processes, or shells directly: everything goes through `invoke()` calls to commands registered in `src-tauri/src/lib.rs`. The per-command catalog and the steps for adding a command live in `docs/architecture/two-process-model.md`. The module map:
+**Rust (`src-tauri/`)** owns all OS access. The webview never touches the FS, processes, or shells directly: everything goes through `invoke()` calls to commands registered in `src-tauri/src/lib.rs`. The `generate_handler![...]` block there is the command catalog; there is no separate list to keep in sync. Adding a command: write it as a thin `#[tauri::command]` over a core function taking `&WorkspaceRegistry` or plain data (so it is unit-tested without a Tauri runtime), register it in `lib.rs`, add a typed wrapper under `src/modules/<area>/lib/`, pick the right authorization gate or argument validation at the boundary, and if it starts anything long-lived keep it in a `*State` that dies on close and on `RunEvent::Exit`. The module map:
 
-- `pty::*`: long-lived interactive PTY sessions (xterm to portable-pty), managed by `PtyState` (`RwLock<HashMap<id, Session>>`); output streams via a Tauri `Channel<PtyEvent>`. The reader thread hosts two byte filters, agent detection (`agent_detect.rs`) and dev-server URL detection (`url_detect.rs`), both zero cost when nothing matches.
+- `pty::*`: long-lived interactive PTY sessions (xterm to portable-pty), managed by `PtyState` (`RwLock<HashMap<id, Session>>`); output streams via a Tauri `Channel<PtyEvent>`. Each session runs three threads: a reader, a flusher that coalesces output for the channel, and a waiter that flushes the tail and reports the exit code. The pending buffer is capped at 4 MiB and on overflow is replaced by an SGR reset plus a notice, so a sliced CSI never corrupts xterm state. The reader hosts three byte filters: `da_filter.rs` answers PowerShell's startup cursor-position query so the shell does not hang, while agent detection (`agent_detect.rs`) and dev-server URL detection (`url_detect.rs`) are zero cost when nothing matches.
 - `fs::*`: explorer and editor IO (`tree`, `file`, `mutate`, `watch`), fuzzy finder and content search (`search`, `grep`, powered by `ignore` + `grep-*`).
 - `git::commands::*`: the full source-control surface, all gated through the workspace registry.
 - `workspace::*`: the authorization registry (`workspace_authorize` / `workspace_current_dir`) plus the WSL bridge.
@@ -80,8 +80,8 @@ Production-grade or it does not ship. A change is done when all of these hold:
 - `history::*`: shell-history-backed suggestions for the block shell input.
 - `lsp::*`: language server process host. A dumb JSON-RPC pipe: Content-Length framing + process lifecycle in Rust (`lsp/framing.rs`, pure + tested), protocol intelligence on the frontend. Spawn cwd gated through the registry; binaries resolve via the captured login-shell env (`lsp/env.rs`, GUI apps get a bare PATH on macOS); root detection walks up to markers but never to or above `$HOME`. Servers run in their own process group on Unix and are group-killed (cargo check / proc-macro children die with the server); Windows children get a `proc::job::ProcessJob` (kill-on-close, shared with pty). A per-server memory watchdog kills a server over its RSS budget after a startup grace. All sessions killed on `RunEvent::Exit`.
 - `device::*`: Android device and emulator mirroring (see **Device module**).
-- `services::*`: optional local hosting stack (databases, mail, web, project sites) on Docker or Podman; probed from the Settings tab and polled only while a service is running.
-- `agent::*`: installs the agent notification hooks (see **agents/** below). `updater::*`: package-aware update flow around `tauri-plugin-updater`. `open_settings_window` (optional `tab` arg deep-links a section), `open_preview_tab`, `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
+- `services::*`: optional local hosting stack (databases, mail, web, project sites) on Docker or Podman; probed from the Settings tab and polled only while a service is running. The runtime is invoked argv-style, and project roots handed to it as mounts pass `authorize_mounts` against the registry.
+- `agent::*`: installs the agent notification hooks (see **agents/** below). `updater::*`: package-aware update flow around `tauri-plugin-updater`; `updater_download` is the only outbound HTTP client in the app (HTTPS only, hosts allowlisted to the GitHub release hosts, every redirect hop checked, body capped at 512 MB, connect and global timeouts bounded, each rule a free function with tests). There is no general-purpose fetch; a new network-facing command copies that shape. `open_settings_window` (optional `tab` arg deep-links a section), `open_preview_tab`, `get_launch_dir` / `get_launch_files` (drained-once CLI launch target).
 - `migrate::migrate_legacy_app_dirs`: not a command. Runs before the builder, because the store and webview open their identifier-scoped trees during plugin init.
 
 ### Workspace authorization
@@ -101,7 +101,7 @@ Four gates in `fs/mod.rs`, and picking the wrong one is a real bug:
 
 Canonicalizing first is what makes the check mean anything: `..` collapses and symlinks resolve, so the root is compared against the real target rather than the spelling. `is_authorized` uses `Path::starts_with`, which is component-wise; a string prefix would let `/home/user2` pass for `/home/user`.
 
-Commands stay thin shells over a core taking `&WorkspaceRegistry`, so the gate is unit-testable without a Tauri runtime (`fs::mutate::create_file`, `fs::grep::grep`, ...). The invariants are locked in `fs::authorization_tests`.
+Commands stay thin shells over a core taking `&WorkspaceRegistry`, so the gate is unit-testable without a Tauri runtime (`fs::mutate::create_file`, `fs::grep::grep`, ...). The invariants are locked in `fs::authorization_tests` and `workspace::auth_tests`, and a change to the registry or a gate covers all of them: a path outside every root is refused by its spelling and again after canonicalization, `..` cannot climb out, the entry gate leaves a symlink unresolved, the new-path gate allows a missing tail inside a root and refuses one outside, and authorizing a single file never authorizes its siblings.
 
 The asset protocol (`asset://`, used for image/video/audio/PDF previews) has an **empty static scope**. `fs_allow_asset` grants one already-authorized file at a time via `asset_protocol_scope().allow_file()`. A blanket `"**"` scope would hand the webview arbitrary file reads over a channel this registry never sees.
 
@@ -120,7 +120,7 @@ Each ConPTY child is also assigned to a per-session **Job Object** with `JOB_OBJ
 
 ### Device module (`src-tauri/src/modules/device/`)
 
-Android device and emulator mirroring over the platform-tools on PATH, on demand: nothing runs until the dock opens, and `device_close` and `RunEvent::Exit` kill every session and every Terra-launched AVD (AVDs the user started elsewhere are left alone). Vocabulary (device, serial, readiness, AVD, emulator, session, mirror, dock) is defined once in `GLOSSARY.md`; the stream pipeline (scrcpy server, `StreamAssembler` remux, `FrameTimeline` pacing, control protocol, frontend playback policy) is in `docs/architecture/device-mirroring.md`.
+Android device and emulator mirroring over the platform-tools on PATH, on demand: nothing runs until the dock opens, and `device_close` and `RunEvent::Exit` kill every session and every Terra-launched AVD (AVDs the user started elsewhere are left alone). Vocabulary (device, serial, readiness, AVD, emulator, session, mirror, dock) and the stream pipeline (scrcpy server, `StreamAssembler` remux, `FrameTimeline` pacing, control protocol, frontend playback policy) are in `docs/architecture/device-mirroring.md`.
 
 Invariants to keep:
 
@@ -203,7 +203,6 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 
 ## Further reading
 
-- `ROADMAP.md`: direction, what is shipped, what is deliberately out of scope.
+- `ROADMAP.md`: what is next and what is deliberately out of scope.
 - `THEME.md`: authoring a theme, the full token reference, surface classes, terminal palette contrast rules, font metrics. Read it before writing a theme or adding a theme token.
-- `GLOSSARY.md`: vocabulary for the device module.
-- `docs/README.md` indexes the long-form guides: `docs/architecture/two-process-model.md` (per-command IPC catalog, adding a command), `docs/architecture/security-model.md`, `docs/architecture/pty-shell-integration.md`, `docs/architecture/terminal-renderer-pool.md`, `docs/architecture/device-mirroring.md`, `docs/contributing/testing.md`, and the ADRs in `docs/adr/`. These elaborate on `TERRA.md`; if anything conflicts, `TERRA.md` wins.
+- `docs/architecture/terminal-renderer-pool.md` and `docs/architecture/device-mirroring.md`: the two long-form guides; `docs/adr/` holds the decision records. These elaborate on `TERRA.md`; if anything conflicts, `TERRA.md` wins.

@@ -1,6 +1,19 @@
 # Device mirroring
 
-This guide elaborates on `TERRA.md`. If anything here conflicts with `TERRA.md`, `TERRA.md` wins. Vocabulary (device, serial, readiness, AVD, emulator, session, mirror, dock) is defined in `GLOSSARY.md`.
+This guide elaborates on `TERRA.md`. If anything here conflicts with `TERRA.md`, `TERRA.md` wins.
+
+## Vocabulary
+
+Defined once here so the host process and the webview describe the same thing.
+
+- **Device**: any target adb can address, physical or emulated.
+- **Serial**: the adb identifier for a Device.
+- **Readiness**: whether a Device is usable.
+- **AVD**: an emulator definition on disk.
+- **Emulator**: a running instance of an AVD.
+- **Session**: one live capture of one Device, owned by the host process.
+- **Mirror**: the live picture of a Session as seen in the webview.
+- **Dock**: the right hand panel the Mirror is displayed in.
 
 The module lives in `src-tauri/src/modules/device/` and mirrors an Android device or emulator into the dock, driven by the platform-tools on PATH. It is on demand: nothing runs until the dock opens, and everything it started dies when the session closes or the app exits.
 
