@@ -33,54 +33,10 @@ fn push_nonempty(nals: &mut Vec<Vec<u8>>, bytes: &[u8], start: Option<usize>, en
     }
 }
 
-/// Pop complete NAL units from the front of `buf`, leaving the trailing
-/// in-flight unit (bytes from the last start code onward, *including* its
-/// start code) in `buf` for the next read. The streaming read loop uses this
-/// because NALs may be split across `read()` calls. Initialize `buf` empty;
-/// append each chunk, then call this to drain what is provably complete.
-///
-/// Only NALs bounded by two start codes are considered complete; with fewer
-/// than two start codes nothing is drained (the whole `buf` is retained).
-fn drain_complete_nals(buf: &mut Vec<u8>) -> Vec<Vec<u8>> {
-    let mut sc: Vec<(usize, usize)> = Vec::new();
-    let mut i = 0usize;
-    while i + 2 < buf.len() {
-        let is4 =
-            i + 3 < buf.len() && buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 0 && buf[i + 3] == 0x01;
-        let is3 = !is4 && buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 0x01;
-        if is4 {
-            sc.push((i, 4));
-            i += 4;
-        } else if is3 {
-            sc.push((i, 3));
-            i += 3;
-        } else {
-            i += 1;
-        }
-    }
-    if sc.len() < 2 {
-        return Vec::new();
-    }
-    let mut out = Vec::with_capacity(sc.len() - 1);
-    for k in 0..sc.len() - 1 {
-        let (p, l) = sc[k];
-        let start = p + l;
-        let end = sc[k + 1].0;
-        if start < end {
-            out.push(buf[start..end].to_vec());
-        }
-    }
-    let tail = sc[sc.len() - 1].0;
-    let keep = buf[tail..].to_vec();
-    buf.clear();
-    buf.extend_from_slice(&keep);
-    out
-}
-
-/// fMP4 (fragmented MP4 / CMAF) muxer for a single Annex-B H.264 elementary
-/// stream. v1 emits one `moof`+`mdat` per NAL. The init segment (`ftyp`+`moov`
-/// with the `avcC` decoder config record) is built once from the first SPS+PPS
-/// NALs the read loop sees.
+/// fMP4 (fragmented MP4 / CMAF) muxer for a single H.264 elementary stream.
+/// One `moof`+`mdat` fragment per access unit. The init segment (`ftyp`+`moov`
+/// with the `avcC` decoder config record) is built once from the SPS+PPS the
+/// capture's config packet carries.
 ///
 /// CONTRACT (Rust↔TS codec-string handoff): the assembler encodes each output
 /// frame as `[discriminator byte][payload]` (`FRAME_INIT` or `FRAME_MEDIA`,
@@ -92,10 +48,7 @@ pub struct Fmp4Builder {
     codec_string: String,
     init_segment: Vec<u8>,
     sequence_number: u32,
-    /// Cumulative `baseMediaDecodeTime` (units = track timescale, 1000 = ms).
-    /// scrcpy `raw_stream=true` strips per-frame PTS, so we synthesize a
-    /// monotonic timeline ourselves: each fragment adds the nominal duration.
-    decode_time: u64,
+    timeline: FrameTimeline,
 }
 
 /// `avc1.PPCCLL` from an SPS NAL (header byte + profile_idc +
@@ -107,33 +60,52 @@ pub fn codec_string_from_sps(sps: &[u8]) -> Option<String> {
     }
 }
 
+/// `sample_flags` for a random access point: `sample_depends_on = 2`
+/// (references nothing) and `sample_is_non_sync_sample = 0`.
+const SAMPLE_FLAGS_KEY_FRAME: u32 = 0x0200_0000;
+
+/// `sample_flags` for a delta frame: `sample_depends_on = 1` plus
+/// `sample_is_non_sync_sample = 1`, so a seek never lands on it.
+const SAMPLE_FLAGS_DELTA: u32 = 0x0101_0000;
+
 impl Fmp4Builder {
     /// `sps`/`pps` are raw NAL payloads without the Annex-B start code but with
     /// the 1-byte NAL header. None for parameter sets that cannot fill an avcC.
     pub fn from_parameter_sets(sps: &[u8], pps: &[u8]) -> Option<Self> {
         let codec_string = codec_string_from_sps(sps)?;
         let init_segment = build_init(sps, pps)?;
-        Some(Self { codec_string, init_segment, sequence_number: 0, decode_time: 0 })
+        Some(Self {
+            codec_string,
+            init_segment,
+            sequence_number: 0,
+            timeline: FrameTimeline::default(),
+        })
     }
 
     pub fn codec_string(&self) -> &str { &self.codec_string }
 
     pub fn init_segment(&self) -> &[u8] { &self.init_segment }
 
-    /// Wrap a single NAL (no start code) in its own fMP4 media fragment
-    /// (`moof`+`mdat`). The `mdat` body is `[u32 BE length][nal]` (AVC length
-    /// prefix = 4 bytes, matching the `lengthSizeMinusOne=3` stored in `avcC`).
+    /// Wrap one complete access unit (its NALs, no start codes) as a single
+    /// fMP4 sample and return the wire frame `[FRAME_MEDIA][moof+mdat]`. The
+    /// `mdat` body concatenates `[u32 BE length][nal]` per NAL (AVC length
+    /// prefix = 4 bytes, matching the `lengthSizeMinusOne=3` in `avcC`).
     /// `mfhd` carries a per-session incrementing `sequence_number`; `tfdt`
-    /// carries an incrementing `baseMediaDecodeTime` so MSE can chain fragments.
-    ///
-    /// Sizes are constant for v1 (one sample per fragment, fixed box layout),
-    /// so `trun`'s `data_offset` is a compile-time constant pointing at the
-    /// `mdat` body start (just after the `mdat` box header).
-    pub fn append_nal(&mut self, nal: &[u8]) -> Vec<u8> {
+    /// carries the decode time `FrameTimeline` derives from `pts_us`.
+    pub fn append_access_unit(
+        &mut self,
+        nals: &[impl AsRef<[u8]>],
+        key_frame: bool,
+        pts_us: u64,
+    ) -> Vec<u8> {
         self.sequence_number = self.sequence_number.wrapping_add(1);
         let seq = self.sequence_number;
+        let (decode_time, duration) = self.timeline.next(pts_us);
 
-        const NOMINAL_FRAME_DURATION_MS: u32 = 33;
+        let sample_size: u32 = nals
+            .iter()
+            .map(|nal| 4 + nal.as_ref().len() as u32)
+            .sum();
 
         let mfhd = fullbox(b"mfhd", 0, 0, &seq.to_be_bytes());
 
@@ -145,61 +117,100 @@ impl Fmp4Builder {
 
         // tfdt (version 1, u64 baseMediaDecodeTime): the decode-time anchor MSE
         // needs to place this fragment on the timeline. Without it (and with a
-        // zero duration) the <video> never paints — the original black-screen bug.
-        let tfdt = fullbox(b"tfdt", 1, 0, &self.decode_time.to_be_bytes());
+        // zero duration) the <video> never paints, the original black-screen bug.
+        let tfdt = fullbox(b"tfdt", 1, 0, &decode_time.to_be_bytes());
 
         // trun flags: data-offset-present (0x000001) | sample-duration-present
-        // (0x000100) | sample-size-present (0x000200) = 0x000301.
-        // moof = box(8)+mfhd(16)+traf[box(8)+tfhd(16)+tfdt(20)+trun(28)] = 96.
-        const DATA_OFFSET: u32 = 104; // moof(96) + mdat header(8) → start of mdat body
-        let mut trun_p = Vec::with_capacity(16);
+        // (0x000100) | sample-size-present (0x000200) | sample-flags-present
+        // (0x000400) = 0x000701.
+        let mut trun_p = Vec::with_capacity(20);
         trun_p.extend_from_slice(&1u32.to_be_bytes()); // sample_count
-        trun_p.extend_from_slice(&DATA_OFFSET.to_be_bytes()); // data_offset
-        trun_p.extend_from_slice(&NOMINAL_FRAME_DURATION_MS.to_be_bytes()); // sample_duration (nominal, non-zero)
-        trun_p.extend_from_slice(&((nal.len() as u32) + 4).to_be_bytes()); // sample_size (4-byte len + nal)
-        let trun = fullbox(b"trun", 0, 0x000301, &trun_p);
+        trun_p.extend_from_slice(&0u32.to_be_bytes()); // data_offset, patched below
+        trun_p.extend_from_slice(&duration.to_be_bytes());
+        trun_p.extend_from_slice(&sample_size.to_be_bytes());
+        let sample_flags = if key_frame { SAMPLE_FLAGS_KEY_FRAME } else { SAMPLE_FLAGS_DELTA };
+        trun_p.extend_from_slice(&sample_flags.to_be_bytes());
+        let mut trun = fullbox(b"trun", 0, 0x000701, &trun_p);
 
-        let mut traf_p = Vec::new();
+        // data_offset points at the mdat body, measured from the start of the
+        // moof. Derived from the boxes just built so a layout change cannot
+        // leave it stale.
+        let traf_len = 8 + tfhd.len() + tfdt.len() + trun.len();
+        let moof_len = 8 + mfhd.len() + traf_len;
+        let data_offset = (moof_len + 8) as u32;
+        let at = trun.len() - trun_p.len() + 4; // past the trun header and sample_count
+        trun[at..at + 4].copy_from_slice(&data_offset.to_be_bytes());
+
+        let mut traf_p = Vec::with_capacity(traf_len - 8);
         traf_p.extend_from_slice(&tfhd);
         traf_p.extend_from_slice(&tfdt);
         traf_p.extend_from_slice(&trun);
         let traf = box_(b"traf", &traf_p);
 
-        let mut moof_p = Vec::new();
+        let mut moof_p = Vec::with_capacity(moof_len - 8);
         moof_p.extend_from_slice(&mfhd);
         moof_p.extend_from_slice(&traf);
         let moof = box_(b"moof", &moof_p);
 
-        // mdat body = [u32 BE nal_length][nal], matching avcC lengthSizeMinusOne=3.
-        let mut mdat_p = Vec::with_capacity(4 + nal.len());
-        mdat_p.extend_from_slice(&(nal.len() as u32).to_be_bytes());
-        mdat_p.extend_from_slice(nal);
-        let mdat = box_(b"mdat", &mdat_p);
-
-        let mut out = Vec::with_capacity(moof.len() + mdat.len());
-        out.extend_from_slice(&moof);
-        out.extend_from_slice(&mdat);
-
-        self.decode_time += NOMINAL_FRAME_DURATION_MS as u64;
-        out
+        // The discriminator is reserved up front so the finished frame is never
+        // copied a second time just to prefix one byte.
+        let mut frame = Vec::with_capacity(1 + moof.len() + 8 + sample_size as usize);
+        frame.push(FRAME_MEDIA);
+        frame.extend_from_slice(&moof);
+        frame.extend_from_slice(&(8 + sample_size).to_be_bytes());
+        frame.extend_from_slice(b"mdat");
+        for nal in nals {
+            let nal = nal.as_ref();
+            frame.extend_from_slice(&(nal.len() as u32).to_be_bytes());
+            frame.extend_from_slice(nal);
+        }
+        frame
     }
 }
 
 use std::collections::VecDeque;
 
-/// Slices that arrive before SPS+PPS are held for the post-bootstrap flush;
-/// a stream that never produces a usable SPS must not grow that queue forever.
+use super::timeline::FrameTimeline;
+
+/// Access units that arrive before SPS+PPS are held for the post-bootstrap
+/// flush; a stream that never produces a usable SPS must not grow that queue
+/// forever.
 pub const MAX_PENDING_SLICES: usize = 256;
 
 /// Byte-size counterpart to `MAX_PENDING_SLICES`: a handful of high-resolution
-/// slices can blow past a lightweight memory budget well before the count cap.
+/// frames can blow past a lightweight memory budget well before the count cap.
 pub const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
+
+/// Every packet the server writes with `send_frame_meta=true` is prefixed by
+/// `[u64 BE pts_and_flags][u32 BE payload size]`.
+const PACKET_HEADER_BYTES: usize = 12;
+
+/// Session-meta packet: the 12-byte header stands alone, with no payload.
+pub const PACKET_FLAG_SESSION: u64 = 1 << 63;
+
+/// The payload is the codec config (Annex-B SPS+PPS), not a frame.
+pub const PACKET_FLAG_CONFIG: u64 = 1 << 62;
+
+/// The payload is a random access point.
+pub const PACKET_FLAG_KEY_FRAME: u64 = 1 << 61;
+
+/// The low 61 bits of `pts_and_flags` are the capture PTS in microseconds.
+pub const PACKET_PTS_MASK: u64 = (1 << 61) - 1;
+
+/// A single access unit far larger than any 1920-wide keyframe: a declared
+/// size above this means the stream is desynchronized, not that a huge frame
+/// arrived, so buffering it would only burn memory on garbage.
+pub const MAX_PACKET_BYTES: usize = 16 * 1024 * 1024;
 
 /// NAL type (low 5 bits of the header byte) 5 = IDR (coded slice of an IDR
 /// picture), the only slice type a decoder can start rendering from cleanly.
 fn is_idr(nal: &[u8]) -> bool {
     nal.first().is_some_and(|b| b & 0x1F == 5)
 }
+
+/// NAL type 9 = access unit delimiter: a framing hint the encoder emits that
+/// carries no picture data, so it is dropped rather than muxed.
+const NAL_TYPE_AUD: u8 = 9;
 
 /// Leading byte of every frame the assembler emits, so the frame carries its
 /// own kind across the wire instead of a side channel keying frames by shape.
@@ -213,7 +224,7 @@ pub const FRAME_MEDIA: u8 = 1;
 pub enum Frame<'a> {
     /// `[u32 BE codec length][codec string][ftyp+moov]`, sent once.
     Init(&'a [u8]),
-    /// `moof+mdat` for one NAL.
+    /// `moof+mdat` for one access unit.
     Media(&'a [u8]),
 }
 
@@ -228,18 +239,27 @@ pub fn decode_frame(frame: &[u8]) -> Option<Frame<'_>> {
     }
 }
 
-/// Turns the NAL sequence of one session into fMP4 segments: stores the first
-/// usable SPS+PPS, emits the init segment once, then one media fragment per
-/// slice. Malformed parameter sets are skipped, so the stream is simply not
-/// bootstrapped yet rather than panicking or emitting a broken avcC.
+/// One access unit waiting for the SPS+PPS that lets it be muxed.
+struct PendingUnit {
+    nals: Vec<Vec<u8>>,
+    key_frame: bool,
+    pts_us: u64,
+    bytes: usize,
+}
+
+/// Turns the packet stream of one capture into fMP4 segments: emits the init
+/// segment once from the config packet's SPS+PPS, then one media fragment per
+/// access unit. Malformed parameter sets are skipped, so the stream is simply
+/// not bootstrapped yet rather than panicking or emitting a broken avcC.
 #[derive(Default)]
 pub struct StreamAssembler {
-    /// Annex-B bytes accumulated across reads, not yet provably complete NALs.
+    /// Packet bytes accumulated across reads, not yet a complete packet.
     buf: Vec<u8>,
+    corrupt: bool,
     builder: Option<Fmp4Builder>,
     sps: Option<Vec<u8>>,
     pps: Option<Vec<u8>>,
-    pending: VecDeque<Vec<u8>>,
+    pending: VecDeque<PendingUnit>,
     pending_bytes: usize,
     warned_malformed: bool,
 }
@@ -249,47 +269,109 @@ impl StreamAssembler {
         self.builder.is_some()
     }
 
-    /// Append newly read bytes to the framing buffer and process every NAL
-    /// unit that is now provably complete (bounded by two start codes). A
-    /// unit split across reads waits in the buffer for the next call.
+    /// True once a packet header declared a size no capture can produce. The
+    /// assembler emits nothing further; the read loop stops reading.
+    pub fn is_corrupt(&self) -> bool {
+        self.corrupt
+    }
+
+    /// Append newly read bytes and process every packet that is now complete.
+    /// A packet whose header or payload is split across reads waits in the
+    /// buffer for the next call.
     pub fn push_bytes(&mut self, bytes: &[u8], out: &mut Vec<Vec<u8>>) {
+        if self.corrupt {
+            return;
+        }
         self.buf.extend_from_slice(bytes);
-        for nal in drain_complete_nals(&mut self.buf) {
-            self.push(nal, out);
-        }
-    }
-
-    /// End of stream: the trailing NAL has no closing start code to prove it
-    /// complete, so split whatever is left in the framing buffer outright.
-    pub fn finish(&mut self, out: &mut Vec<Vec<u8>>) {
-        let remaining = std::mem::take(&mut self.buf);
-        for nal in split_nal_units(&remaining) {
-            self.push(nal, out);
-        }
-    }
-
-    fn push(&mut self, nal: Vec<u8>, out: &mut Vec<Vec<u8>>) {
-        let Some(&header) = nal.first() else { return };
-        match header & 0x1F {
-            7 => {
-                if codec_string_from_sps(&nal).is_some() {
-                    self.sps = Some(nal);
-                } else {
-                    self.warn_malformed("SPS", nal.len());
-                    return;
-                }
+        // Taken out of `self` so each packet can be handed to `&mut self`
+        // without copying its payload first.
+        let buf = std::mem::take(&mut self.buf);
+        let mut consumed = 0usize;
+        while let Some(header) = buf.get(consumed..consumed + PACKET_HEADER_BYTES) {
+            let pts_and_flags = u64::from_be_bytes(header[0..8].try_into().expect("8 bytes"));
+            let size = u32::from_be_bytes(header[8..12].try_into().expect("4 bytes")) as usize;
+            if pts_and_flags & PACKET_FLAG_SESSION != 0 {
+                consumed += PACKET_HEADER_BYTES;
+                continue;
             }
-            8 => {
-                self.pps = Some(nal);
-            }
-            _ => {
-                self.emit_or_hold(nal, out);
+            if size > MAX_PACKET_BYTES {
+                log::warn!("[device] video stream desynchronized: packet declares {size} bytes");
+                self.enter_corrupt_state();
                 return;
             }
+            let body = consumed + PACKET_HEADER_BYTES;
+            let Some(payload) = buf.get(body..body + size) else { break };
+            self.handle_packet(pts_and_flags, payload, out);
+            consumed = body + size;
         }
+        self.buf = buf;
+        self.buf.drain(..consumed);
+    }
+
+    /// End of stream. Explicit packet sizes mean a trailing partial packet is
+    /// unusable rather than a frame that only needs flushing, so this releases
+    /// the buffer instead of emitting anything.
+    pub fn finish(&mut self, _out: &mut Vec<Vec<u8>>) {
+        self.buf = Vec::new();
+    }
+
+    fn enter_corrupt_state(&mut self) {
+        self.corrupt = true;
+        self.buf = Vec::new();
+        self.pending = VecDeque::new();
+        self.pending_bytes = 0;
+    }
+
+    fn handle_packet(&mut self, pts_and_flags: u64, payload: &[u8], out: &mut Vec<Vec<u8>>) {
+        if pts_and_flags & PACKET_FLAG_CONFIG != 0 {
+            self.handle_config(payload, out);
+            return;
+        }
+        let nals: Vec<Vec<u8>> = split_nal_units(payload)
+            .into_iter()
+            .filter(|nal| !nal.is_empty() && nal[0] & 0x1F != NAL_TYPE_AUD)
+            .collect();
+        if nals.is_empty() {
+            return;
+        }
+        let bytes = nals.iter().map(Vec::len).sum();
+        // The flag is authoritative; the IDR scan only covers a capture that
+        // did not set it, since eviction must never keep a headless GOP.
+        let key_frame = pts_and_flags & PACKET_FLAG_KEY_FRAME != 0
+            || nals.iter().any(|nal| is_idr(nal));
+        let unit = PendingUnit {
+            nals,
+            key_frame,
+            pts_us: pts_and_flags & PACKET_PTS_MASK,
+            bytes,
+        };
+        self.emit_or_hold(unit, out);
+    }
+
+    /// The init segment is emitted exactly once: MSE cannot swap an initialized
+    /// SourceBuffer's decoder config, so a later config packet (a rotation, or
+    /// scrcpy's `downsize_on_error` re-encode) is ignored until the session restarts.
+    fn handle_config(&mut self, payload: &[u8], out: &mut Vec<Vec<u8>>) {
         if self.builder.is_some() {
             return;
         }
+        for nal in split_nal_units(payload) {
+            match nal.first().map(|header| header & 0x1F) {
+                Some(7) => {
+                    if codec_string_from_sps(&nal).is_some() {
+                        self.sps = Some(nal);
+                    } else {
+                        self.warn_malformed("SPS", nal.len());
+                    }
+                }
+                Some(8) => self.pps = Some(nal),
+                _ => {}
+            }
+        }
+        self.bootstrap(out);
+    }
+
+    fn bootstrap(&mut self, out: &mut Vec<Vec<u8>>) {
         let (Some(sps), Some(pps)) = (self.sps.as_deref(), self.pps.as_deref()) else { return };
         let Some(builder) = Fmp4Builder::from_parameter_sets(sps, pps) else {
             self.warn_malformed("SPS+PPS", sps.len() + pps.len());
@@ -306,27 +388,21 @@ impl StreamAssembler {
         frame.extend_from_slice(init);
         out.push(frame);
         self.builder = Some(builder);
-        // A stream that only ever had pending P-slices must flush nothing
+        // A stream that only ever had pending delta frames must flush nothing
         // rather than lead with garbage the decoder cannot start from.
         self.evict_to_newest_keyframe();
         self.pending_bytes = 0;
-        for slice in std::mem::take(&mut self.pending) {
-            self.emit_or_hold(slice, out);
+        for unit in std::mem::take(&mut self.pending) {
+            self.emit_or_hold(unit, out);
         }
     }
 
-    fn emit_or_hold(&mut self, nal: Vec<u8>, out: &mut Vec<Vec<u8>>) {
+    fn emit_or_hold(&mut self, unit: PendingUnit, out: &mut Vec<Vec<u8>>) {
         match self.builder.as_mut() {
-            Some(b) => {
-                let media = b.append_nal(&nal);
-                let mut frame = Vec::with_capacity(1 + media.len());
-                frame.push(FRAME_MEDIA);
-                frame.extend_from_slice(&media);
-                out.push(frame);
-            }
+            Some(b) => out.push(b.append_access_unit(&unit.nals, unit.key_frame, unit.pts_us)),
             None => {
-                self.pending_bytes += nal.len();
-                self.pending.push_back(nal);
+                self.pending_bytes += unit.bytes;
+                self.pending.push_back(unit);
                 if self.pending.len() > MAX_PENDING_SLICES || self.pending_bytes > MAX_PENDING_BYTES {
                     self.evict_to_newest_keyframe();
                 }
@@ -334,15 +410,15 @@ impl StreamAssembler {
         }
     }
 
-    /// Drops from the front of `pending` until it leads with an IDR (or is
+    /// Drops from the front of `pending` until it leads with a key frame (or is
     /// empty), so the flush after bootstrap never starts mid-GOP.
     fn evict_to_newest_keyframe(&mut self) {
         while let Some(front) = self.pending.front() {
-            if is_idr(front) {
+            if front.key_frame {
                 break;
             }
             let dropped = self.pending.pop_front().expect("front just checked Some");
-            self.pending_bytes -= dropped.len();
+            self.pending_bytes -= dropped.bytes;
         }
     }
 
@@ -397,7 +473,7 @@ fn build_moov(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
     let mut mvhd_p = Vec::with_capacity(100);
     mvhd_p.extend_from_slice(&0u32.to_be_bytes()); // creation_time
     mvhd_p.extend_from_slice(&0u32.to_be_bytes()); // modification_time
-    mvhd_p.extend_from_slice(&1000u32.to_be_bytes()); // timescale (ms)
+    mvhd_p.extend_from_slice(&1_000_000u32.to_be_bytes()); // timescale (capture PTS microseconds)
     mvhd_p.extend_from_slice(&0u32.to_be_bytes()); // duration
     mvhd_p.extend_from_slice(&0x00010000u32.to_be_bytes()); // rate 1.0
     mvhd_p.extend_from_slice(&0x0100u16.to_be_bytes()); // volume 1.0
@@ -447,7 +523,7 @@ fn build_moov(sps: &[u8], pps: &[u8]) -> Option<Vec<u8>> {
     let mut mdhd_p = Vec::with_capacity(24);
     mdhd_p.extend_from_slice(&0u32.to_be_bytes()); // creation_time
     mdhd_p.extend_from_slice(&0u32.to_be_bytes()); // modification_time
-    mdhd_p.extend_from_slice(&1000u32.to_be_bytes()); // timescale (ms)
+    mdhd_p.extend_from_slice(&1_000_000u32.to_be_bytes()); // timescale (capture PTS microseconds)
     mdhd_p.extend_from_slice(&0u32.to_be_bytes()); // duration
     mdhd_p.extend_from_slice(&0x55C4u16.to_be_bytes()); // language = 'und'
     mdhd_p.extend_from_slice(&0u16.to_be_bytes()); // pre_defined
@@ -594,6 +670,18 @@ mod tests {
     const SPS_HIGH_31: [u8; 8] = [0x67, 0x64, 0x00, 0x1f, 0xac, 0xd9, 0x40, 0x50];
     const PPS: [u8; 6] = [0x68, 0xce, 0x01, 0xa8, 0x35, 0xc8];
     const IDR: [u8; 5] = [0x65, 0x88, 0x84, 0x00, 0x33];
+    const P_SLICE: [u8; 2] = [0x61, 0x01];
+
+    /// Annex-B byte stream (4-byte start codes) for the given NALs, the way a
+    /// packet payload actually arrives off the scrcpy socket.
+    fn nal_stream(nals: &[&[u8]]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for nal in nals {
+            bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+            bytes.extend_from_slice(nal);
+        }
+        bytes
+    }
 
     fn init_codec(frame: &[u8]) -> String {
         let n = u32::from_be_bytes(frame[0..4].try_into().unwrap()) as usize;
@@ -630,14 +718,6 @@ mod tests {
     }
 
     #[test]
-    fn drain_skips_empty_nal_between_adjacent_start_codes() {
-        let mut buf = vec![0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x65, 0xAA, 0x00, 0x00, 0x01];
-        let drained = drain_complete_nals(&mut buf);
-        assert!(drained.iter().all(|n| !n.is_empty()), "got {drained:?}");
-        assert_eq!(drained, vec![vec![0x65, 0xAA]]);
-    }
-
-    #[test]
     fn split_nal_units_skips_empty_nal_between_adjacent_start_codes() {
         let bytes = [0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x68, 0xDD];
         assert_eq!(split_nal_units(&bytes), vec![vec![0x68, 0xDD]]);
@@ -647,9 +727,8 @@ mod tests {
     fn assembler_ignores_one_byte_sps_and_never_bootstraps() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(vec![0x67], &mut out);
-        a.push(PPS.to_vec(), &mut out);
-        a.push(IDR.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &nal_stream(&[&[0x67], &PPS])), &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
         assert!(out.is_empty(), "no segment may be emitted from a malformed SPS");
         assert!(!a.is_bootstrapped());
     }
@@ -658,81 +737,74 @@ mod tests {
     fn assembler_ignores_three_byte_sps_and_never_bootstraps() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(vec![0x67, 0x64, 0x00], &mut out);
-        a.push(PPS.to_vec(), &mut out);
-        a.push(IDR.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &nal_stream(&[&[0x67, 0x64, 0x00], &PPS])), &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
         assert!(out.is_empty());
         assert!(!a.is_bootstrapped());
     }
 
     #[test]
-    fn assembler_tolerates_empty_nal() {
+    fn assembler_tolerates_an_empty_payload() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(Vec::new(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &[]), &mut out);
+        a.push_bytes(&packet(KEY, 0, &[]), &mut out);
+        a.push_bytes(&packet(0, 0, &[0x00, 0x00, 0x00, 0x01]), &mut out);
         assert!(out.is_empty());
+        assert!(!a.is_corrupt());
     }
 
     #[test]
     fn assembler_bootstraps_then_streams_media() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(SPS_HIGH_31.to_vec(), &mut out);
-        a.push(PPS.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         assert!(a.is_bootstrapped());
-        a.push(IDR.to_vec(), &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
         assert_eq!(out.len(), 2);
         match decode_frame(&out[0]) {
             Some(Frame::Init(payload)) => assert_eq!(init_codec(payload), "avc1.64001f"),
             other => panic!("expected init first, got {other:?}"),
         }
-        assert!(matches!(decode_frame(&out[1]), Some(Frame::Media(m)) if &m[4..8] == b"moof"));
-        // A repeated SPS/PPS mid-stream must not re-emit the init segment.
-        a.push(SPS_HIGH_31.to_vec(), &mut out);
-        a.push(PPS.to_vec(), &mut out);
-        assert_eq!(out.len(), 2);
+        assert_eq!(&media_payload(&out[1])[4..8], b"moof");
     }
 
     #[test]
     fn assembler_recovers_when_a_valid_sps_follows_a_malformed_one() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(vec![0x67, 0x64], &mut out);
-        a.push(PPS.to_vec(), &mut out);
-        a.push(SPS_HIGH_31.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &nal_stream(&[&[0x67, 0x64], &PPS])), &mut out);
+        assert!(!a.is_bootstrapped());
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         assert!(a.is_bootstrapped());
         assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
     }
 
     #[test]
-    fn assembler_flushes_pending_slices_after_bootstrap_in_order() {
+    fn assembler_flushes_pending_units_after_bootstrap_in_order() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(IDR.to_vec(), &mut out);
-        a.push(vec![0x61, 0x01], &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
+        a.push_bytes(&packet(0, 33_333, &nal_stream(&[&P_SLICE])), &mut out);
         assert!(out.is_empty());
-        a.push(SPS_HIGH_31.to_vec(), &mut out);
-        a.push(PPS.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         assert_eq!(out.len(), 3);
         assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
-        assert!(matches!(decode_frame(&out[1]), Some(Frame::Media(_))));
-        assert!(matches!(decode_frame(&out[2]), Some(Frame::Media(_))));
+        assert_eq!(mdat_nals(media_payload(&out[1]))[0], IDR);
+        assert_eq!(mdat_nals(media_payload(&out[2]))[0], P_SLICE);
     }
 
-    const P_SLICE: [u8; 2] = [0x61, 0x01];
-
     #[test]
-    fn assembler_bounds_pending_slices_before_bootstrap() {
+    fn assembler_bounds_pending_units_before_bootstrap() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
         for _ in 0..(MAX_PENDING_SLICES + 50) {
-            a.push(IDR.to_vec(), &mut out);
+            a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
         }
-        a.push(SPS_HIGH_31.to_vec(), &mut out);
-        a.push(PPS.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         let media = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Media(_)))).count();
-        // Every pushed slice is itself an IDR, so eviction never finds a
-        // non-keyframe front to drop: the cap only bites a non-keyframe head.
+        // Every held unit is itself a key frame, so eviction never finds a
+        // delta front to drop: the cap only bites a non-keyframe head.
         assert_eq!(media, MAX_PENDING_SLICES + 50);
     }
 
@@ -740,16 +812,15 @@ mod tests {
     fn assembler_cap_keeps_the_newest_keyframe_led_run() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        let idr_at = 200;
+        let key_at = 200;
         for i in 0..(MAX_PENDING_SLICES + 1) {
-            if i == idr_at {
-                a.push(IDR.to_vec(), &mut out);
-            } else {
-                a.push(P_SLICE.to_vec(), &mut out);
-            }
+            let (flags, nal): (u64, &[u8]) = if i == key_at { (KEY, &IDR) } else { (0, &P_SLICE) };
+            a.push_bytes(&packet(flags, i as u64 * 33_333, &nal_stream(&[nal])), &mut out);
         }
-        assert_eq!(a.pending.len(), MAX_PENDING_SLICES + 1 - idr_at);
-        assert_eq!(a.pending.front(), Some(&IDR.to_vec()));
+        assert_eq!(a.pending.len(), MAX_PENDING_SLICES + 1 - key_at);
+        let front = a.pending.front().expect("queue must keep the keyframe-led run");
+        assert!(front.key_frame);
+        assert_eq!(front.nals, vec![IDR.to_vec()]);
     }
 
     #[test]
@@ -757,7 +828,7 @@ mod tests {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
         for _ in 0..(MAX_PENDING_SLICES + 1) {
-            a.push(P_SLICE.to_vec(), &mut out);
+            a.push_bytes(&packet(0, 0, &nal_stream(&[&P_SLICE])), &mut out);
         }
         assert!(a.pending.is_empty());
         assert_eq!(a.pending_bytes, 0);
@@ -767,110 +838,53 @@ mod tests {
     fn assembler_byte_budget_evicts_before_the_count_cap() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        let big_slice = vec![0x61u8; 3 * 1024 * 1024];
+        let big = vec![0x61u8; 3 * 1024 * 1024];
         for _ in 0..3 {
-            a.push(big_slice.clone(), &mut out);
+            a.push_bytes(&packet(0, 0, &nal_stream(&[&big])), &mut out);
         }
-        assert!(a.pending.is_empty(), "byte budget must evict before the 256-slice count cap is ever reached");
+        assert!(a.pending.is_empty(), "byte budget must evict before the 256-unit count cap is ever reached");
     }
 
     #[test]
     fn assembler_flush_after_bootstrap_skips_leading_non_keyframes() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push(P_SLICE.to_vec(), &mut out);
-        a.push(P_SLICE.to_vec(), &mut out);
-        a.push(IDR.to_vec(), &mut out);
-        a.push(P_SLICE.to_vec(), &mut out);
+        a.push_bytes(&packet(0, 0, &nal_stream(&[&P_SLICE])), &mut out);
+        a.push_bytes(&packet(0, 33_333, &nal_stream(&[&P_SLICE])), &mut out);
+        a.push_bytes(&packet(KEY, 66_666, &nal_stream(&[&IDR])), &mut out);
+        a.push_bytes(&packet(0, 99_999, &nal_stream(&[&P_SLICE])), &mut out);
         assert!(out.is_empty());
-        a.push(SPS_HIGH_31.to_vec(), &mut out);
-        a.push(PPS.to_vec(), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
         assert_eq!(out.len(), 3);
         assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
-        match decode_frame(&out[1]) {
-            Some(Frame::Media(m)) => assert_eq!(&m[108..], IDR.as_slice(), "flush must lead with the IDR, not a stale P-slice"),
-            other => panic!("expected media, got {other:?}"),
-        }
-        match decode_frame(&out[2]) {
-            Some(Frame::Media(m)) => assert_eq!(&m[108..], P_SLICE.as_slice()),
-            other => panic!("expected media, got {other:?}"),
-        }
+        assert_eq!(
+            mdat_nals(media_payload(&out[1]))[0],
+            IDR,
+            "flush must lead with the key frame, not a stale delta frame"
+        );
+        assert_eq!(mdat_nals(media_payload(&out[2]))[0], P_SLICE);
     }
 
-    /// Annex-B byte stream (4-byte start codes) for the given NALs, the way
-    /// bytes actually arrive off the scrcpy socket.
-    fn nal_stream(nals: &[&[u8]]) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        for nal in nals {
-            bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
-            bytes.extend_from_slice(nal);
-        }
-        bytes
-    }
-
+    /// A key frame whose packet lost the flag is still a random access point,
+    /// so eviction must not throw the GOP away.
     #[test]
-    fn assembler_emits_init_exactly_once_and_before_first_media() {
-        let bytes = nal_stream(&[
-            &SPS_HIGH_31, &PPS, &IDR, &P_SLICE, &SPS_HIGH_31, &PPS, &P_SLICE,
-        ]);
+    fn assembler_falls_back_to_an_idr_scan_when_the_key_frame_flag_is_absent() {
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push_bytes(&bytes, &mut out);
-        a.finish(&mut out);
-
-        let init_count = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Init(_)))).count();
-        assert_eq!(init_count, 1, "a repeated SPS+PPS mid-stream must not re-emit the init segment");
-        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))), "the init segment must lead the output");
-    }
-
-    #[test]
-    fn assembler_reassembles_a_nal_split_across_two_reads() {
-        let bytes = nal_stream(&[&SPS_HIGH_31, &PPS, &IDR, &P_SLICE]);
-        // Land inside the IDR NAL's payload bytes, not on a start-code boundary.
-        let idr_payload_start = bytes.len() - PPS.len() - P_SLICE.len() - 4;
-        let split_at = idr_payload_start + 2;
-
-        let mut whole = StreamAssembler::default();
-        let mut out_whole = Vec::new();
-        whole.push_bytes(&bytes, &mut out_whole);
-        whole.finish(&mut out_whole);
-
-        let mut split = StreamAssembler::default();
-        let mut out_split = Vec::new();
-        split.push_bytes(&bytes[..split_at], &mut out_split);
-        split.push_bytes(&bytes[split_at..], &mut out_split);
-        split.finish(&mut out_split);
-
-        assert!(!out_whole.is_empty());
-        assert_eq!(out_whole, out_split, "a NAL split across two reads must reassemble identically");
-    }
-
-    #[test]
-    fn assembler_buffers_pre_bootstrap_slices_and_flushes_in_order_from_bytes() {
-        let bytes = nal_stream(&[&IDR, &P_SLICE, &SPS_HIGH_31, &PPS]);
-        let mut a = StreamAssembler::default();
-        let mut out = Vec::new();
-        a.push_bytes(&bytes, &mut out);
-        a.finish(&mut out);
-
-        assert_eq!(out.len(), 3);
-        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
-        match decode_frame(&out[1]) {
-            Some(Frame::Media(m)) => assert_eq!(&m[108..], IDR.as_slice(), "the first media segment must be the IDR"),
-            other => panic!("expected media, got {other:?}"),
-        }
-        match decode_frame(&out[2]) {
-            Some(Frame::Media(m)) => assert_eq!(&m[108..], P_SLICE.as_slice(), "media segments must stay in arrival order"),
-            other => panic!("expected media, got {other:?}"),
-        }
+        a.push_bytes(&packet(0, 0, &nal_stream(&[&P_SLICE])), &mut out);
+        a.push_bytes(&packet(0, 33_333, &nal_stream(&[&IDR])), &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        assert_eq!(out.len(), 2);
+        assert_eq!(mdat_nals(media_payload(&out[1]))[0], IDR);
+        assert_eq!(trun_of(media_payload(&out[1])).3, 0x0200_0000);
     }
 
     #[test]
     fn frame_discriminator_round_trips_init_and_media() {
-        let bytes = nal_stream(&[&SPS_HIGH_31, &PPS, &IDR]);
         let mut a = StreamAssembler::default();
         let mut out = Vec::new();
-        a.push_bytes(&bytes, &mut out);
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
         a.finish(&mut out);
 
         assert_eq!(out.len(), 2);
@@ -935,55 +949,263 @@ mod tests {
         assert!(split_nal_units(&[]).is_empty());
     }
 
-    #[test]
-    fn drain_returns_complete_nals_and_keeps_tail() {
-        // Two complete NALs + a partial third (no terminating start code yet).
-        let mut buf = annexb_fixture();
-        buf.extend_from_slice(&[0x00, 0x00, 0x00, 0x01, 0x61, 0x77, 0x88]);
-        let drained = drain_complete_nals(&mut buf);
-        assert_eq!(drained.len(), 2);
-        assert_eq!(drained[0], vec![0x65, 0xAA, 0xBB, 0xCC]);
-        assert_eq!(drained[1], vec![0x68, 0xDD, 0xEE]);
-        // Tail retained: the partial NAL *with* its start code.
-        assert_eq!(buf, vec![0x00, 0x00, 0x00, 0x01, 0x61, 0x77, 0x88]);
+    // ---- scrcpy frame-metadata framing -------------------------------------
+
+    /// Wire flag bits, spelled out rather than reused from the implementation:
+    /// a swapped constant would still round-trip through the parser but would
+    /// desync from the server.
+    const CONFIG: u64 = 1 << 62;
+    const KEY: u64 = 1 << 61;
+    const SESSION: u64 = 1 << 63;
+    const AUD: [u8; 2] = [0x09, 0xF0];
+
+    /// One packet as the server writes it with `send_frame_meta=true`:
+    /// `[u64 BE pts|flags][u32 BE payload size][payload]`.
+    fn packet(flags: u64, pts_us: u64, payload: &[u8]) -> Vec<u8> {
+        let mut v = Vec::with_capacity(PACKET_HEADER_BYTES + payload.len());
+        v.extend_from_slice(&(flags | pts_us).to_be_bytes());
+        v.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        v.extend_from_slice(payload);
+        v
+    }
+
+    fn config_payload() -> Vec<u8> {
+        nal_stream(&[&SPS_HIGH_31, &PPS])
+    }
+
+    fn media_payload(frame: &[u8]) -> &[u8] {
+        match decode_frame(frame) {
+            Some(Frame::Media(p)) => p,
+            other => panic!("expected a media frame, got {other:?}"),
+        }
+    }
+
+    fn find_box<'a>(region: &'a [u8], btype: &[u8; 4]) -> &'a [u8] {
+        let at = region.windows(4).position(|w| w == btype).expect("box must be present");
+        let start = at - 4;
+        let size = u32::from_be_bytes(region[start..start + 4].try_into().unwrap()) as usize;
+        &region[start..start + size]
+    }
+
+    fn moof_of(payload: &[u8]) -> &[u8] {
+        let size = u32::from_be_bytes(payload[0..4].try_into().unwrap()) as usize;
+        &payload[..size]
+    }
+
+    fn mdat_body(payload: &[u8]) -> &[u8] {
+        let moof = u32::from_be_bytes(payload[0..4].try_into().unwrap()) as usize;
+        assert_eq!(&payload[moof + 4..moof + 8], b"mdat");
+        &payload[moof + 8..]
+    }
+
+    fn mdat_nals(payload: &[u8]) -> Vec<&[u8]> {
+        let body = mdat_body(payload);
+        let mut nals = Vec::new();
+        let mut i = 0usize;
+        while i + 4 <= body.len() {
+            let n = u32::from_be_bytes(body[i..i + 4].try_into().unwrap()) as usize;
+            nals.push(&body[i + 4..i + 4 + n]);
+            i += 4 + n;
+        }
+        nals
+    }
+
+    fn tfdt_of(payload: &[u8]) -> u64 {
+        let b = find_box(moof_of(payload), b"tfdt");
+        u64::from_be_bytes(b[12..20].try_into().unwrap())
+    }
+
+    /// `(data_offset, sample_duration, sample_size, sample_flags)`.
+    fn trun_of(payload: &[u8]) -> (u32, u32, u32, u32) {
+        let b = find_box(moof_of(payload), b"trun");
+        let f = |r: std::ops::Range<usize>| u32::from_be_bytes(b[r].try_into().unwrap());
+        (f(16..20), f(20..24), f(24..28), f(28..32))
     }
 
     #[test]
-    fn drain_nothing_with_only_one_start_code() {
-        let mut buf = vec![0x00, 0x00, 0x00, 0x01, 0x65, 0xAA];
-        assert!(drain_complete_nals(&mut buf).is_empty());
-        assert_eq!(buf, vec![0x00, 0x00, 0x00, 0x01, 0x65, 0xAA]);
+    fn frame_meta_config_then_keyframe_bootstraps_and_emits_init_once() {
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&packet(CONFIG, 0, &config_payload()));
+        stream.extend_from_slice(&packet(KEY, 0, &nal_stream(&[&IDR])));
+        stream.extend_from_slice(&packet(0, 33_333, &nal_stream(&[&P_SLICE])));
+        stream.extend_from_slice(&packet(0, 66_666, &nal_stream(&[&P_SLICE])));
+        stream.extend_from_slice(&packet(CONFIG, 0, &config_payload()));
+        stream.extend_from_slice(&packet(0, 99_999, &nal_stream(&[&P_SLICE])));
+
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&stream, &mut out);
+        a.finish(&mut out);
+
+        assert!(a.is_bootstrapped());
+        assert_eq!(out.len(), 5);
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))), "init must lead the output");
+        let inits = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Init(_)))).count();
+        assert_eq!(inits, 1, "a second CONFIG packet must not re-emit the init segment");
+        let media = out.iter().filter(|f| matches!(decode_frame(f), Some(Frame::Media(_)))).count();
+        assert_eq!(media, 4, "one media frame per media packet");
     }
 
-    /// Regression guard for the black-video bug: scrcpy `raw_stream=true`
-    /// strips per-frame PTS, so the muxer must synthesize a timeline itself.
-    /// If every media fragment has `sample_duration=0` and no `tfdt`, the MSE
-    /// `buffered` range collapses to zero length and the `<video>` paints
-    /// nothing (pure `bg-black`). This test pins the fixed moof layout:
-    ///   moof[box(8) + mfhd(16) + traf(box(8) + tfhd(16) + tfdt(20) + trun(28))]
-    ///     + mdat header(8) + mdat body.
     #[test]
-    fn append_nal_advances_tfdt_and_emits_nonzero_duration() {
+    fn frame_meta_header_split_across_reads_reassembles() {
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&packet(CONFIG, 0, &config_payload()));
+        let key_at = stream.len();
+        stream.extend_from_slice(&packet(KEY, 0, &nal_stream(&[&IDR])));
+        stream.extend_from_slice(&packet(0, 33_333, &nal_stream(&[&P_SLICE])));
+
+        let mut whole = StreamAssembler::default();
+        let mut out_whole = Vec::new();
+        whole.push_bytes(&stream, &mut out_whole);
+
+        let mut split = StreamAssembler::default();
+        let mut out_split = Vec::new();
+        split.push_bytes(&stream[..key_at + 5], &mut out_split); // inside the 12-byte header
+        split.push_bytes(&stream[key_at + 5..key_at + 14], &mut out_split); // inside the payload
+        split.push_bytes(&stream[key_at + 14..], &mut out_split);
+
+        assert_eq!(out_whole.len(), 3);
+        assert_eq!(out_whole, out_split, "a packet split across reads must reassemble identically");
+    }
+
+    #[test]
+    fn frame_meta_one_media_frame_per_access_unit() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&AUD, &SPS_HIGH_31, &PPS, &IDR])), &mut out);
+
+        assert_eq!(out.len(), 2, "one access unit must produce exactly one media frame");
+        let payload = media_payload(&out[1]);
+        let nals = mdat_nals(payload);
+        assert_eq!(nals.len(), 3, "the AUD must be dropped and every other NAL kept");
+        assert_eq!(nals[0], SPS_HIGH_31);
+        assert_eq!(nals[1], PPS);
+        assert_eq!(nals[2], IDR);
+        let (_, _, sample_size, _) = trun_of(payload);
+        assert_eq!(sample_size as usize, mdat_body(payload).len(), "sample_size covers the whole access unit");
+    }
+
+    #[test]
+    fn frame_meta_key_frame_flag_drives_sample_flags() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
+        a.push_bytes(&packet(0, 33_333, &nal_stream(&[&P_SLICE])), &mut out);
+
+        assert_eq!(trun_of(media_payload(&out[1])).3, 0x0200_0000, "a key frame must be a sync sample");
+        assert_eq!(trun_of(media_payload(&out[2])).3, 0x0101_0000, "a delta frame must not be a sync sample");
+    }
+
+    #[test]
+    fn frame_meta_decode_times_are_monotonic_and_follow_pts() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        for (i, pts) in [0u64, 33_333, 66_666, 5_066_666, 5_100_000].into_iter().enumerate() {
+            let (flags, nal): (u64, &[u8]) = if i == 0 { (KEY, &IDR) } else { (0, &P_SLICE) };
+            a.push_bytes(&packet(flags, pts, &nal_stream(&[nal])), &mut out);
+        }
+
+        let media: Vec<&[u8]> = out.iter().skip(1).map(|f| media_payload(f)).collect();
+        assert_eq!(media.len(), 5);
+        let times: Vec<u64> = media.iter().map(|m| tfdt_of(m)).collect();
+        assert_eq!(times, vec![0, 33_333, 66_666, 99_999, 199_999]);
+        let durations: Vec<u32> = media.iter().map(|m| trun_of(m).1).collect();
+        // 100_000 is the capped idle gap: a 5 s pause must not become a 5 s hole.
+        assert_eq!(durations, vec![33_333, 33_333, 33_333, 100_000, 33_334]);
+        assert!(times.windows(2).all(|w| w[1] > w[0]), "decode times must strictly increase");
+    }
+
+    #[test]
+    fn frame_meta_session_packet_is_skipped() {
+        // A session packet is its 12-byte header alone; the trailing u32 is not
+        // a payload length and must not be consumed as one.
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&SESSION.to_be_bytes());
+        stream.extend_from_slice(&7u32.to_be_bytes());
+        stream.extend_from_slice(&packet(CONFIG, 0, &config_payload()));
+        stream.extend_from_slice(&packet(KEY, 0, &nal_stream(&[&IDR])));
+
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&stream, &mut out);
+
+        assert_eq!(out.len(), 2);
+        assert!(matches!(decode_frame(&out[0]), Some(Frame::Init(_))));
+        assert!(matches!(decode_frame(&out[1]), Some(Frame::Media(_))));
+    }
+
+    /// Regression guard for the black-video bug: if every media fragment has
+    /// `sample_duration=0` and no `tfdt`, the MSE `buffered` range collapses to
+    /// zero length and the `<video>` paints nothing (pure `bg-black`). Also
+    /// pins `data_offset` against the moof this fragment actually built, so a
+    /// box-layout change cannot leave it pointing into the middle of a box.
+    #[test]
+    fn append_access_unit_advances_tfdt_and_emits_nonzero_duration() {
         let mut b = Fmp4Builder::from_parameter_sets(&SPS_HIGH_31, &PPS).unwrap();
-        let nal = vec![0x65u8, 0x88, 0x84, 0x00, 0x33]; // an IDR-ish slice NAL
-        let f1 = b.append_nal(&nal);
-        let f2 = b.append_nal(&nal);
+        let f1 = b.append_access_unit(&[IDR.as_slice()], true, 0);
+        let f2 = b.append_access_unit(&[P_SLICE.as_slice()], false, 33_333);
 
-        // A `moof` must open the fragment.
-        assert_eq!(&f1[4..8], b"moof");
-        // A `tfdt` subbox (v1, payload u64) lives at fragment offset 48..68;
-        // its baseMediaDecodeTime u64 is at 60..68.
-        assert_eq!(&f1[52..56], b"tfdt", "no tfdt box — MSE has no fragment time base");
-        let tfdt = |f: &[u8]| u64::from_be_bytes(f[60..68].try_into().unwrap());
-        assert_eq!(tfdt(&f1), 0, "first fragment must start at decode time 0");
-        assert_eq!(tfdt(&f2), 33, "fragment decode time must advance by the nominal duration");
-        // `trun` sample_duration (u32) at offset 88..92 must be non-zero or the
-        // MSE buffered range collapses to zero length → black video.
-        assert_eq!(&f1[72..76], b"trun");
-        let duration = u32::from_be_bytes(f1[88..92].try_into().unwrap());
+        assert_eq!(f1[0], FRAME_MEDIA, "the discriminator is written in place");
+        let p1 = media_payload(&f1);
+        let p2 = media_payload(&f2);
+        assert_eq!(&p1[4..8], b"moof");
+        assert_eq!(tfdt_of(p1), 0, "first fragment must start at decode time 0");
+        assert_eq!(tfdt_of(p2), 33_333, "decode time must advance by the previous duration");
+
+        let (data_offset, duration, sample_size, flags) = trun_of(p1);
         assert!(duration > 0, "sample_duration=0 produces a zero-length buffered range");
-        // data_offset (u32 at 84..88) must point at the mdat body: moof(96)+mdat header(8)=104.
-        let data_offset = u32::from_be_bytes(f1[84..88].try_into().unwrap());
-        assert_eq!(data_offset, 104, "data_offset must point past the (now tfdt-bearing) moof");
+        let moof_size = u32::from_be_bytes(p1[0..4].try_into().unwrap());
+        assert_eq!(data_offset, moof_size + 8, "data_offset must point at the mdat body");
+        assert_eq!(sample_size as usize, mdat_body(p1).len());
+        assert_eq!(flags, 0x0200_0000);
+        assert_eq!(trun_of(p2).3, 0x0101_0000);
+    }
+
+    #[test]
+    fn assembler_stops_after_an_oversized_packet() {
+        let mut header = Vec::new();
+        header.extend_from_slice(&0u64.to_be_bytes());
+        header.extend_from_slice(&((MAX_PACKET_BYTES + 1) as u32).to_be_bytes());
+
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        assert_eq!(out.len(), 1);
+        a.push_bytes(&header, &mut out);
+
+        assert!(a.is_corrupt());
+        assert_eq!(out.len(), 1, "nothing may be emitted from a desynchronized stream");
+        // The terminal state is sticky: later bytes are dropped without parsing.
+        a.push_bytes(&packet(KEY, 0, &nal_stream(&[&IDR])), &mut out);
+        a.finish(&mut out);
+        assert!(a.is_corrupt());
+        assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn assembler_accepts_a_packet_at_the_size_limit() {
+        let mut header = Vec::new();
+        header.extend_from_slice(&0u64.to_be_bytes());
+        header.extend_from_slice(&(MAX_PACKET_BYTES as u32).to_be_bytes());
+
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&header, &mut out);
+        assert!(!a.is_corrupt(), "the limit itself must be accepted, not rejected");
+    }
+
+    #[test]
+    fn assembler_drops_a_truncated_trailing_packet_on_finish() {
+        let mut a = StreamAssembler::default();
+        let mut out = Vec::new();
+        a.push_bytes(&packet(CONFIG, 0, &config_payload()), &mut out);
+        let truncated = packet(KEY, 0, &nal_stream(&[&IDR]));
+        a.push_bytes(&truncated[..truncated.len() - 3], &mut out);
+        assert_eq!(out.len(), 1);
+        a.finish(&mut out);
+        assert_eq!(out.len(), 1, "half an access unit must never be muxed");
     }
 }

@@ -31,10 +31,14 @@ fn generate_scid() -> u32 {
 
 pub fn build_server_command(adb: &Path, _jar: &Path, serial: &str, scid: u32) -> Command {
     let classpath_arg = format!("CLASSPATH={DEVICE_JAR_PATH}");
+    // `clipboard_autosync=false` because nothing here reads the control
+    // socket's device-message direction: a device that answers clipboard
+    // changes would fill that socket's buffer with replies no one drains.
     let server_arg = format!(
         "app_process / com.genymobile.scrcpy.Server {SCRCPY_SERVER_VERSION} \
-         tunnel_forward=true audio=false control=true cleanup=false \
-         raw_stream=true max_size=1920 max_fps=30 video_codec=h264 scid={scid:08x}"
+         tunnel_forward=true audio=false control=true cleanup=false clipboard_autosync=false \
+         send_device_meta=false send_dummy_byte=false send_stream_meta=false send_frame_meta=true \
+         video_bit_rate=4000000 max_size=1920 max_fps=30 video_codec=h264 scid={scid:08x}"
     );
     let mut cmd = Command::new(adb);
     cmd.args(["-s", serial, "shell", &classpath_arg, &server_arg]);
@@ -161,13 +165,16 @@ mod tests {
         assert_eq!(args[1], "emulator-5554");
         assert_eq!(args[2], "shell");
         assert!(args[3].starts_with("CLASSPATH=/data/local/tmp/terra-scrcpy.jar"));
-        assert!(args[4].contains("com.genymobile.scrcpy.Server 4.1 "));
-        assert!(args[4].contains("tunnel_forward=true"));
-        assert!(args[4].contains("control=true"));
-        assert!(args[4].contains("raw_stream=true"));
-        assert!(args[4].contains("audio=false"));
-        assert!(args[4].contains("video_codec=h264"));
-        assert!(args[4].contains("scid=0000002a"));
+        assert_eq!(
+            args[4],
+            "app_process / com.genymobile.scrcpy.Server 4.1 \
+             tunnel_forward=true audio=false control=true cleanup=false clipboard_autosync=false \
+             send_device_meta=false send_dummy_byte=false send_stream_meta=false send_frame_meta=true \
+             video_bit_rate=4000000 max_size=1920 max_fps=30 video_codec=h264 scid=0000002a"
+        );
+        // The muxer needs per-frame timestamps and explicit packet boundaries;
+        // `raw_stream=true` would force every one of those meta options off.
+        assert!(!args[4].contains("raw_stream"));
     }
 
     #[test]

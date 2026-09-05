@@ -243,7 +243,8 @@ impl Drop for DeviceSession {
     }
 }
 
-/// Read the raw Annex-B H.264 stream off `TcpStream(127.0.0.1:local_port)` and
+/// Read the H.264 frame-metadata packet stream off
+/// `TcpStream(127.0.0.1:local_port)` and
 /// feed it through a `StreamAssembler`, forwarding each resulting encoded
 /// frame (`[discriminator][payload]`, see `remux::decode_frame`) on `channel`
 /// as `Response::new(frame)`. One channel keeps the frames in order, which is
@@ -339,6 +340,13 @@ fn run_read_loop(
 
         assembler.push_bytes(&read_buf[..n], &mut frames);
         send_frames(&channel, &mut frames);
+
+        // Nothing can resynchronize a packet stream once a header stops making
+        // sense, so reading on would only spin on bytes the assembler drops.
+        if assembler.is_corrupt() {
+            log::warn!("[device] read_loop: video stream desynchronized, stopping the reader");
+            break;
+        }
     }
 }
 
