@@ -528,7 +528,11 @@ mod tests {
         (client, server)
     }
 
+    // Winsock leaves a recv that is already blocked alone after shutdown(),
+    // so on Windows only the peer closing wakes the reader (see the read loop
+    // tests below, which model adb doing exactly that).
     #[test]
+    #[cfg(not(windows))]
     fn socket_registry_close_all_unblocks_a_blocked_reader() {
         let (mut client, _server) = connected_pair();
         let registry = Arc::new(SocketRegistry::default());
@@ -743,7 +747,13 @@ mod tests {
         let port = TcpListener::bind("127.0.0.1:0")
             .map(|l| l.local_addr().unwrap().port())
             .unwrap();
+        // A refused loopback connect is instant on Unix but costs about two
+        // seconds of SYN retries on Windows, so the bound is measured, not fixed.
+        let probe = Instant::now();
+        let _ = TcpStream::connect(("127.0.0.1", port));
+        let one_refusal = probe.elapsed();
 
+        let budget = test_budget(3);
         let (on_exit, seen) = capturing_exit_channel();
         let started = Instant::now();
         run_read_loop(
@@ -753,13 +763,15 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
             None,
             &SocketRegistry::default(),
-            test_budget(3),
+            budget,
         );
+        let elapsed = started.elapsed();
 
         assert_eq!(*seen.lock_or_recover(), ["server-unreachable"]);
+        let bound = (one_refusal + budget.interval) * budget.attempts + Duration::from_secs(2);
         assert!(
-            started.elapsed() < Duration::from_secs(2),
-            "the retry budget must bound how long the reader waits"
+            elapsed < bound,
+            "the retry budget must bound how long the reader waits: {elapsed:?} vs {bound:?}"
         );
     }
 
@@ -804,10 +816,13 @@ mod tests {
             );
         });
 
-        let (_socket, _) = listener.accept().unwrap();
+        let (peer, _) = listener.accept().unwrap();
         ready_rx.blocking_recv().expect("the reader registers its socket before reading");
 
         session.shutdown();
+        // adb closes the forwarded pipe once it sees our FIN; on Windows that
+        // close, not the shutdown, is what wakes the blocked reader.
+        drop(peer);
 
         join_within(handle, Duration::from_secs(5));
         assert!(
@@ -839,12 +854,13 @@ mod tests {
             );
         });
 
-        let (_socket, _) = listener.accept().unwrap();
+        let (peer, _) = listener.accept().unwrap();
         ready_rx.blocking_recv().expect("the reader registers its socket before reading");
 
         // Exactly what shutdown() does, in the order it does it.
         stopping.store(true, Ordering::Relaxed);
         sockets.close_all();
+        drop(peer);
 
         join_within(handle, Duration::from_secs(5));
         assert!(
