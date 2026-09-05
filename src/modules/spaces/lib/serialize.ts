@@ -19,7 +19,6 @@ export type SerializedTab =
   | {
       kind: "terminal";
       tree: SerializedNode;
-      blocks?: boolean;
       customTitle?: string;
     }
   | { kind: "editor"; path: string }
@@ -74,7 +73,6 @@ function serializeTab(tab: Tab): SerializedTab | null {
       return {
         kind: "terminal",
         tree: serializeNode(tab.paneTree, tab.activeLeafId),
-        ...(tab.blocks && { blocks: true }),
         ...(tab.customTitle !== undefined && { customTitle: tab.customTitle }),
       };
     case "editor":
@@ -151,7 +149,7 @@ function hydrateTab(
       const { tree, activeLeafId, firstLeafCwd } = hydrateTree(s.tree, allocId);
       const title =
         s.customTitle ??
-        (firstLeafCwd ? basename(firstLeafCwd) : s.blocks ? "blocks" : "shell");
+        (firstLeafCwd ? basename(firstLeafCwd) : "shell");
       return {
         id: allocId(),
         kind: "terminal",
@@ -161,7 +159,6 @@ function hydrateTab(
         cwd: firstLeafCwd,
         paneTree: tree,
         activeLeafId,
-        ...(s.blocks && { blocks: true }),
         ...(s.customTitle !== undefined && { customTitle: s.customTitle }),
       } satisfies TerminalTab;
     }

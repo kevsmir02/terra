@@ -10,10 +10,6 @@ describe("parseQuery", () => {
     });
   });
 
-  it("routes > to command history", () => {
-    expect(parseQuery(">git")).toMatchObject({ mode: "history", term: "git" });
-  });
-
   it("routes # to content search", () => {
     expect(parseQuery("# useState")).toMatchObject({
       mode: "content",

@@ -10,19 +10,13 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import { BlockOverlay } from "./block/BlockOverlay";
-import { BlockWatermark } from "./block/BlockWatermark";
 import {
   isDragGesture,
   type Point,
   selectionToCopy,
 } from "./lib/copyOnSelect";
 import { writeTerminalClipboard } from "./lib/terminalClipboard";
-import {
-  focusLeafInput,
-  submitToLeaf,
-  useTerminalSession,
-} from "./lib/useTerminalSession";
+import { useTerminalSession } from "./lib/useTerminalSession";
 
 /** Shared so rapid selections replace one toast rather than stacking. */
 const COPY_TOAST_ID = "terminal-copy-on-select";
@@ -42,8 +36,6 @@ type Props = {
   /** This leaf is the active pane within its tab — receives auto-focus. */
   focused?: boolean;
   initialCwd?: string;
-  /** Enable command-block decorations (OSC 133) for this terminal. */
-  blocks?: boolean;
   onSearchReady?: (leafId: number, addon: SearchAddon) => void;
   onExit?: (leafId: number, code: number) => void;
   onCwd?: (leafId: number, cwd: string) => void;
@@ -56,7 +48,6 @@ export const TerminalPane = memo(
       visible,
       focused = true,
       initialCwd,
-      blocks = false,
       onSearchReady,
       onExit,
       onCwd,
@@ -74,7 +65,6 @@ export const TerminalPane = memo(
       visible,
       focused,
       initialCwd,
-      blocks,
       onSearchReady: (a) => onSearchReady?.(leafId, a),
       onExit: (c) => onExit?.(leafId, c),
       onCwd: (c) => onCwd?.(leafId, c),
@@ -139,50 +129,6 @@ export const TerminalPane = memo(
       visibility: visible ? ("visible" as const) : ("hidden" as const),
       pointerEvents: visible ? ("auto" as const) : ("none" as const),
     };
-
-    const promptReady = session.blockMode === "prompt";
-
-    if (blocks) {
-      return (
-        <div
-          className="zoom-exempt flex h-full w-full flex-col"
-          style={hideStyle}
-        >
-          <div className="relative min-h-0 flex-1">
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: terminal surface; pointer selects command blocks */}
-            <div
-              ref={containerRef}
-              className="absolute inset-0 z-0"
-              onMouseDown={handlePaneMouseDown}
-              onMouseUp={(e) => {
-                // Mutually exclusive on purpose: selectBlockAt replaces the
-                // selection with whole-block lines, so it must never run where
-                // the copy path could observe that.
-                if (!copySelectionIfDragged(e)) session.selectBlockAt(e.clientY);
-                if (session.blockMode === "prompt") focusLeafInput(leafId);
-              }}
-            />
-            <BlockWatermark
-              leafId={leafId}
-              subscribe={session.subscribeBlocks}
-            />
-            <BlockOverlay
-              subscribe={session.subscribeBlocks}
-              getVisible={session.visibleBlocks}
-              readOutput={(id) => session.readBlockId(id)?.output ?? null}
-              searchBlock={session.searchBlock}
-              revealMatch={session.revealMatch}
-              clearSearch={session.clearSearch}
-              promptReady={promptReady}
-              onRunAgain={(cmd) => submitToLeaf(leafId, cmd)}
-              onRestoreFocus={() => {
-                if (session.blockMode === "prompt") focusLeafInput(leafId);
-              }}
-            />
-          </div>
-        </div>
-      );
-    }
 
     return (
       // biome-ignore lint/a11y/noStaticElementInteractions: terminal surface; pointer selects text for copy-on-selection

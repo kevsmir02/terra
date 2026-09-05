@@ -7,7 +7,6 @@ export type ParsedQuery = {
 };
 
 const PREFIXES: ReadonlyArray<{ sigil: string; mode: PaletteMode }> = [
-  { sigil: ">", mode: "history" },
   { sigil: "#", mode: "content" },
   { sigil: "?", mode: "help" },
 ];
@@ -22,6 +21,5 @@ export function parseQuery(raw: string): ParsedQuery {
 }
 
 export const MODE_HINTS: ReadonlyArray<{ sigil: string; label: string }> = [
-  { sigil: ">", label: "Search command history" },
   { sigil: "#", label: "Find text in files" },
 ];

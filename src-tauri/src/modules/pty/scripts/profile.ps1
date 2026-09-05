@@ -56,7 +56,6 @@ function global:__terra_install_readline {
         }
         try {
             if ($line -is [string] -and $line.Trim().Length -gt 0) {
-                $global:__terra_block_seen = $true
                 $esc = [char]27
                 $cmd = $line -replace '[\x00-\x1F\x7F]', ' '
                 if ($cmd.Length -gt 256) { $cmd = $cmd.Substring(0, 256) }
@@ -85,15 +84,6 @@ function global:prompt {
         $cwdEnc = __terra_urlencode $cwd
         $hostName = [System.Environment]::MachineName
         $osc7 = "$esc]7;file://$hostName$cwdEnc$esc\"
-    }
-
-    # Block mode: the host renders its own input bar, so suppress the shell
-    # prompt (markers only) and reserve the header/gap rows in the prompt
-    # itself -- same layout contract as the zsh integration.
-    if ($env:TERRA_BLOCKS) {
-        $global:LASTEXITCODE = $lec
-        $gap = if ($global:__terra_block_seen) { "`n`n" } else { "`n" }
-        return "$oscD$oscA$osc7$gap$oscB"
     }
 
     $original = if (Test-Path Function:__terra_user_prompt) {

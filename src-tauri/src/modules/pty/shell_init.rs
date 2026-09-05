@@ -52,18 +52,17 @@ fn fish_init_script() -> &'static str {
 pub fn build_command(
     cwd: Option<String>,
     workspace: WorkspaceEnv,
-    blocks: bool,
     shell: Option<String>,
 ) -> Result<CommandBuilder, String> {
     let shell = sanitize_shell_override(shell);
     #[cfg(unix)]
     {
         let _ = workspace;
-        unix::build(cwd, blocks, shell)
+        unix::build(cwd, shell)
     }
     #[cfg(windows)]
     {
-        windows::build(cwd, workspace, blocks, shell)
+        windows::build(cwd, workspace, shell)
     }
 }
 
@@ -106,7 +105,7 @@ pub struct ShellInfo {
     pub name: String,
     pub path: String,
     /// True when Terra injects OSC 7/133 integration for this shell (cwd
-    /// tracking, command blocks, agent detection). Others spawn bare.
+    /// tracking, agent detection). Others spawn bare.
     pub integrated: bool,
 }
 
@@ -141,16 +140,13 @@ fn ensure_utf8_locale(cmd: &mut CommandBuilder) {
     cmd.env("LANG", fallback);
 }
 
-fn apply_common(cmd: &mut CommandBuilder, cwd: Option<String>, blocks: bool) {
+fn apply_common(cmd: &mut CommandBuilder, cwd: Option<String>) {
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERRA_TERMINAL", "1");
     // Pre-rename hooks in the user's agent config gate on `$TERAX_TERMINAL`.
     // Export it too so they keep firing until they're reinstalled.
     cmd.env("TERAX_TERMINAL", "1");
-    if blocks {
-        cmd.env("TERRA_BLOCKS", "1");
-    }
     for (key, value) in workspace::appimage_env_overrides() {
         match value {
             Some(v) => {
@@ -282,12 +278,11 @@ mod unix {
 
     pub fn build(
         cwd: Option<String>,
-        blocks: bool,
         shell_override: Option<String>,
     ) -> Result<CommandBuilder, String> {
         let (shell, shell_path) = Shell::resolve(shell_override);
         let mut cmd = CommandBuilder::new(&shell_path);
-        super::apply_common(&mut cmd, cwd, blocks);
+        super::apply_common(&mut cmd, cwd);
         apply_shell_init(&mut cmd, &shell, &shell_path);
         Ok(cmd)
     }
@@ -513,11 +508,10 @@ mod windows {
     pub fn build(
         cwd: Option<String>,
         workspace: WorkspaceEnv,
-        blocks: bool,
         shell: Option<String>,
     ) -> Result<CommandBuilder, String> {
         if let WorkspaceEnv::Wsl { distro } = workspace {
-            let _ = (blocks, shell);
+            let _ = shell;
             return build_wsl(cwd, distro);
         }
         let shell_path = shell
@@ -535,7 +529,7 @@ mod windows {
         let is_bash = shell_name == "bash.exe";
 
         let mut cmd = CommandBuilder::new(&shell_path);
-        super::apply_common(&mut cmd, cwd, blocks);
+        super::apply_common(&mut cmd, cwd);
 
         if is_powershell {
             match prepare_ps_profile() {

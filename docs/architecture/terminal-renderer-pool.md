@@ -20,7 +20,7 @@ The pool lives in `src/modules/terminal/lib/rendererPool.ts`.
 When a leaf becomes hidden:
 
 1. `parkLeafSlot` sets the host to `display:none`. Rendering pauses but the live buffer keeps receiving bytes.
-2. If the leaf is **busy** (foreground command, agent signal, alt-screen TUI, or block-shell running mode), it keeps the slot parked indefinitely.
+2. If the leaf is **busy** (foreground command, agent signal, or alt-screen TUI), it keeps the slot parked indefinitely.
 3. If the leaf is **idle**, `releaseSlot` is called after `HIDDEN_RELEASE_DELAY_MS`. The slot's `currentLeafId` is cleared and `retainedLeafId` is set so the buffer stays live.
 
 When the leaf becomes visible again, `acquireSlot` looks for:

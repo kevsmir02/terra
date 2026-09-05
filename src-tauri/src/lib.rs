@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, history, lsp, migrate, pty, shell, updater, workspace};
+use modules::{agent, device, fs, git, lsp, migrate, pty, shell, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -259,7 +259,6 @@ pub fn run() {
         })
         .manage(pty::PtyState::default())
         .manage(fs::watch::FsWatchState::default())
-        .manage(history::HistoryState::default())
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
@@ -345,10 +344,6 @@ pub fn run() {
             shell::shell_run_command,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
-            history::history_suggest,
-            history::history_commands,
-            history::history_record,
-            history::history_list,
             device::commands::device_list,
             device::commands::device_list_avds,
             device::commands::device_launch_avd,

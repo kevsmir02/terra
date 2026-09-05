@@ -62,7 +62,7 @@ Net effect: about 22k lines deleted across 167 files, 11 npm dependencies and 5 
 
 ## Features
 
-- **Terminal**: xterm.js with the WebGL renderer, native PTY via `portable-pty` (zsh, bash, fish), multi-tab with background streaming, split panes with layout restore, inline search, link detection, true color, and a block-mode shell input with history ghost text and path completion.
+- **Terminal**: xterm.js with the WebGL renderer, native PTY via `portable-pty` (zsh, bash, fish), multi-tab with background streaming, split panes with layout restore, inline search, link detection, true color.
 - **Editor**: CodeMirror 6 with the usual languages, vim mode, on-save diagnostics by default, and an opt-in language server session that idles down and runs under a memory watchdog.
 - **Source control**: stage, unstage, commit, push with upstream awareness, and a history pane with a real commit graph and per-file diffs.
 - **Explorer**: Catppuccin icons, fuzzy search, keyboard navigation, inline rename, live sync with disk.

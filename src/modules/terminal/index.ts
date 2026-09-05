@@ -5,11 +5,9 @@ export {
   disposeSession,
   leafHasForegroundProcess,
   leafIdForPty,
-  navigateFocusedBlocks,
   ptyIdForLeaf,
   respawnSession,
   whenSessionReady,
-  writeToSession,
 } from "./lib/useTerminalSession";
 export {
   type AgentTabStatus,

@@ -37,7 +37,6 @@ export type CommandPaletteActionContext = {
   explorerRoot: string | null;
   home: string | null;
   openNewTab: () => void;
-  openNewBlock: () => void;
   openNewPrivate: () => void;
   openNewEditor: () => void;
   openNewPreview: () => void;
@@ -140,14 +139,6 @@ export function createCommandItems(
       run: ctx.openNewTab,
     },
     {
-      id: "tab.newBlock",
-      title: "New block terminal",
-      group: "Tabs",
-      keywords: ["blocks", "warp", "command blocks", "terminal"],
-      icon: DashboardSquare01Icon,
-      run: ctx.openNewBlock,
-    },
-    {
       id: "tab.newPrivate",
       title: "New private terminal",
       group: "Tabs",
@@ -229,15 +220,6 @@ export function createCommandItems(
       keywords: ["grep", "ripgrep", "text", "contents", "search in files"],
       icon: FileSearchIcon,
       trailing: "#",
-      run: noop,
-    },
-    {
-      id: "history.open",
-      title: "Search command history",
-      group: "Search",
-      keywords: ["history", "shell", "rerun", "previous commands"],
-      icon: TerminalIcon,
-      trailing: ">",
       run: noop,
     },
     {
