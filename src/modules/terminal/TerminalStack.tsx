@@ -95,6 +95,7 @@ export function TerminalStack({
               node={t.paneTree}
               tabVisible={tabVisible}
               activeLeafId={t.activeLeafId}
+              split={leafIds(t.paneTree).length > 1}
               onFocusLeaf={(leafId) => onFocusLeaf(t.id, leafId)}
               getBundle={getBundle}
             />

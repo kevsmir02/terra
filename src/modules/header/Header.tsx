@@ -1,14 +1,6 @@
-import { Button } from "@/components/ui/button";
 import { WindowControls } from "@/components/WindowControls";
-import { NotificationBell } from "@/modules/agents";
 import type { Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
-import {
-  CommandIcon,
-  Settings01Icon,
-  SidebarLeftIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type ReactNode,
   type RefObject,
@@ -39,10 +31,6 @@ type Props = {
   /** Move a dragged tab to a new position (insertion gap index). */
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
-  onToggleSidebar: () => void;
-  onOpenCommandPalette: () => void;
-  onActivateAgent: (tabId: number, leafId: number) => void;
-  onOpenSettings: () => void;
   spaceSwitcher: ReactNode;
   searchTarget: SearchTarget;
   searchRef: RefObject<SearchInlineHandle | null>;
@@ -64,10 +52,6 @@ export function Header({
   onRename,
   onReorder,
   onOverrideLanguage,
-  onToggleSidebar,
-  onOpenCommandPalette,
-  onActivateAgent,
-  onOpenSettings,
   spaceSwitcher,
   searchTarget,
   searchRef,
@@ -86,55 +70,18 @@ export function Header({
     return () => ro.disconnect();
   }, []);
 
-  const settingsButton = (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-      onClick={onOpenSettings}
-      title="Settings"
-    >
-      <HugeiconsIcon icon={Settings01Icon} size={15} strokeWidth={1.75} />
-    </Button>
-  );
-
   return (
     <div
       ref={rootRef}
       data-tauri-drag-region
-      className="terra-chrome flex h-10 shrink-0 items-center gap-2 border-b border-border/(--emph-strong) bg-card select-none pr-0 pl-2"
+      className="terra-chrome relative z-20 flex h-9 shrink-0 items-center gap-2 border-b border-border/(--emph-strong) bg-card select-none pr-0 pl-2"
     >
-      <div className="flex shrink-0 items-center gap-0.5">
-        <Button
-          onClick={onToggleSidebar}
-          title="Toggle sidebar"
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <HugeiconsIcon icon={SidebarLeftIcon} size={18} strokeWidth={1.75} />
-        </Button>
-
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          onClick={onOpenCommandPalette}
-          title="Command palette"
-          className="shrink-0 gap-1.5 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <HugeiconsIcon icon={CommandIcon} size={14} strokeWidth={1.75} />
-        </Button>
-
-        <NotificationBell onActivate={onActivateAgent} />
-      </div>
-
-      <span className="mx-1 h-full w-0 shrink-0 border-l border-border/(--emph-strong)" />
-
       <div
         className="flex min-w-0 flex-1 items-center gap-2"
         data-tauri-drag-region
       >
         {spaceSwitcher}
+        <span className="h-4 w-0 shrink-0 border-l border-border/(--emph-strong)" />
         <TabBar
           tabs={tabs}
           activeId={activeId}
@@ -154,9 +101,7 @@ export function Header({
         <div data-tauri-drag-region className="h-full min-w-2 flex-1" />
       </div>
 
-      <SearchInline ref={searchRef} target={searchTarget} compact={compact} />
-
-      {settingsButton}
+      <SearchInline ref={searchRef} target={searchTarget} />
 
       <span className="ml-1 h-5 w-0 shrink-0 border-l border-border/(--emph-strong)" />
       <WindowControls />

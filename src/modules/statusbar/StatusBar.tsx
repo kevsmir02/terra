@@ -6,8 +6,10 @@ import {
 import { LspStatusPill } from "@/modules/lsp";
 import { IncognitoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { ReactNode } from "react";
 import { CwdBreadcrumb } from "./CwdBreadcrumb";
 import { DiagnosticsBadge } from "./DiagnosticsBadge";
+import { GitStatusChip, type GitStatusChipProps } from "./GitStatusChip";
 
 type Props = {
   cwd: string | null;
@@ -15,21 +17,41 @@ type Props = {
   home: string | null;
   onCd: (path: string) => void;
   privateActive: boolean;
+  git: GitStatusChipProps;
+  /** Agent cluster, injected so the statusbar keeps no dependency on agents. */
+  agents: ReactNode;
 };
 
-export function StatusBar({ cwd, filePath, home, onCd, privateActive }: Props) {
+/**
+ * Two zones: the left says where you are (path, branch), the right says what
+ * state things are in (agents, language server, diagnostics). Everything used
+ * to crowd the left with two thirds of the bar empty.
+ */
+export function StatusBar({
+  cwd,
+  filePath,
+  home,
+  onCd,
+  privateActive,
+  git,
+  agents,
+}: Props) {
   return (
-    <footer className="terra-chrome flex h-9 shrink-0 items-center justify-between gap-3 border-t border-border/(--emph-strong) bg-card/(--emph-strong) pl-3 pr-4 text-[11px]">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+    <footer className="terra-chrome flex h-6.5 shrink-0 items-center gap-2 border-t border-border/(--emph-strong) bg-card/(--emph-strong) px-2 text-[11px]">
+      <div className="flex min-w-0 items-center gap-2">
         <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
-        <LspStatusPill filePath={filePath ?? null} />
-        <DiagnosticsBadge filePath={filePath ?? null} />
+        <GitStatusChip {...git} />
+      </div>
+
+      <div className="min-w-4 flex-1" />
+
+      <div className="flex shrink-0 items-center gap-1.5">
         {privateActive ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="terra-label flex shrink-0 cursor-default items-center gap-1 rounded-pill bg-status-warning/15 px-2 py-0.5 text-[10.5px] font-medium text-status-warning">
+              <span className="terra-label flex h-4.5 shrink-0 cursor-default items-center gap-1 rounded-sm bg-status-warning/15 px-1.5 text-[10.5px] font-medium text-status-warning">
                 <HugeiconsIcon icon={IncognitoIcon} size={11} strokeWidth={2} />
-                <span>Private: hidden from AI</span>
+                <span>Private</span>
               </span>
             </TooltipTrigger>
             <TooltipContent
@@ -41,6 +63,9 @@ export function StatusBar({ cwd, filePath, home, onCd, privateActive }: Props) {
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {agents}
+        <LspStatusPill filePath={filePath ?? null} />
+        <DiagnosticsBadge filePath={filePath ?? null} />
       </div>
     </footer>
   );

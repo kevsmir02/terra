@@ -6,21 +6,16 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { consumeLaunchFiles, getLaunchDir } from "@/lib/launchDir";
+import { native } from "@/lib/native";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { isMarkdownPath } from "@/lib/utils";
 import {
   AgentNotificationsBridge,
+  AgentStatusCluster,
   nextAttentionTarget,
 } from "@/modules/agents";
-import { native } from "@/lib/native";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
-import {
-  type EditorPaneHandle,
-  NewEditorDialog,
-  useApplyEditorFontSize,
-  useEditorFileSync,
-} from "@/modules/editor";
 import {
   DeviceDock,
   DeviceDropdown,
@@ -28,6 +23,12 @@ import {
   DOCK_MIN_WIDTH,
   useDeviceDock,
 } from "@/modules/device";
+import {
+  type EditorPaneHandle,
+  NewEditorDialog,
+  useApplyEditorFontSize,
+  useEditorFileSync,
+} from "@/modules/editor";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
 import type { GitHistorySearchHandle } from "@/modules/git-history";
 import {
@@ -36,13 +37,13 @@ import {
   type SearchTarget,
 } from "@/modules/header";
 import { setLspNavigator } from "@/modules/lsp";
-import { setDevServerOpener, type PreviewPaneHandle } from "@/modules/preview";
+import { type PreviewPaneHandle, setDevServerOpener } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
-  shouldDisablePaneSwapShortcut,
   type ShortcutHandlers,
   type ShortcutId,
+  shouldDisablePaneSwapShortcut,
   useGlobalShortcuts,
 } from "@/modules/shortcuts";
 import {
@@ -58,8 +59,8 @@ import {
 import {
   SpaceSwitcher,
   useSpacePersistence,
-  useSpaces,
   useSpaceStartup,
+  useSpaces,
   useSpacesBoot,
 } from "@/modules/spaces";
 import { StatusBar } from "@/modules/statusbar";
@@ -71,7 +72,6 @@ import {
   useWorkspaceCwd,
 } from "@/modules/tabs";
 import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
-import { invoke } from "@tauri-apps/api/core";
 import {
   clearFocusedTerminal,
   configureTerminalLinks,
@@ -88,6 +88,7 @@ import {
   useTerminalFileDrop,
 } from "@/modules/terminal";
 import { ThemeProvider } from "@/modules/theme";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -259,7 +260,6 @@ export default function App() {
     sidebarWidthRef,
     sidebarView,
     initialSidebarCollapsed,
-    persistSidebarView,
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
@@ -1094,10 +1094,6 @@ export default function App() {
               onPin={pinTab}
               onRename={handleRenameTab}
               onReorder={reorderTabByGap}
-              onToggleSidebar={toggleSidebar}
-              onOpenCommandPalette={() => openCommandPalette("commands")}
-              onActivateAgent={onActivateAgent}
-              onOpenSettings={() => void openSettingsWindow()}
               spaceSwitcher={spaceSwitcher}
               searchTarget={searchTarget}
               searchRef={searchInlineRef}
@@ -1105,10 +1101,19 @@ export default function App() {
             />
           )}
 
-          <main className="zoom-content flex min-h-0 flex-1 flex-col">
+          <main className="zoom-content flex min-h-0 flex-1">
+            {!zenMode && (
+              <SidebarRail
+                activeView={sidebarView}
+                onSelectView={cycleSidebarView}
+                changedCount={sourceControl.changedCount}
+                onOpenCommandPalette={() => openCommandPalette("commands")}
+                onOpenSettings={() => void openSettingsWindow()}
+              />
+            )}
             <ResizablePanelGroup
               orientation="horizontal"
-              className="min-h-0 flex-1"
+              className="min-h-0 min-w-0 flex-1"
             >
               <ResizablePanel
                 id="sidebar"
@@ -1170,11 +1175,6 @@ export default function App() {
                       <DeviceDropdown onPick={dockDevice} />
                     )}
                   </div>
-                  <SidebarRail
-                    activeView={sidebarView}
-                    onSelectView={persistSidebarView}
-                    changedCount={sourceControl.changedCount}
-                  />
                 </div>
               </ResizablePanel>
               <ResizableHandle withHandle />
@@ -1232,6 +1232,17 @@ export default function App() {
               privateActive={
                 activeTab?.kind === "terminal" && activeTab.private === true
               }
+              git={{
+                hasRepo: sourceControl.hasRepo,
+                branch:
+                  sourceControl.status?.branch ??
+                  sourceControl.repo?.branch ??
+                  null,
+                ahead: sourceControl.ahead,
+                behind: sourceControl.behind,
+                changedCount: sourceControl.changedCount,
+              }}
+              agents={<AgentStatusCluster onActivate={onActivateAgent} />}
             />
           )}
 

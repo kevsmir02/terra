@@ -1,4 +1,3 @@
-import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -26,24 +25,21 @@ import {
   FileIconView,
   useIconProvider,
 } from "@/modules/explorer/lib/iconProvider";
-import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import {
+  type AgentTabStatus,
   leafIds,
   ptyIdForLeaf,
-  type AgentTabStatus,
   selectTabAgentStatus,
   useAgentActivityStore,
 } from "@/modules/terminal";
 import {
   Cancel01Icon,
-  CheckmarkCircle01Icon,
   Clock01Icon,
   ComputerTerminal02Icon,
   GitBranchIcon,
   GitCompareIcon,
   Globe02Icon,
   IncognitoIcon,
-  Message02Icon,
   PencilEdit02Icon,
   PlusSignIcon,
   Tick02Icon,
@@ -57,6 +53,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { labelFor } from "./lib/tabLabel";
 import type { EditorTab, Tab } from "./lib/useTabs";
 
@@ -494,6 +491,7 @@ export function TabBar({
                       />
                     </span>
                   )}
+                  <TabStateBar tab={t} />
                 </TabsTrigger>
               );
 
@@ -647,8 +645,29 @@ function ptyIdsForTab(tab: Tab): readonly number[] {
   return ptyIds;
 }
 
+// A tab's agent state is a bar under the pill, not a swapped icon: an icon can
+// only say one thing at a time, and it already says what kind of tab this is.
+const STATE_BAR: Record<NonNullable<AgentTabStatus["state"]>, string> = {
+  attention: "bg-status-warning",
+  working: "bg-status-renamed",
+  finished: "bg-status-ok/(--emph-strong)",
+};
+
+export function TabStateBar({ tab }: { tab: Tab }) {
+  const { state } = useTabAgentStatus(tab);
+  if (!state) return null;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "terra-pill-in pointer-events-none absolute inset-x-2 bottom-0.5 h-0.5 rounded-pill",
+        STATE_BAR[state],
+      )}
+    />
+  );
+}
+
 export function TabIcon({ tab }: { tab: Tab }) {
-  const agentStatus = useTabAgentStatus(tab);
   const icons = useIconProvider();
   if (tab.kind === "editor" || tab.kind === "markdown") {
     const icon =
@@ -707,31 +726,6 @@ export function TabIcon({ tab }: { tab: Tab }) {
         strokeWidth={2}
         className="shrink-0"
       />
-    );
-  }
-  if (agentStatus.state === "attention") {
-    return (
-      <HugeiconsIcon
-        icon={Message02Icon}
-        size={14}
-        strokeWidth={2}
-        className="shrink-0"
-      />
-    );
-  }
-  if (agentStatus.state === "finished") {
-    return (
-      <HugeiconsIcon
-        icon={CheckmarkCircle01Icon}
-        size={14}
-        strokeWidth={2}
-        className="shrink-0"
-      />
-    );
-  }
-  if (agentStatus.state === "working" && agentStatus.agent) {
-    return (
-      <AgentIcon agent={agentStatus.agent} size={14} className="shrink-0" />
     );
   }
   return (

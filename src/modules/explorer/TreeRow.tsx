@@ -55,13 +55,25 @@ function EntryRowImpl(props: EntryRowProps) {
   const icons = useIconProvider();
   const icon = isDir ? icons.folder(name, isExpanded) : icons.file(name);
   const paddingLeft = 6 + depth * 12;
+  // One hairline per ancestor level, centred on where that level's chevron
+  // sits, so a deep tree reads as a tree instead of a ragged left edge.
+  const guides = Array.from({ length: depth }, (_, i) => (
+    <span
+      // biome-ignore lint/suspicious/noArrayIndexKey: depth level is the identity
+      key={i}
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0 border-l border-border/(--emph-medium)"
+      style={{ left: 13 + i * 12 }}
+    />
+  ));
 
   if (isRenaming) {
     return (
       <div
-        className="flex h-6 w-full min-w-0 items-center gap-2 px-1.5 text-[13px]"
+        className="relative flex h-6 w-full min-w-0 items-center gap-2 px-1.5 text-[13px]"
         style={{ paddingLeft }}
       >
+        {guides}
         <span className="size-3.5 shrink-0" />
         <FileIconView icon={icon} className="size-4" />
         <InlineInput
@@ -94,7 +106,7 @@ function EntryRowImpl(props: EntryRowProps) {
       onClick={handleClick}
       onDoubleClick={() => activate("dblclick")}
       className={cn(
-        "group flex h-6 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm px-1.5 text-left text-[13px] transition-colors hover:bg-accent/(--emph-strong)",
+        "group relative flex h-6 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm px-1.5 text-left text-[13px] transition-colors hover:bg-accent/(--emph-strong)",
         isSelected
           ? "bg-accent text-foreground"
           : gitignored
@@ -105,6 +117,7 @@ function EntryRowImpl(props: EntryRowProps) {
       )}
       style={{ paddingLeft }}
     >
+      {guides}
       <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
         {isDir ? (
           <HugeiconsIcon

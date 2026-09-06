@@ -38,16 +38,15 @@ export type SearchInlineHandle = { focus: () => void };
 
 type Props = {
   target: SearchTarget;
-  /** When true, collapse to an icon-only button until the user opens it. */
-  compact?: boolean;
 };
 
 export const SearchInline = forwardRef<SearchInlineHandle, Props>(
-  function SearchInline({ target, compact }, ref) {
+  function SearchInline({ target }, ref) {
     const [q, setQ] = useState("");
-    // In compact mode the field is hidden behind an icon until activated.
-    // In normal mode the field is always present.
-    const [openInCompact, setOpenInCompact] = useState(false);
+    // The field is a panel over the surface it searches, not a permanent
+    // header widget: it opens on the shortcut or the button and closes on
+    // Escape, so an empty box never taxes the width the tab strip needs.
+    const [open, setOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const pendingFocusRef = useRef(false);
     const setInputRef = useCallback((el: HTMLInputElement | null) => {
@@ -70,6 +69,17 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
 
     const baseLabel = target?.kind === "git-history" ? "Git search" : "Search";
 
+    // git-history filters the list live, so Enter has no next/prev semantics
+    // there; say so rather than advertising a key that does nothing.
+    const hasDirection = target?.kind !== "git-history";
+
+    const scopeLabel = useMemo(() => {
+      if (!target) return "Nothing to search";
+      if (target.kind === "terminal") return "Terminal";
+      if (target.kind === "editor") return "Editor";
+      return "Commit history";
+    }, [target]);
+
     const placeholder = useMemo(() => {
       return shortcutText ? `${baseLabel} (${shortcutText})` : baseLabel;
     }, [baseLabel, shortcutText]);
@@ -78,14 +88,12 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
       return shortcutText ? `${baseLabel} (${shortcutText})` : baseLabel;
     }, [baseLabel, shortcutText]);
 
-    const expanded = !compact || openInCompact;
-
     const focus = useCallback(() => {
       pendingFocusRef.current = true;
-      if (compact) setOpenInCompact(true);
-      else inputRef.current?.focus();
+      setOpen(true);
+      inputRef.current?.focus();
       if (inputRef.current) pendingFocusRef.current = false;
-    }, [compact]);
+    }, []);
 
     useImperativeHandle(ref, () => ({ focus }), [focus]);
 
@@ -133,74 +141,82 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
     };
 
     return (
-      <div
-        className="relative h-7 shrink-0 transition-[width] duration-200 ease-out"
-        style={{ width: expanded ? 192 : 28 }}
-      >
-        {expanded ? (
-          <div className="absolute inset-0 animate-in fade-in-0 duration-150">
-            <HugeiconsIcon
-              icon={Search01Icon}
-              size={13}
-              strokeWidth={1.75}
-              className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              ref={setInputRef}
-              value={q}
-              placeholder={placeholder}
-              className="h-7 w-full bg-muted/(--emph-bold) pr-7 pl-7 text-[13px]! placeholder:text-muted-foreground/(--emph-strong) focus-visible:ring-0"
-              onChange={(e) => {
-                const next = e.target.value;
-                setQ(next);
-                applyIncremental(next);
-              }}
-              onBlur={() => {
-                if (compact && !q) setOpenInCompact(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  findDirection(!e.shiftKey);
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  clearTarget();
-                  setQ("");
-                  if (compact) {
-                    setOpenInCompact(false);
-                  }
-                  restoreTargetFocus();
-                }
-              }}
-            />
-            {q && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQ("");
-                  clearTarget();
-                  inputRef.current?.focus();
+      <div className="relative h-7 w-7 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-expanded={open}
+          className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground"
+          onClick={() => (open ? setOpen(false) : focus())}
+          title={tooltipTitle}
+        >
+          <HugeiconsIcon icon={Search01Icon} size={15} strokeWidth={1.75} />
+        </Button>
+
+        {open ? (
+          <div className="terra-pop-in absolute top-full right-0 z-50 mt-1.5 w-80 rounded-lg border border-border/(--emph-soft) bg-popover/(--emph-bold) p-1.5 shadow-lg backdrop-blur-md">
+            <div className="relative">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                size={13}
+                strokeWidth={1.75}
+                className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                ref={setInputRef}
+                value={q}
+                placeholder={placeholder}
+                className="h-7 w-full bg-muted/(--emph-bold) pr-7 pl-7 text-[13px]! placeholder:text-muted-foreground/(--emph-strong) focus-visible:ring-0"
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setQ(next);
+                  applyIncremental(next);
                 }}
-                className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
-              </button>
-            )}
+                onBlur={() => {
+                  if (!q) setOpen(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    findDirection(!e.shiftKey);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    clearTarget();
+                    setQ("");
+                    setOpen(false);
+                    restoreTargetFocus();
+                  }
+                }}
+              />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQ("");
+                    clearTarget();
+                    inputRef.current?.focus();
+                  }}
+                  className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <HugeiconsIcon
+                    icon={Cancel01Icon}
+                    size={11}
+                    strokeWidth={2}
+                  />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 px-1 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">
+              <span className="truncate">{scopeLabel}</span>
+              <span className="ml-auto shrink-0">
+                {hasDirection
+                  ? "Enter next \u00b7 Shift+Enter prev \u00b7 Esc close"
+                  : "Esc close"}
+              </span>
+            </div>
           </div>
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-end animate-in fade-in-0 duration-150">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={focus}
-              title={tooltipTitle}
-            >
-              <HugeiconsIcon icon={Search01Icon} size={15} strokeWidth={1.75} />
-            </Button>
-          </div>
-        )}
+        ) : null}
       </div>
     );
   },

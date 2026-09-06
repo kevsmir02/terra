@@ -1,3 +1,3 @@
 export { AgentNotificationsBridge } from "./components/AgentNotificationsBridge";
-export { NotificationBell } from "./components/NotificationBell";
+export { AgentStatusCluster } from "./components/AgentStatusCluster";
 export { nextAttentionTarget } from "./store/agentStore";

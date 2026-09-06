@@ -6,7 +6,10 @@ import {
 import type { SearchAddon } from "@xterm/addon-search";
 import { Fragment } from "react";
 import { DevServerChip } from "@/modules/preview/DevServerChip";
+import { cn } from "@/lib/utils";
+import { useAgentActivityStore } from "./lib/agentActivity";
 import { useTerminalDropStore } from "./lib/dropStore";
+import { ptyIdForLeaf } from "./lib/useTerminalSession";
 import { firstLeafSlotId, type PaneNode } from "./lib/panes";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
@@ -21,6 +24,9 @@ type Props = {
   node: PaneNode;
   tabVisible: boolean;
   activeLeafId: number;
+  /** True once the tab holds more than one leaf, when "which pane takes the
+   * next keystroke" stops being obvious and has to be drawn. */
+  split: boolean;
   onFocusLeaf: (leafId: number) => void;
   getBundle: (leafId: number) => LeafBundle;
 };
@@ -28,7 +34,7 @@ type Props = {
 export function PaneTreeView(props: Props) {
   const { node } = props;
   if (node.kind === "leaf") {
-    const { tabVisible, activeLeafId, onFocusLeaf, getBundle } = props;
+    const { tabVisible, activeLeafId, split, onFocusLeaf, getBundle } = props;
     const focused = node.id === activeLeafId;
     const b = getBundle(node.id);
     return (
@@ -55,6 +61,8 @@ export function PaneTreeView(props: Props) {
           onCwd={b.onCwd}
           onExit={b.onExit}
         />
+        {split ? <PaneFocusRing focused={focused} /> : null}
+        <PaneAttentionEdge leafId={node.id} />
         <DropOverlay leafId={node.id} />
         <DevServerChip leafId={node.id} />
       </div>
@@ -77,6 +85,35 @@ export function PaneTreeView(props: Props) {
         );
       })}
     </ResizablePanelGroup>
+  );
+}
+
+/** Dims the unfocused pane's edge, never its output: the other agent has to
+ * stay readable while you type into this one. */
+function PaneFocusRing({ focused }: { focused: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-0 ring-1 ring-inset transition-colors terra-motion",
+        focused ? "ring-ring/(--emph-bold)" : "ring-border/(--emph-medium)",
+      )}
+    />
+  );
+}
+
+function PaneAttentionEdge({ leafId }: { leafId: number }) {
+  // Selects the whole phase map on purpose: ptyIdForLeaf reads a non-reactive
+  // session map, so the id is only trustworthy on a render an agent signal
+  // caused. The component renders nothing in every other phase.
+  const phases = useAgentActivityStore((s) => s.phases);
+  const ptyId = ptyIdForLeaf(leafId);
+  if (ptyId === null || phases[ptyId] !== "attention") return null;
+  return (
+    <span
+      aria-hidden
+      className="terra-fade-in pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-status-warning"
+    />
   );
 }
 
