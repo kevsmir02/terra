@@ -253,8 +253,15 @@ function createSlot(): Slot {
   };
 
   term.registerLinkProvider(
-    createPathLinkProvider(term, () => slot.currentLeafId),
+    lazyPathLinkProvider(term, () => slot.currentLeafId),
   );
+  term.onBell(() => {
+    const leafId = slot.currentLeafId;
+    if (leafId === null) return;
+    window.dispatchEvent(
+      new CustomEvent("terra:terminal-bell", { detail: { leafId } }),
+    );
+  });
 
   term.attachCustomKeyEventHandler((event) => {
     // During IME composition the browser is assembling a multi-keystroke

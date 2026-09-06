@@ -2,6 +2,7 @@ import type { Tab } from "@/modules/tabs";
 import { hasLeaf, leafIdForPty } from "@/modules/terminal";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
+import { BELL_WINDOW_MS, bellAllowed } from "../lib/bellGate";
 import { displayAgent } from "../lib/format";
 import { routeAgentNotification } from "../lib/route";
 import type { AgentSession, AgentSignal } from "../lib/types";
@@ -87,6 +88,35 @@ function handleSignal(sig: AgentSignal, ctx: Ctx): void {
   }
 }
 
+const bellSeen = new Map<number, number>();
+
+// A BEL from any program is attention for its pane, throttled per leaf. A
+// hooked agent that just reported attention has already covered this bell.
+function handleBell(leafId: number, ctx: Ctx): void {
+  const now = Date.now();
+  const session = useAgentStore.getState().sessions[leafId];
+  const recent =
+    session?.attentionSince != null &&
+    now - session.attentionSince < BELL_WINDOW_MS;
+  if (recent || !bellAllowed(bellSeen, leafId, now)) return;
+  const info = tabInfo(ctx.tabs, leafId);
+  if (!info) return;
+  const agent = session?.agent ?? "shell";
+  routeAgentNotification({
+    source: "terminal",
+    agent,
+    kind: "attention",
+    title: `${displayAgent(agent)} rang the bell`,
+    body: info.title,
+    focused: ctx.focused,
+    visible: ctx.activeId === info.tabId,
+    allowToast: true,
+    tabId: info.tabId,
+    leafId,
+    onActivate: () => ctx.onActivate(info.tabId, leafId),
+  });
+}
+
 export function AgentNotificationsBridge({
   tabs,
   activeId,
@@ -111,9 +141,15 @@ export function AgentNotificationsBridge({
         else u();
       })
       .catch(() => {});
+    const onBell = (e: Event) => {
+      const leafId = (e as CustomEvent<{ leafId: number }>).detail?.leafId;
+      if (typeof leafId === "number") handleBell(leafId, ctxRef.current);
+    };
+    window.addEventListener("terra:terminal-bell", onBell);
     return () => {
       alive = false;
       unlisten?.();
+      window.removeEventListener("terra:terminal-bell", onBell);
     };
   }, []);
 
