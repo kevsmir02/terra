@@ -31,8 +31,9 @@ import { useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
-  const { themeId, setThemeId, resolvedMode } = useTheme();
+  const { themeId, setThemeId, resolvedMode, activeVariant } = useTheme();
   const themes = listBuiltinThemes();
+  const wallpaperDeclined = activeVariant.effects?.wallpaper === false;
 
   const [bgError, setBgError] = useState<string | null>(null);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
@@ -217,7 +218,7 @@ export function ThemesSection() {
             {bgError}
           </div>
         ) : null}
-        {backgroundKind === "image" && backgroundImageId ? (
+        {backgroundKind === "image" && backgroundImageId && !wallpaperDeclined ? (
           <div className="flex flex-col gap-3 rounded-lg border border-border/(--emph-strong) p-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[11.5px] text-muted-foreground">Opacity</span>
@@ -246,6 +247,11 @@ export function ThemesSection() {
               onValueChange={(v) => void setBackgroundBlur(v[0] ?? 0)}
             />
           </div>
+        ) : wallpaperDeclined ? (
+          <p className="text-[11px] text-muted-foreground">
+            The active theme declines the wallpaper. Your image is kept and
+            shows again under a theme that accepts it.
+          </p>
         ) : (
           <p className="text-[11px] text-muted-foreground">
             Drop an image here or pick one. Stored locally; doesn't affect the

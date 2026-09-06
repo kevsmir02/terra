@@ -170,7 +170,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
 
   return (
     <ThemeProviderContext.Provider value={value}>
-      <SurfaceLayer />
+      <SurfaceLayer theme={activeTheme} mode={resolvedMode} />
       {children}
     </ThemeProviderContext.Provider>
   );
