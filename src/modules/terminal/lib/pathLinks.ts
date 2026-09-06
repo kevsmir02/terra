@@ -1,4 +1,5 @@
 import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
+import { terminalLinkDeps } from "./linkDeps";
 
 export type PathLink = {
   /** 0-based [start, end) offsets in the line text, suffix included. */
@@ -74,19 +75,6 @@ export function resolveLinkPath(
   return `/${out.join("/")}`;
 }
 
-export type TerminalLinkDeps = {
-  cwdForLeaf: (leafId: number) => string | undefined;
-  home: () => string | null;
-  exists: (path: string) => Promise<boolean>;
-  open: (path: string, line?: number, column?: number) => void;
-};
-
-let deps: TerminalLinkDeps | null = null;
-
-export function configureTerminalLinks(next: TerminalLinkDeps | null): void {
-  deps = next;
-}
-
 const STAT_TTL_MS = 10_000;
 const STAT_CACHE_MAX = 256;
 const statCache = new Map<string, { at: number; result: Promise<boolean> }>();
@@ -96,8 +84,9 @@ function fileExists(path: string): Promise<boolean> {
   const hit = statCache.get(path);
   if (hit && now - hit.at < STAT_TTL_MS) return hit.result;
   if (statCache.size >= STAT_CACHE_MAX) statCache.clear();
-  const result = deps
-    ? deps.exists(path).catch(() => false)
+  const current = terminalLinkDeps();
+  const result = current
+    ? current.exists(path).catch(() => false)
     : Promise.resolve(false);
   statCache.set(path, { at: now, result });
   return result;
@@ -110,7 +99,7 @@ export function createPathLinkProvider(
 ): ILinkProvider {
   return {
     provideLinks(y, callback) {
-      const current = deps;
+      const current = terminalLinkDeps();
       const leaf = leafId();
       const bufferLine = term.buffer.active.getLine(y - 1);
       if (!current || leaf === null || !bufferLine) {

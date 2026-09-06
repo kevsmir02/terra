@@ -18,7 +18,7 @@ export { useTerminalFileDrop } from "./lib/useTerminalFileDrop";
 export { useTerminalDropStore } from "./lib/dropStore";
 export { pasteIntoLeaf } from "./lib/rendererPool";
 export { formatDroppedPaths } from "./lib/quoteShellPath";
-export { configureTerminalLinks } from "./lib/pathLinks";
+export { configureTerminalLinks } from "./lib/linkDeps";
 export {
   findLeafCwd,
   hasLeaf,
