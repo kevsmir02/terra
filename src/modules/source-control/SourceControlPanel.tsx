@@ -41,7 +41,7 @@ import {
   copyToClipboard,
   revealInFinder,
 } from "@/modules/explorer/lib/contextActions";
-import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
+import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
 import {
   COMPACT_CONTENT,
   COMPACT_ITEM,
@@ -1137,7 +1137,7 @@ const EntryRow = memo(function EntryRow({
   const entry = row.entry;
   const isSelected = selectedPath === entry.path;
   const fileName = basename(entry.path);
-  const iconUrl = fileIconUrl(fileName);
+  const icons = useIconProvider();
   const pathLabel = entryPathLabel(entry);
   const showDiscard = entry.unstaged;
   const isStageBusy =
@@ -1190,11 +1190,7 @@ const EntryRow = memo(function EntryRow({
             }}
             className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
           >
-            {iconUrl ? (
-              <img src={iconUrl} alt="" className="size-4 shrink-0" />
-            ) : (
-              <span className="size-4 shrink-0" />
-            )}
+            <FileIconView icon={icons.file(fileName)} className="size-4" />
             <div className="flex min-w-0 flex-1 items-baseline gap-1.5 leading-none">
               <span
                 className={cn(

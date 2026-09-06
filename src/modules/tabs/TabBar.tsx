@@ -21,7 +21,7 @@ import {
   EXPOSED_LANGUAGES,
 } from "@/modules/editor/lib/languageDefinitions";
 import { resolveDisplayName } from "@/modules/editor/lib/languageResolver";
-import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
+import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
 import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import {
   leafIds,
@@ -97,6 +97,7 @@ export function TabBar({
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
   const [showAllLanguages, setShowAllLanguages] = useState(false);
+  const icons = useIconProvider();
   const drag = useRef<{
     pointerId: number;
     startX: number;
@@ -387,11 +388,7 @@ export function TabBar({
                             }}
                             className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
                           >
-                            <img
-                              src={fileIconUrl(t.title)}
-                              className="size-3.5 shrink-0 object-contain"
-                              alt=""
-                            />
+                            <FileIconView icon={icons.file(t.title)} className="size-3.5" />
                             <div className="flex flex-1 flex-col">
                               <span>Auto Detect</span>
                               <span className="text-[10px] text-muted-foreground italic">
@@ -431,10 +428,9 @@ export function TabBar({
                                 }
                                 className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
                               >
-                                <img
-                                  src={fileIconUrl(`dummy.${lang.ext}`)}
-                                  className="size-3.5 shrink-0 object-contain"
-                                  alt=""
+                                <FileIconView
+                                  icon={icons.file(`dummy.${lang.ext}`)}
+                                  className="size-3.5"
                                 />
                                 <span className="flex-1">{lang.name}</span>
                                 {isSelected && (
@@ -637,24 +633,25 @@ function useTabAgentStatus(tab: Tab) {
 
 export function TabIcon({ tab }: { tab: Tab }) {
   const agentStatus = useTabAgentStatus(tab);
+  const icons = useIconProvider();
   if (tab.kind === "editor" || tab.kind === "markdown") {
-    const url =
+    const icon =
       tab.kind === "editor" && tab.overrideLanguage
-        ? fileIconUrl(`dummy.${tab.overrideLanguage}`)
-        : fileIconUrl(tab.title);
-    return url ? (
-      <img
-        src={url}
-        alt=""
-        className="size-3.5 shrink-0 object-contain"
-        onError={(e) => {
+        ? icons.file(`dummy.${tab.overrideLanguage}`)
+        : icons.file(tab.title);
+    return (
+      <FileIconView
+        icon={icon}
+        className="size-3.5"
+        onImageError={(e) => {
           const img = e.currentTarget;
           if (img.dataset.fallback) return;
           img.dataset.fallback = "1";
-          img.src = fileIconUrl("dummy.txt");
+          const fallback = icons.file("dummy.txt");
+          if (fallback.kind === "image") img.src = fallback.url;
         }}
       />
-    ) : null;
+    );
   }
   if (tab.kind === "preview") {
     return (

@@ -5,7 +5,7 @@ import { memo } from "react";
 import { InlineInput } from "./InlineInput";
 import { explorerGitTextClass } from "./lib/gitStatusColor";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
-import { fileIconUrl, folderIconUrl } from "./lib/iconResolver";
+import { FileIconView, useIconProvider } from "./lib/iconProvider";
 
 export type RowActions = {
   toggle: (path: string) => void;
@@ -49,7 +49,8 @@ function EntryRowImpl(props: EntryRowProps) {
     gitignored = false,
   } = props;
 
-  const iconUrl = isDir ? folderIconUrl(name, isExpanded) : fileIconUrl(name);
+  const icons = useIconProvider();
+  const icon = isDir ? icons.folder(name, isExpanded) : icons.file(name);
   const paddingLeft = 6 + depth * 12;
 
   if (isRenaming) {
@@ -59,11 +60,7 @@ function EntryRowImpl(props: EntryRowProps) {
         style={{ paddingLeft }}
       >
         <span className="size-3.5 shrink-0" />
-        {iconUrl ? (
-          <img src={iconUrl} alt="" className="size-4 shrink-0" />
-        ) : (
-          <span className="size-4 shrink-0" />
-        )}
+        <FileIconView icon={icon} className="size-4" />
         <InlineInput
           initial={name}
           onCommit={actions.commitRename}
@@ -107,11 +104,7 @@ function EntryRowImpl(props: EntryRowProps) {
           />
         ) : null}
       </span>
-      {iconUrl ? (
-        <img src={iconUrl} alt="" className="size-4 shrink-0" />
-      ) : (
-        <span className="size-4 shrink-0" />
-      )}
+      <FileIconView icon={icon} className="size-4" />
       <span
         className={cn(
           "min-w-0 flex-1 truncate",
@@ -142,18 +135,16 @@ export function PendingRow({
   onCommit,
   onCancel,
 }: PendingRowProps) {
+  const icons = useIconProvider();
   return (
     <div
       className="flex h-6 w-full min-w-0 items-center gap-2 px-1.5 text-[13px]"
       style={{ paddingLeft: 6 + depth * 12 }}
     >
       <span className="size-3.5 shrink-0" />
-      <img
-        src={
-          kind === "dir" ? folderIconUrl("", false) : fileIconUrl("untitled")
-        }
-        alt=""
-        className="size-4 shrink-0 opacity-70"
+      <FileIconView
+        icon={kind === "dir" ? icons.folder("", false) : icons.file("untitled")}
+        className="size-4 opacity-70"
       />
       <InlineInput
         initial=""

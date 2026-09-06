@@ -1,4 +1,5 @@
 import catppuccinIcons from "@iconify-json/catppuccin/icons.json";
+import type { IconProvider } from "./iconProvider";
 import { EXT_TO_LANGUAGE_ID } from "./constants";
 import * as fileIconsMod from "./fileIcons";
 import * as folderIconsMod from "./folderIcons";
@@ -64,7 +65,7 @@ function extOf(name: string): string {
   return lower.slice(dot + 1);
 }
 
-export function fileIconUrl(name: string): string {
+function fileIconUrl(name: string): string {
   const lower = name.toLowerCase();
 
   const byName = catFileNames[lower];
@@ -96,7 +97,7 @@ export function fileIconUrl(name: string): string {
   return buildDataUrl(DEFAULT_FILE) ?? "";
 }
 
-export function folderIconUrl(name: string, expanded: boolean): string {
+function folderIconUrl(name: string, expanded: boolean): string {
   const lower = name.toLowerCase();
 
   const mapped = catFolderNames[lower];
@@ -109,3 +110,14 @@ export function folderIconUrl(name: string, expanded: boolean): string {
 
   return buildDataUrl(expanded ? DEFAULT_FOLDER_OPEN : DEFAULT_FOLDER) ?? "";
 }
+
+export const catppuccinProvider: IconProvider = {
+  file(name) {
+    const url = fileIconUrl(name);
+    return url ? { kind: "image", url } : { kind: "none" };
+  },
+  folder(name, open) {
+    const url = folderIconUrl(name, open);
+    return url ? { kind: "image", url } : { kind: "none" };
+  },
+};

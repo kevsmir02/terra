@@ -262,6 +262,15 @@ html[data-chrome="borderless"] .terra-bg-surface {
   zoom: calc(1 / var(--app-zoom));
 }
 
+/* Nerd Font file glyph: one cell wide, centred, coloured by the row. */
+.terra-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 12px;
+}
+
 /* Custom window chrome (Linux/Windows): the OS gives us a transparent
  * borderless window, and we paint the rounded corners + border + shadow
  * ourselves so the app doesn't look naked on GNOME/KDE/Hyprland. */

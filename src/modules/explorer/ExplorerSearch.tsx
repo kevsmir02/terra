@@ -22,7 +22,7 @@ import {
   useState,
 } from "react";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { fileIconUrl } from "./lib/iconResolver";
+import { FileIconView, useIconProvider } from "./lib/iconProvider";
 import { copyToClipboard, revealInFinder } from "./lib/contextActions";
 import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { cn } from "@/lib/utils";
@@ -67,6 +67,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
   ref,
 ) {
   const showHidden = usePreferencesStore((s) => s.showHidden);
+  const icons = useIconProvider();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -229,7 +230,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
               </div>
             ) : (
               results.map((hit, index) => {
-                const url = hit.is_dir ? null : fileIconUrl(hit.name);
+                const icon = hit.is_dir ? null : icons.file(hit.name);
                 const isSelected = index === selectedIndex;
                 return (
                   <ContextMenu key={hit.path}>
@@ -249,8 +250,8 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                         )}
                         title={hit.path}
                       >
-                        {url ? (
-                          <img src={url} alt="" className="size-3.5 shrink-0" />
+                        {icon ? (
+                          <FileIconView icon={icon} className="size-3.5" />
                         ) : (
                           <HugeiconsIcon
                             icon={Folder01Icon}
