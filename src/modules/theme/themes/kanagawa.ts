@@ -28,7 +28,6 @@ export const kanagawa: Theme = {
   id: "kanagawa",
   name: "Kanagawa",
   description: "Inky dark inspired by Hokusai; warm Lotus light.",
-  editorTheme: { dark: "kanagawa", light: "kanagawa-lotus" },
   variants: {
     dark: {
       colors: {
@@ -52,14 +51,6 @@ export const kanagawa: Theme = {
         ring: "#7e9cd8",
         radius: "0.5rem",
         borderStyle: "solid",
-        sidebar: "#16161d",
-        sidebarForeground: "#dcd7ba",
-        sidebarPrimary: "#7e9cd8",
-        sidebarPrimaryForeground: "#1f1f28",
-        sidebarAccent: "#2a2a37",
-        sidebarAccentForeground: "#dcd7ba",
-        sidebarBorder: "#38384a",
-        sidebarRing: "#7e9cd8",
       },
       emphasis: {
         faint: "12%",
@@ -116,14 +107,6 @@ export const kanagawa: Theme = {
         ring: "#4d699b",
         radius: "0.5rem",
         borderStyle: "solid",
-        sidebar: "#e5ddb0",
-        sidebarForeground: "#545464",
-        sidebarPrimary: "#4d699b",
-        sidebarPrimaryForeground: "#f2ecbc",
-        sidebarAccent: "#dcd5ac",
-        sidebarAccentForeground: "#545464",
-        sidebarBorder: "#c5bd90",
-        sidebarRing: "#4d699b",
       },
       emphasis: {
         faint: "12%",

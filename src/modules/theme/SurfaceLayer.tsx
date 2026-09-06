@@ -5,6 +5,8 @@ import {
 import { BG_OPACITY_RENDER_FACTOR } from "@/modules/settings/store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { Theme, ThemeMode } from "./types";
+import { wallpaperAllowed } from "./wallpaper";
 
 // One below the max 32-bit z-index, so the wallpaper wash sits above all
 // normal UI. Surfaces that must stay pixel-accurate (e.g. the web preview
@@ -13,14 +15,14 @@ export const OVERLAY_Z = 2147483646;
 const RESIZE_IDLE_MS = 280;
 const FADE_IN_MS = 200;
 
-export function SurfaceLayer() {
+export function SurfaceLayer({ theme, mode }: { theme: Theme; mode: ThemeMode }) {
   const [fastPath] = useState(readBgFastPath);
   const storeActive = usePreferencesStore(
     (s) => s.backgroundKind === "image" && !!s.backgroundImageId,
   );
   const hydrated = usePreferencesStore((s) => s.hydrated);
   const active = hydrated ? storeActive : fastPath.active;
-  if (!active) return null;
+  if (!wallpaperAllowed(theme, mode, { active })) return null;
   return <BackgroundImage fastImageId={fastPath.imageId} />;
 }
 

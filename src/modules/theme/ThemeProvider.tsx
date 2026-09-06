@@ -15,14 +15,10 @@ import {
   type ThemePref,
 } from "@/modules/settings/store";
 import { applyTheme } from "./applyTheme";
-import {
-  listCustomThemes,
-  onCustomThemesChange,
-} from "./customThemes";
-import { loadFonts } from "./fonts";
+import { resolveVariant } from "./resolveVariant";
 import { SurfaceLayer } from "./SurfaceLayer";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
-import type { Theme } from "./types";
+import type { Theme, ThemeVariant } from "./types";
 
 export type { Theme };
 export type ThemeModePref = ThemePref;
@@ -37,7 +33,7 @@ type ThemeProviderState = {
   resolvedMode: "dark" | "light";
   themeId: string;
   activeTheme: Theme;
-  customThemes: Theme[];
+  activeVariant: ThemeVariant;
   setMode: (mode: ThemePref) => void;
   setThemeId: (id: string) => void;
   /** Apply a theme transiently without persisting; null reverts to committed. */
@@ -68,15 +64,14 @@ function writeFastThemeId(id: string): void {
   try { window.localStorage.setItem(FAST_PATH_THEME_ID, id); } catch { /* ignore */ }
 }
 
-function resolveTheme(id: string, custom: Theme[]): Theme {
-  return custom.find((t) => t.id === id) ?? getBuiltinTheme(id) ?? getDefaultTheme();
+function resolveTheme(id: string): Theme {
+  return getBuiltinTheme(id) ?? getDefaultTheme();
 }
 
 export function ThemeProvider({ children, defaultMode = "system" }: ThemeProviderProps) {
   const [mode, setModeState] = useState<ThemePref>(() => readFastMode(defaultMode));
   const [themeId, setThemeIdState] = useState<string>(() => readFastThemeId());
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [customThemes, setCustomThemes] = useState<Theme[]>([]);
   const [systemDark, setSystemDark] = useState<boolean>(() =>
     typeof window === "undefined"
       ? true
@@ -108,18 +103,6 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, []);
 
   useEffect(() => {
-    let alive = true;
-    void listCustomThemes().then((list) => { if (alive) setCustomThemes(list); });
-    const unlisten = onCustomThemesChange(() => {
-      void listCustomThemes().then((list) => setCustomThemes(list));
-    });
-    return () => {
-      alive = false;
-      void unlisten.then((fn) => fn());
-    };
-  }, []);
-
-  useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
     mq.addEventListener("change", onChange);
@@ -136,16 +119,12 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   }, [resolvedMode]);
 
   const effectiveId = previewId ?? themeId;
-  const activeTheme = useMemo(
-    () => resolveTheme(effectiveId, customThemes),
-    [effectiveId, customThemes],
+  const activeTheme = useMemo(() => resolveTheme(effectiveId), [effectiveId]);
+  const activeVariant = useMemo<ThemeVariant>(
+    () => resolveVariant(activeTheme, resolvedMode)?.variant ?? {},
+    [activeTheme, resolvedMode],
   );
   useEffect(() => {
-    const fonts =
-      activeTheme.variants[resolvedMode]?.type?.fonts ??
-      activeTheme.variants.dark?.type?.fonts ??
-      activeTheme.variants.light?.type?.fonts;
-    if (fonts?.length) void loadFonts(fonts);
     applyTheme(activeTheme, resolvedMode);
   }, [activeTheme, resolvedMode]);
 
@@ -172,7 +151,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId,
       activeTheme,
-      customThemes,
+      activeVariant,
       setMode,
       setThemeId,
       previewThemeId,
@@ -182,7 +161,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId,
       activeTheme,
-      customThemes,
+      activeVariant,
       setMode,
       setThemeId,
       previewThemeId,
@@ -191,7 +170,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
 
   return (
     <ThemeProviderContext.Provider value={value}>
-      <SurfaceLayer />
+      <SurfaceLayer theme={activeTheme} mode={resolvedMode} />
       {children}
     </ThemeProviderContext.Provider>
   );

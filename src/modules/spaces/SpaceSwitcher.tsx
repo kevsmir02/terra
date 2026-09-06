@@ -596,7 +596,7 @@ function DropLine({ edge }: { edge: Edge }) {
     <span
       aria-hidden
       className={cn(
-        "pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full bg-primary",
+        "pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-pill bg-primary",
         edge === "top" ? "top-0 -translate-y-1/2" : "bottom-0 translate-y-1/2",
       )}
     />
@@ -619,7 +619,7 @@ function OverlayChip({
       ) : (
         <span
           aria-hidden
-          className="size-2 shrink-0 rounded-full"
+          className="size-2 shrink-0 rounded-circle"
           style={{ backgroundColor: color }}
         />
       )}

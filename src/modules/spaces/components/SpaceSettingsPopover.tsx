@@ -86,7 +86,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
+            <span className="text-[10px] terra-label text-muted-foreground/(--emph-strong)">
               Name
             </span>
             <input
@@ -107,7 +107,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
+            <span className="text-[10px] terra-label text-muted-foreground/(--emph-strong)">
               Root directory
             </span>
             <input
@@ -129,7 +129,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </label>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
+            <span className="text-[10px] terra-label text-muted-foreground/(--emph-strong)">
               Accent color
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -138,7 +138,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                 aria-label="Theme primary"
                 onClick={() => setColor(space.id, undefined)}
                 className={cn(
-                  "size-5 rounded-full ring-1 ring-inset transition",
+                  "size-5 rounded-circle ring-1 ring-inset transition",
                   space.color == null
                     ? "ring-foreground/(--emph-bold)"
                     : "ring-border hover:ring-foreground/(--emph-soft)",
@@ -152,7 +152,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                   aria-label={`Accent ${i + 1}`}
                   onClick={() => setColor(space.id, i)}
                   className={cn(
-                    "size-5 rounded-full ring-1 ring-inset transition",
+                    "size-5 rounded-circle ring-1 ring-inset transition",
                     space.color === i
                       ? "ring-foreground/(--emph-bold)"
                       : "ring-transparent hover:ring-foreground/(--emph-soft)",
@@ -164,7 +164,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground/(--emph-strong)">
+            <span className="text-[10px] terra-label text-muted-foreground/(--emph-strong)">
               Startup commands
             </span>
             <div className="flex flex-col gap-1">

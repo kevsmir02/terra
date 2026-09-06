@@ -22,107 +22,27 @@ import {
   setBackgroundOpacity,
   setEditorTheme,
 } from "@/modules/settings/store";
-import { useTheme } from "@/modules/theme";
+import { listBuiltinThemes, useTheme } from "@/modules/theme";
 import {
   deleteBgImage,
   importBgImageFromFile,
 } from "@/modules/theme/bgImageStore";
-import {
-  deleteCustomTheme,
-  saveCustomTheme,
-  listCustomThemesWithDiagnostics,
-  onCustomThemesChange,
-} from "@/modules/theme/customThemes";
-import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
-import { listBuiltinThemes } from "@/modules/theme/themes";
-import { DEFAULT_THEME_ID } from "@/modules/theme/types";
-import { validateTheme } from "@/modules/theme/validateTheme";
-import type { Diagnostic } from "@/modules/theme/diagnostics";
-import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function ThemesSection() {
-  const { themeId, setThemeId, resolvedMode, customThemes } = useTheme();
-  const builtinThemes = listBuiltinThemes();
-  const themes = useMemo(
-    () => [...builtinThemes, ...customThemes],
-    [builtinThemes, customThemes],
-  );
-  const customIds = useMemo(
-    () => new Set(customThemes.map((t) => t.id)),
-    [customThemes],
-  );
+  const { themeId, setThemeId, resolvedMode, activeVariant } = useTheme();
+  const themes = listBuiltinThemes();
+  const wallpaperDeclined = activeVariant.effects?.wallpaper === false;
 
-  const [importMessage, setImportMessage] = useState<{ type: "error" | "warning"; text: string } | null>(null);
   const [bgError, setBgError] = useState<string | null>(null);
-  const [rejectedThemes, setRejectedThemes] = useState<{ id: string; diagnostics: Diagnostic[] }[]>([]);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
-    const promise = onCustomThemesChange(() => {
-      void listCustomThemesWithDiagnostics().then((res) => setRejectedThemes(res.rejected));
-    });
-    return () => {
-      void promise.then((unsub) => unsub());
-    };
-  }, []);
-
-  const onCreateTheme = () => {
-    void emitThemeEdit({ action: "create" });
-    void getCurrentWindow().hide();
-  };
-
-  const onEditTheme = (id: string) => {
-    void emitThemeEdit({ action: "edit", id });
-    void getCurrentWindow().hide();
-  };
 
   const editorThemePref = usePreferencesStore((s) => s.editorTheme);
   const backgroundKind = usePreferencesStore((s) => s.backgroundKind);
   const backgroundImageId = usePreferencesStore((s) => s.backgroundImageId);
   const backgroundOpacity = usePreferencesStore((s) => s.backgroundOpacity);
   const backgroundBlur = usePreferencesStore((s) => s.backgroundBlur);
-
-  const handleThemeFiles = async (files: FileList | null) => {
-    setImportMessage(null);
-    if (!files || files.length === 0) return;
-    for (const file of Array.from(files)) {
-      try {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        const result = validateTheme(parsed);
-        if (!result.ok) {
-          setImportMessage({ type: "error", text: `${file.name}: ${result.diagnostics.map(d => d.message).join(", ")}` });
-          return;
-        }
-        await saveCustomTheme(result.theme);
-        setThemeId(result.theme.id);
-        if (result.diagnostics.length > 0) {
-          setImportMessage({ type: "warning", text: `${file.name} imported with warnings: ${result.diagnostics.map(d => d.message).join(", ")}` });
-        }
-      } catch (e) {
-        setImportMessage({
-          type: "error",
-          text: `${file.name}: ${e instanceof Error ? e.message : "failed to read"}`,
-        });
-        return;
-      }
-    }
-  };
-
-  const onPickThemeFile = () => fileInputRef.current?.click();
-
-  const onRemoveCustomTheme = async (id: string) => {
-    if (themeId === id) setThemeId(DEFAULT_THEME_ID);
-    await deleteCustomTheme(id);
-    void deleteThemeFile(id);
-  };
 
   const onPickBgFile = () => bgInputRef.current?.click();
 
@@ -157,66 +77,11 @@ export function ThemesSection() {
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Themes"
-        description="Theme, background image, and customization."
+        description="Theme, editor colours, and background image."
       />
 
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: drop target for files; the adjacent file picker is the keyboard path */}
-      <div
-        role="presentation"
-        className="flex flex-col gap-2"
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "copy";
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          void handleThemeFiles(e.dataTransfer.files);
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <Label>Theme</Label>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1.5 px-2 text-[11px]"
-              onClick={onCreateTheme}
-            >
-              <HugeiconsIcon icon={PlusSignIcon} size={11} strokeWidth={2} />
-              Create
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-[11px]"
-              onClick={onPickThemeFile}
-            >
-              Import .terra-theme
-            </Button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".terra-theme,.terax-theme,.json,application/json"
-            className="hidden"
-            onChange={(e) => {
-              void handleThemeFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </div>
-        {importMessage ? (
-          <div
-            className={cn(
-              "rounded-md border px-2.5 py-1.5 text-[11.5px]",
-              importMessage.type === "error"
-                ? "border-destructive/(--emph-soft) bg-destructive/(--emph-faint) text-destructive"
-                : "border-orange-500/40 bg-orange-500/10 text-orange-500",
-            )}
-          >
-            {importMessage.text}
-          </div>
-        ) : null}
+      <div className="flex flex-col gap-2">
+        <Label>Theme</Label>
         <div className="grid grid-cols-2 gap-2">
           {themes.map((t) => {
             const v =
@@ -227,7 +92,6 @@ export function ThemesSection() {
             const swatchAccent = c?.primary ?? c?.accent ?? "var(--accent)";
             const swatchMuted = c?.muted ?? "var(--muted)";
             const selected = themeId === t.id;
-            const isCustom = customIds.has(t.id);
             return (
               <button
                 key={t.id}
@@ -244,88 +108,22 @@ export function ThemesSection() {
                   className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/(--emph-soft)"
                   style={{ background: swatchBg }}
                 >
-                  <span
-                    className="h-5 w-2 rounded-sm"
-                    style={{ background: swatchAccent }}
-                  />
-                  <span
-                    className="h-5 w-2 rounded-sm"
-                    style={{ background: swatchFg, opacity: 0.7 }}
-                  />
-                  <span
-                    className="h-5 w-2 rounded-sm"
-                    style={{ background: swatchMuted }}
-                  />
+                  <span className="h-5 w-2 rounded-sm" style={{ background: swatchAccent }} />
+                  <span className="h-5 w-2 rounded-sm" style={{ background: swatchFg, opacity: 0.7 }} />
+                  <span className="h-5 w-2 rounded-sm" style={{ background: swatchMuted }} />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[12.5px] font-medium">
-                    {t.name}
-                  </span>
+                  <span className="truncate text-[12.5px] font-medium">{t.name}</span>
                   {t.description ? (
                     <span className="truncate text-[11px] text-muted-foreground">
                       {t.description}
                     </span>
                   ) : null}
                 </div>
-                {isCustom ? (
-                  <span className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                    {/* biome-ignore lint/a11y/useSemanticElements: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
-                    {/* biome-ignore lint/a11y/useFocusableInteractive: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
-                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
-                    <span
-                      role="button"
-                      aria-label={`Edit ${t.name}`}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditTheme(t.id);
-                      }}
-                    >
-                      <HugeiconsIcon
-                        icon={Edit02Icon}
-                        size={12}
-                        strokeWidth={1.75}
-                      />
-                    </span>
-                    {/* biome-ignore lint/a11y/useSemanticElements: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
-                    {/* biome-ignore lint/a11y/useFocusableInteractive: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
-                    {/* biome-ignore lint/a11y/useKeyWithClickEvents: nested interactive element is invalid DOM and breaks WebKit focus; the parent button owns keyboard activation */}
-                    <span
-                      role="button"
-                      aria-label={`Remove ${t.name}`}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onRemoveCustomTheme(t.id);
-                      }}
-                    >
-                      ×
-                    </span>
-                  </span>
-                ) : null}
               </button>
             );
           })}
         </div>
-        {rejectedThemes.length > 0 ? (
-          <div className="flex flex-col gap-2 pt-2">
-            <Label>Rejected Stored Themes</Label>
-            <div className="flex flex-col gap-2">
-              {rejectedThemes.map((rt, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: multiple rejected themes might have the same 'unknown' id
-                <div key={`${rt.id}-${idx}`} className="rounded-md border border-destructive/(--emph-soft) bg-destructive/(--emph-faint) px-2.5 py-1.5 text-[11.5px] text-destructive flex justify-between items-start gap-4">
-                  <div className="flex flex-col">
-                    <span className="font-semibold">{rt.id}</span>
-                    <span>{rt.diagnostics[0]?.message}</span>
-                  </div>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 hover:bg-destructive/(--emph-subtle) text-destructive" onClick={() => void onRemoveCustomTheme(rt.id)}>
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -420,12 +218,10 @@ export function ThemesSection() {
             {bgError}
           </div>
         ) : null}
-        {backgroundKind === "image" && backgroundImageId ? (
+        {backgroundKind === "image" && backgroundImageId && !wallpaperDeclined ? (
           <div className="flex flex-col gap-3 rounded-lg border border-border/(--emph-strong) p-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[11.5px] text-muted-foreground">
-                Opacity
-              </span>
+              <span className="text-[11.5px] text-muted-foreground">Opacity</span>
               <span className="tabular-nums text-[11px] text-muted-foreground">
                 {Math.round(backgroundOpacity * 100)}%
               </span>
@@ -451,6 +247,11 @@ export function ThemesSection() {
               onValueChange={(v) => void setBackgroundBlur(v[0] ?? 0)}
             />
           </div>
+        ) : wallpaperDeclined ? (
+          <p className="text-[11px] text-muted-foreground">
+            The active theme declines the wallpaper. Your image is kept and
+            shows again under a theme that accepts it.
+          </p>
         ) : (
           <p className="text-[11px] text-muted-foreground">
             Drop an image here or pick one. Stored locally; doesn't affect the

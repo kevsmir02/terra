@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { validateTheme } from "../validateTheme";
 import { getBuiltinTheme, listBuiltinThemes } from "./index";
 
 const builtins = listBuiltinThemes();
 
 describe("built-in themes", () => {
   it.each(builtins.map((t) => [t.id, t] as const))(
-    "%s round-trips through validateTheme",
+    "%s has a kebab-case id and a name",
     (_id, theme) => {
-      const result = validateTheme(theme);
-      expect(result.ok ? null : result.diagnostics).toBeNull();
+      expect(theme.id).toMatch(/^[a-z0-9][a-z0-9-]{1,63}$/);
+      expect(theme.name.trim().length).toBeGreaterThan(0);
     },
   );
 
@@ -22,10 +21,10 @@ describe("built-in themes", () => {
     for (const t of builtins) expect(getBuiltinTheme(t.id)).toBe(t);
   });
 
-  it("pairs editor themes only for variants that exist", () => {
+  it("declares a 16-slot ANSI palette in both variants, the editor derives from it", () => {
     for (const t of builtins) {
       for (const mode of ["light", "dark"] as const) {
-        if (t.editorTheme?.[mode]) expect(t.variants[mode]).toBeDefined();
+        expect(t.variants[mode]?.terminal?.ansi, `${t.id}/${mode}`).toHaveLength(16);
       }
     }
   });

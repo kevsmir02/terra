@@ -32,7 +32,6 @@ export const terraDefault: Theme = {
   id: "terra-default",
   name: "Terra Default",
   description: "The default Terra look - clean glass over neutral surfaces.",
-  editorTheme: { dark: "atomone", light: "atomone" },
   variants: {
     light: {
       colors: {
@@ -56,14 +55,6 @@ export const terraDefault: Theme = {
         ring: "oklch(0.723 0.014 214.4)",
         radius: "0.625rem",
         borderStyle: "solid",
-        sidebar: "oklch(0.987 0.002 197.1)",
-        sidebarForeground: "oklch(0.148 0.004 228.8)",
-        sidebarPrimary: "oklch(0.218 0.008 223.9)",
-        sidebarPrimaryForeground: "oklch(0.987 0.002 197.1)",
-        sidebarAccent: "oklch(0.963 0.002 197.1)",
-        sidebarAccentForeground: "oklch(0.218 0.008 223.9)",
-        sidebarBorder: "oklch(0.925 0.005 214.3)",
-        sidebarRing: "oklch(0.723 0.014 214.4)",
       },
       emphasis: {
         faint: "10%",
@@ -117,14 +108,6 @@ export const terraDefault: Theme = {
         ring: "oklch(0.56 0.021 213.5)",
         radius: "0.625rem",
         borderStyle: "solid",
-        sidebar: "oklch(0.218 0.008 223.9)",
-        sidebarForeground: "oklch(0.987 0.002 197.1)",
-        sidebarPrimary: "oklch(0.488 0.243 264.376)",
-        sidebarPrimaryForeground: "oklch(0.987 0.002 197.1)",
-        sidebarAccent: "oklch(0.275 0.011 216.9)",
-        sidebarAccentForeground: "oklch(0.987 0.002 197.1)",
-        sidebarBorder: "oklch(1 0 0 / 10%)",
-        sidebarRing: "oklch(0.56 0.021 213.5)",
       },
       emphasis: {
         faint: "10%",

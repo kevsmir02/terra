@@ -5,7 +5,7 @@ import { accentFor, spaceInitial } from "./lib/spaceColor";
 type Size = "sm" | "md";
 
 const SIZES: Record<Size, string> = {
-  sm: "size-5 rounded-[5px] text-[10px]",
+  sm: "size-5 rounded-sm text-[10px]",
   md: "size-7 rounded-md text-[12px]",
 };
 

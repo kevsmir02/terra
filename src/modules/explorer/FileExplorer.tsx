@@ -34,7 +34,7 @@ import {
   relativePath,
   revealInFinder,
 } from "./lib/contextActions";
-import { fileIconUrl, folderIconUrl } from "./lib/iconResolver";
+import { FileIconView, useIconProvider } from "./lib/iconProvider";
 import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { useExplorerDnd } from "./lib/useExplorerDnd";
 import { useExplorerFileDrop } from "./lib/useExplorerFileDrop";
@@ -199,6 +199,7 @@ export const FileExplorer = memo(
       gitDecorations ? gitStatus : null,
       gitDecorations,
     );
+    const icons = useIconProvider();
     const [selectedPath, setSelectedPath] = useState<string | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSearchActive, setIsSearchActive] = useState(false);
@@ -492,15 +493,12 @@ export const FileExplorer = memo(
       >
         <div className="terra-chrome flex h-8 shrink-0 items-center gap-1 border-b border-border/(--emph-strong) px-2">
           <span
-            className="terra-chrome-label flex flex-1 items-center truncate text-xs font-medium text-foreground/(--emph-bold)"
+            className="terra-label flex flex-1 items-center truncate text-xs font-medium text-foreground/(--emph-bold)"
             title={rootPath}
           >
-            <img
-              src={folderIconUrl(basename(rootPath), false)}
-              alt=""
-              height={15}
-              width={15}
-              className="mx-1.5"
+            <FileIconView
+              icon={icons.folder(basename(rootPath), false)}
+              className="mx-1.5 size-[15px]"
             />
             {basename(rootPath)}
           </span>
@@ -595,14 +593,13 @@ export const FileExplorer = memo(
                     style={{ paddingLeft: 6 }}
                   >
                     <span className="size-3.5 shrink-0" />
-                    <img
-                      src={
+                    <FileIconView
+                      icon={
                         pendingAtRoot.kind === "dir"
-                          ? folderIconUrl("", false)
-                          : fileIconUrl("untitled")
+                          ? icons.folder("", false)
+                          : icons.file("untitled")
                       }
-                      alt=""
-                      className="size-4 shrink-0 opacity-70"
+                      className="size-4 opacity-70"
                     />
                     <InlineInput
                       initial=""

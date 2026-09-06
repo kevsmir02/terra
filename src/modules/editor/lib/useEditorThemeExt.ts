@@ -8,12 +8,12 @@ import { EDITOR_THEME_EXT } from "./themes";
 /** Resolves the active CodeMirror theme extension, honoring the "auto" pairing. */
 export function useEditorThemeExt(): Extension {
   const pref = usePreferencesStore((s) => s.editorTheme);
-  const { themeId, customThemes, resolvedMode } = useTheme();
+  const { activeTheme, resolvedMode } = useTheme();
   return useMemo(() => {
-    const r = resolveEditorTheme(pref, themeId, customThemes, resolvedMode);
+    const r = resolveEditorTheme(pref, activeTheme, resolvedMode);
     if (r.kind === "derived") {
       return r.mode === "dark" ? derivedDark : derivedLight;
     }
     return EDITOR_THEME_EXT[r.id] ?? EDITOR_THEME_EXT.atomone;
-  }, [pref, themeId, customThemes, resolvedMode]);
+  }, [pref, activeTheme, resolvedMode]);
 }

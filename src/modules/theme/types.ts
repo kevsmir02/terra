@@ -1,5 +1,3 @@
-import type { FontId } from "./fonts";
-
 export type ThemeMode = "light" | "dark";
 
 export const BORDER_STYLES = [
@@ -31,14 +29,6 @@ export type ThemeColors = Partial<{
   border: string;
   input: string;
   ring: string;
-  sidebar: string;
-  sidebarForeground: string;
-  sidebarPrimary: string;
-  sidebarPrimaryForeground: string;
-  sidebarAccent: string;
-  sidebarAccentForeground: string;
-  sidebarBorder: string;
-  sidebarRing: string;
   radius: string;
   borderStyle: BorderStyle;
 }>;
@@ -49,9 +39,6 @@ export type TerminalPalette = Partial<{
   cursor: string;
   cursorAccent: string;
   selection: string;
-  fontFamily: string;
-  fontWeight: string;
-  fontSize: number;
   ansi: readonly [
     string, string, string, string, string, string, string, string,
     string, string, string, string, string, string, string, string,
@@ -69,24 +56,37 @@ export type ThemeShape = Partial<{
   chromeWidth: string;
   panelWidth: string;
   slotWidth: string;
-  controlWidth: string;
   bevelWidth: string;
   bevelOuter: string;
   bevelMid: string;
   bevelInner: string;
-  liftColor: string;
-  liftDepth: string;
   spacing: string;
+  pillRadius: string;
 }>;
 
 export type ThemeTypography = Partial<{
-  sans: string;
-  mono: string;
-  display: string;
   chromeTracking: string;
   chromeTransform: TextTransform;
-  fonts?: readonly FontId[];
 }>;
+
+export const BLUR_MODES = ["on", "off"] as const;
+
+export type BlurMode = (typeof BLUR_MODES)[number];
+
+/**
+ * Ambient effects. `shadow` is the tint every shadow utility uses, so
+ * `transparent` flattens the app; `wallpaper: false` declines the user's
+ * background image while the theme is active.
+ */
+export type ThemeEffects = Partial<{
+  shadow: string;
+  blur: BlurMode;
+  wallpaper: boolean;
+}>;
+
+export const ICON_SETS = ["catppuccin", "nerd"] as const;
+
+export type IconSet = (typeof ICON_SETS)[number];
 
 export const SYNTAX_ROLES = [
   "comment", "keyword", "string", "number", "constant", "func",
@@ -128,6 +128,8 @@ export type ThemeVariant = {
   terminal?: TerminalPalette;
   shape?: ThemeShape;
   type?: ThemeTypography;
+  effects?: ThemeEffects;
+  icons?: IconSet;
   syntax?: Partial<Record<SyntaxRole, string>>;
   status?: Partial<Record<StatusRole, string>>;
   emphasis?: ThemeEmphasis;
@@ -142,10 +144,6 @@ export type Theme = {
   variants: {
     light?: ThemeVariant;
     dark?: ThemeVariant;
-  };
-  editorTheme?: {
-    light?: string;
-    dark?: string;
   };
 };
 

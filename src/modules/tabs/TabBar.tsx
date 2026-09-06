@@ -21,7 +21,7 @@ import {
   EXPOSED_LANGUAGES,
 } from "@/modules/editor/lib/languageDefinitions";
 import { resolveDisplayName } from "@/modules/editor/lib/languageResolver";
-import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
+import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
 import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import {
   leafIds,
@@ -97,6 +97,7 @@ export function TabBar({
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
   const [showAllLanguages, setShowAllLanguages] = useState(false);
+  const icons = useIconProvider();
   const drag = useRef<{
     pointerId: number;
     startX: number;
@@ -366,7 +367,7 @@ export function TabBar({
                             role="button"
                             tabIndex={-1}
                             data-no-drag
-                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-[0_0_4px_var(--color-popover-foreground)]"
+                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-sm"
                           >
                             <TabIcon tab={t} />
                           </span>
@@ -387,11 +388,7 @@ export function TabBar({
                             }}
                             className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
                           >
-                            <img
-                              src={fileIconUrl(t.title)}
-                              className="size-3.5 shrink-0 object-contain"
-                              alt=""
-                            />
+                            <FileIconView icon={icons.file(t.title)} className="size-3.5" />
                             <div className="flex flex-1 flex-col">
                               <span>Auto Detect</span>
                               <span className="text-[10px] text-muted-foreground italic">
@@ -431,10 +428,9 @@ export function TabBar({
                                 }
                                 className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
                               >
-                                <img
-                                  src={fileIconUrl(`dummy.${lang.ext}`)}
-                                  className="size-3.5 shrink-0 object-contain"
-                                  alt=""
+                                <FileIconView
+                                  icon={icons.file(`dummy.${lang.ext}`)}
+                                  className="size-3.5"
                                 />
                                 <span className="flex-1">{lang.name}</span>
                                 {isSelected && (
@@ -453,14 +449,14 @@ export function TabBar({
                     )}
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
-                    <span className={cn("truncate", isPreview && "italic")}>
+                    <span className={cn("terra-label truncate", isPreview && "italic")}>
                       {labelFor(t)}
                     </span>
                     {t.kind === "editor" && t.dirty ? (
                       <span
                         role="img"
                         aria-label="Unsaved changes"
-                        className="size-1.5 shrink-0 rounded-full bg-foreground/(--emph-strong)"
+                        className="size-1.5 shrink-0 rounded-circle bg-foreground/(--emph-strong)"
                       />
                     ) : null}
                   </span>
@@ -616,7 +612,7 @@ function DropIndicator() {
   return (
     <span
       aria-hidden
-      className="my-0.5 w-0.5 shrink-0 self-stretch rounded-full bg-primary"
+      className="my-0.5 w-0.5 shrink-0 self-stretch rounded-pill bg-primary"
     />
   );
 }
@@ -637,24 +633,25 @@ function useTabAgentStatus(tab: Tab) {
 
 export function TabIcon({ tab }: { tab: Tab }) {
   const agentStatus = useTabAgentStatus(tab);
+  const icons = useIconProvider();
   if (tab.kind === "editor" || tab.kind === "markdown") {
-    const url =
+    const icon =
       tab.kind === "editor" && tab.overrideLanguage
-        ? fileIconUrl(`dummy.${tab.overrideLanguage}`)
-        : fileIconUrl(tab.title);
-    return url ? (
-      <img
-        src={url}
-        alt=""
-        className="size-3.5 shrink-0 object-contain"
-        onError={(e) => {
+        ? icons.file(`dummy.${tab.overrideLanguage}`)
+        : icons.file(tab.title);
+    return (
+      <FileIconView
+        icon={icon}
+        className="size-3.5"
+        onImageError={(e) => {
           const img = e.currentTarget;
           if (img.dataset.fallback) return;
           img.dataset.fallback = "1";
-          img.src = fileIconUrl("dummy.txt");
+          const fallback = icons.file("dummy.txt");
+          if (fallback.kind === "image") img.src = fallback.url;
         }}
       />
-    ) : null;
+    );
   }
   if (tab.kind === "preview") {
     return (

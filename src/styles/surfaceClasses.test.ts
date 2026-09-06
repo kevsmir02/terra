@@ -19,7 +19,6 @@ describe("surface classes", () => {
     [".terra-chrome", "--chrome-border-width"],
     [".terra-panel", "--panel-border-width"],
     [".terra-slot", "--slot-border-width"],
-    [".terra-control", "--control-border-width"],
   ])("%s scopes --surface-border-width from %s", (selector, token) => {
     const b = block(selector);
     expect(b).toContain(`--surface-border-width: var(${token}, 1px)`);
@@ -46,17 +45,24 @@ describe("surface classes", () => {
       "--bevel-outer: transparent",
       "--bevel-mid: transparent",
       "--bevel-inner: transparent",
-      "--lift-color: transparent",
-      "--lift-depth: 0px",
     ]) {
       expect(CSS).toContain(decl);
     }
   });
 
   it("gives chrome labels inert typography defaults", () => {
-    const b = block(".terra-chrome-label");
-    expect(b).toContain("var(--chrome-tracking, inherit)");
-    expect(b).toContain("var(--chrome-transform, none)");
-    expect(b).toContain("var(--ui-font-display, inherit)");
+    const b = block("@utility terra-label");
+    expect(b).toContain("letter-spacing: var(--chrome-tracking, inherit)");
+    expect(b).toContain("text-transform: var(--chrome-transform, none)");
+    expect(CSS).not.toContain(".terra-chrome-label");
+  });
+
+  it("draws the window frame in the theme's border style", () => {
+    const i = CSS.indexOf('html[data-chrome="borderless"] #root,');
+    expect(i).toBeGreaterThan(-1);
+    const rule = CSS.slice(i, CSS.indexOf("}", i));
+    expect(rule).toContain(
+      "border: var(--frame-border-width, 1px) var(--border-style, solid) var(--border)",
+    );
   });
 });

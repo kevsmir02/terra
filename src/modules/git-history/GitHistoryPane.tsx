@@ -12,7 +12,7 @@ import {
   type GitCommitFileChange,
   type GitLogEntry,
 } from "@/lib/native";
-import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
+import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
 import {
   Copy01Icon,
   File02Icon,
@@ -537,7 +537,7 @@ export function GitHistoryPane({
         ) : (
           <>
             <div
-              className="grid shrink-0 items-center gap-3 border-b border-border/(--emph-soft) bg-card/(--emph-medium) pr-3 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/(--emph-strong)"
+              className="grid shrink-0 items-center gap-3 border-b border-border/(--emph-soft) bg-card/(--emph-medium) pr-3 text-[9.5px] font-semibold terra-label text-muted-foreground/(--emph-strong)"
               style={{
                 height: TABLE_HEADER_HEIGHT,
                 gridTemplateColumns: gridTemplate,
@@ -750,12 +750,12 @@ const CommitRow = memo(function CommitRow({
         title={commit.authorEmail || commit.author}
       >
         <span
-          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-[3px] font-mono text-[8.5px] font-bold uppercase tabular-nums text-background"
+          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-xs font-mono text-[8.5px] font-bold tabular-nums text-background"
           style={{
             backgroundColor: authorTint(commit.authorEmail || commit.author),
           }}
         >
-          {initials}
+          {initials.toUpperCase()}
         </span>
         <span className="min-w-0 truncate">
           {commit.author ? highlight(commit.author, query) : "Unknown"}
@@ -782,7 +782,7 @@ const CommitRow = memo(function CommitRow({
         {commit.filesChanged > 0 && totalStat > 0 ? (
           <span
             aria-hidden
-            className="size-[3px] shrink-0 rounded-full bg-muted-foreground/(--emph-subtle)"
+            className="size-[3px] shrink-0 rounded-circle bg-muted-foreground/(--emph-subtle)"
           />
         ) : null}
         {totalStat > 0 ? (
@@ -954,7 +954,7 @@ function CommitFiles({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/(--emph-bold)">
+      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[10px] font-semibold terra-label text-muted-foreground/(--emph-bold)">
         <span>Files</span>
         <span className="rounded-sm bg-muted/(--emph-medium) px-1 py-px text-[9.5px] tabular-nums text-muted-foreground/(--emph-bold) normal-case tracking-normal">
           {filesEntry.files.length}
@@ -985,18 +985,14 @@ const FileRow = memo(function FileRow({
 }) {
   const fileName = basename(file.path);
   const dir = dirname(file.path);
-  const iconUrl = fileIconUrl(fileName);
+  const icons = useIconProvider();
   return (
     <button
       type="button"
       onClick={onOpen}
       className="group flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-accent/(--emph-soft)"
     >
-      {iconUrl ? (
-        <img src={iconUrl} alt="" className="size-3.5 shrink-0" />
-      ) : (
-        <span className="size-3.5 shrink-0" />
-      )}
+      <FileIconView icon={icons.file(fileName)} className="size-3.5" />
       <div className="flex min-w-0 flex-1 items-baseline gap-1.5 leading-none">
         <span className="truncate text-[11.5px] font-medium leading-tight">
           {fileName}

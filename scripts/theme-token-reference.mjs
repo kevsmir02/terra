@@ -1,5 +1,5 @@
 export function renderTokenReference(tokens) {
-  const groups = ["colors", "shape", "type", "terminal", "syntax", "status", "emphasis"];
+  const groups = ["colors", "shape", "type", "effects", "terminal", "syntax", "status", "emphasis"];
   let out = "<!-- token-reference:start -->\n";
   
   for (const group of groups) {

@@ -1,5 +1,5 @@
 /**
- * Extension → VS Code language id, used by `iconResolver` as a fallback when
+ * Extension → VS Code language id, used by `catppuccinIcons` as a fallback when
  * material-icon-theme's `fileExtensions` map lacks an entry. material-icon-theme
  * relies on VS Code's extension→languageId registry for many common files
  * (ts, js, html, css, sh, sql…). Without this layer, plain `foo.ts` would

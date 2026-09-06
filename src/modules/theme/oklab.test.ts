@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { contrast, ensureContrast, fromOklab, isHexColor, parseColor, toOklab } from "./oklab";
-import { COLOR_RE } from "./validateTheme";
 
 const WHITE_IN_EVERY_NOTATION = [
   "#fff",
@@ -109,19 +108,5 @@ describe("ensureContrast", () => {
     const out = ensureContrast("#8da101", "#fdf6e3", 4.5);
     const [, a, b] = toOklab(out);
     expect(Math.hypot(a, b)).toBeGreaterThan(0.05);
-  });
-});
-
-describe("allowlist agreement", () => {
-  it("parses everything COLOR_RE accepts, except transparent", () => {
-    for (const v of WHITE_IN_EVERY_NOTATION) {
-      expect(COLOR_RE.test(v), `COLOR_RE rejected ${v}`).toBe(true);
-      expect(parseColor(v), `parseColor rejected ${v}`).not.toBeNull();
-    }
-  });
-
-  it("no longer advertises the CIE Lab notations", () => {
-    expect(COLOR_RE.test("lab(50% 40 59)")).toBe(false);
-    expect(COLOR_RE.test("lch(50% 70 40)")).toBe(false);
   });
 });

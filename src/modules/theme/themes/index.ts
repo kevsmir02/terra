@@ -1,36 +1,20 @@
 import { DEFAULT_THEME_ID, type Theme } from "../types";
-import { gameboy } from "./gameboy";
 import { gruvbox } from "./gruvbox";
 import { kanagawa } from "./kanagawa";
 import { kanagawaDragon } from "./kanagawa-dragon";
 import { nothing } from "./nothing";
 import { rebar } from "./rebar";
-import { stardew } from "./stardew";
 import { terraDefault } from "./terra-default";
-import { windowsXp } from "./windows-xp";
 
-export {
-  terraDefault,
-  stardew,
-  gameboy,
-  kanagawa,
-  kanagawaDragon,
-  gruvbox,
-  nothing,
-  rebar,
-  windowsXp,
-};
+export { terraDefault, kanagawa, kanagawaDragon, gruvbox, nothing, rebar };
 
 export const BUILTIN: readonly Theme[] = [
   terraDefault,
   nothing,
   rebar,
-  stardew,
-  gameboy,
   kanagawa,
   kanagawaDragon,
   gruvbox,
-  windowsXp,
 ];
 
 const BY_ID = new Map<string, Theme>(BUILTIN.map((t) => [t.id, t]));

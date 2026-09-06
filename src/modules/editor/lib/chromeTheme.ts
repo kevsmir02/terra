@@ -1,4 +1,4 @@
-import { detectMonoFontFamily } from "@/lib/fonts";
+import { APP_FONT_FAMILY } from "@/lib/fonts";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
@@ -168,14 +168,14 @@ const chrome = EditorView.theme({
     },
     "& ul, & ol": { margin: "4px 0", paddingLeft: "18px" },
     "& code": {
-      fontFamily: detectMonoFontFamily(),
+      fontFamily: APP_FONT_FAMILY,
       fontSize: "11px",
       backgroundColor: "color-mix(in srgb, var(--muted) 70%, transparent)",
       borderRadius: "4px",
       padding: "1px 4px",
     },
     "& pre": {
-      fontFamily: detectMonoFontFamily(),
+      fontFamily: APP_FONT_FAMILY,
       fontSize: "11px",
       backgroundColor: "color-mix(in srgb, var(--muted) 70%, transparent)",
       border: "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
@@ -194,7 +194,7 @@ const chrome = EditorView.theme({
   ".cm-tooltip.cm-tooltip-autocomplete": {
     padding: "4px",
     "& > ul": {
-      fontFamily: detectMonoFontFamily(),
+      fontFamily: APP_FONT_FAMILY,
       fontSize: "12px",
       maxHeight: "246px",
       minWidth: "220px",
@@ -290,7 +290,7 @@ const chrome = EditorView.theme({
   },
   ".cm-panel.cm-search br": { display: "none" },
   ".cm-panel .cm-textfield": {
-    fontFamily: detectMonoFontFamily(),
+    fontFamily: APP_FONT_FAMILY,
     fontSize: "12px",
     backgroundColor: "color-mix(in srgb, var(--muted) 50%, transparent)",
     color: "var(--foreground)",
@@ -355,7 +355,7 @@ const chrome = EditorView.theme({
   },
   ".cm-lsp-rename-input": {
     flex: "1",
-    fontFamily: detectMonoFontFamily(),
+    fontFamily: APP_FONT_FAMILY,
     fontSize: "12px",
     backgroundColor: "color-mix(in srgb, var(--muted) 50%, transparent)",
     color: "var(--foreground)",
@@ -369,7 +369,7 @@ const chrome = EditorView.theme({
   },
 
   ".cm-lsp-locations": {
-    fontFamily: detectMonoFontFamily(),
+    fontFamily: APP_FONT_FAMILY,
     fontSize: "12px",
     backgroundColor: "var(--popover)",
     color: "var(--popover-foreground)",
@@ -377,8 +377,8 @@ const chrome = EditorView.theme({
       padding: "5px 10px",
       fontSize: "10.5px",
       fontWeight: "600",
-      textTransform: "uppercase",
-      letterSpacing: "0.04em",
+      textTransform: "var(--chrome-transform, none)",
+      letterSpacing: "var(--chrome-tracking, inherit)",
       color: "var(--muted-foreground)",
       borderBottom: "1px solid var(--border)",
     },

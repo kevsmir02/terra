@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { resolveFontFamily } from "./fonts";
 
-const FALLBACK = '"JetBrains Mono", SFMono-Regular, Menlo, monospace';
+const FALLBACK =
+  '"JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", monospace';
 
 describe("resolveFontFamily", () => {
   it("quotes a bare family and appends the mono fallback", () => {
