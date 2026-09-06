@@ -75,7 +75,7 @@ No visible change on any current theme (they all set `borderStyle: "solid"`). Un
 **Interfaces:**
 - Produces: `src/app/theme-contract.test.ts` with a `scan(rules)` helper later tasks extend. Rule shape: `{ id: string; pattern: RegExp; message: string }`. Allowlist shape: `Record<string, string>` mapping repo-relative path to reason.
 
-- [ ] **Step 1: Write the failing CSS assertion**
+- [x] **Step 1: Write the failing CSS assertion**
 
 Append to `src/styles/surfaceClasses.test.ts` inside `describe("surface classes", ...)`:
 
@@ -90,7 +90,7 @@ Append to `src/styles/surfaceClasses.test.ts` inside `describe("surface classes"
   });
 ```
 
-- [ ] **Step 2: Write the failing divider scan**
+- [x] **Step 2: Write the failing divider scan**
 
 Create `src/app/theme-contract.test.ts`:
 
@@ -154,12 +154,12 @@ describe("theme consumption contract", () => {
 });
 ```
 
-- [ ] **Step 3: Run both tests to verify they fail**
+- [x] **Step 3: Run both tests to verify they fail**
 
 Run: `pnpm vitest run src/styles/surfaceClasses.test.ts src/app/theme-contract.test.ts`
 Expected: FAIL. The frame assertion fails on the literal `solid`; the scan lists `separator.tsx`, `resizable.tsx`, `command.tsx`, `dropdown-menu.tsx`, `context-menu.tsx`, `select.tsx`, and two `Header.tsx` lines. Any other line it reports is converted the same way in Step 5: the fill becomes a zero-size box with a `border-t` or `border-l`.
 
-- [ ] **Step 4: Fix the frame rule**
+- [x] **Step 4: Fix the frame rule**
 
 In `src/styles/globals.css`, in the `html[data-chrome="borderless"] #root, html[data-chrome="borderless"] #settings-root` rule, replace:
 
@@ -173,7 +173,7 @@ with:
   border: var(--frame-border-width, 1px) var(--border-style, solid) var(--border);
 ```
 
-- [ ] **Step 5: Convert the dividers**
+- [x] **Step 5: Convert the dividers**
 
 `src/components/ui/separator.tsx`, the `cn(...)` first argument becomes:
 
@@ -191,16 +191,16 @@ with:
 
 `src/modules/header/Header.tsx`: `<span className="mx-1 h-full w-px shrink-0 bg-border/(--emph-strong)" />` becomes `<span className="mx-1 h-full w-0 shrink-0 border-l border-border/(--emph-strong)" />` and `<span className="ml-1 h-5 w-px shrink-0 bg-border/(--emph-strong)" />` becomes `<span className="ml-1 h-5 w-0 shrink-0 border-l border-border/(--emph-strong)" />`.
 
-- [ ] **Step 6: Run the tests, lint, and types**
+- [x] **Step 6: Run the tests, lint, and types**
 
 Run: `pnpm vitest run src/styles src/app && pnpm lint && pnpm check-types`
 Expected: PASS.
 
-- [ ] **Step 7: Run the app and look**
+- [x] **Step 7: Run the app and look**
 
 Run: `pnpm tauri dev` (or the project's `run` skill). Open a dropdown, the command palette, a select, and drag a pane handle. Dividers look identical to before on Terra Default. Switch to Nothing in Settings: the window frame and every divider are now dotted.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/styles/globals.css src/styles/surfaceClasses.test.ts src/app/theme-contract.test.ts src/components/ui/separator.tsx src/components/ui/resizable.tsx src/components/ui/command.tsx src/components/ui/dropdown-menu.tsx src/components/ui/context-menu.tsx src/components/ui/select.tsx src/modules/header/Header.tsx
@@ -219,7 +219,7 @@ git commit -m "fix(theme): draw the frame and every divider in the theme's borde
 **Interfaces:**
 - Produces CSS variables read by later tasks: `--radius-pill` (fallback `9999px`), `--fx-shadow-color` (fallback per size, Tailwind's default alpha), `--fx-blur-factor` (fallback `1`). Utilities `rounded-pill`, `rounded-circle`.
 
-- [ ] **Step 1: Write the failing compile test**
+- [x] **Step 1: Write the failing compile test**
 
 Append to `src/styles/tailwindTokens.test.ts`:
 
@@ -268,7 +268,7 @@ describe("theme-owned scales", () => {
 });
 ```
 
-- [ ] **Step 2: Extend the contract scan**
+- [x] **Step 2: Extend the contract scan**
 
 In `src/app/theme-contract.test.ts` add to `RULES`:
 
@@ -314,12 +314,12 @@ const ALLOWLIST: Record<string, string> = {
 };
 ```
 
-- [ ] **Step 3: Run to verify failure**
+- [x] **Step 3: Run to verify failure**
 
 Run: `pnpm vitest run src/styles/tailwindTokens.test.ts src/app/theme-contract.test.ts`
 Expected: FAIL. The compile tests find no `--fx-` variables; the scan lists the 36 `rounded-full` sites, three arbitrary radii, two `shadow-black`, the slider's `bg-white ring-black/10`, and the orange import message in `ThemesSection.tsx`.
 
-- [ ] **Step 4: Add the scale bridges**
+- [x] **Step 4: Add the scale bridges**
 
 In `src/styles/globals.css`, inside `@theme inline { ... }`, after the `--radius-4xl` line add:
 
@@ -354,7 +354,7 @@ After the five `@utility border*` lines add:
 @utility rounded-circle { border-radius: 50%; }
 ```
 
-- [ ] **Step 5: Migrate every `rounded-full`**
+- [x] **Step 5: Migrate every `rounded-full`**
 
 Replace with `rounded-circle` (geometric dots, swatches, icon discs):
 
@@ -391,7 +391,7 @@ grep -rl --include=*.tsx "rounded-full" src | xargs sed -i 's/\brounded-full\b/r
 
 Run it only after the fourteen circle sites already say `rounded-circle`.
 
-- [ ] **Step 6: Fix the remaining literals**
+- [x] **Step 6: Fix the remaining literals**
 
 - `src/components/ui/checkbox.tsx:16`: `rounded-[5px]` becomes `rounded-sm`.
 - `src/modules/spaces/SpaceAvatar.tsx:8`: `rounded-[5px]` becomes `rounded-sm`.
@@ -400,16 +400,16 @@ Run it only after the fourteen circle sites already say `rounded-circle`.
 - `src/components/ui/slider.tsx:50`: `bg-white` becomes `bg-background`, `ring-black/10` becomes `ring-border`.
 - `src/settings/sections/ThemesSection.tsx:214`: `border-orange-500/40 bg-orange-500/10 text-orange-500` becomes `border-status-warning/(--emph-soft) bg-status-warning/(--emph-faint) text-status-warning` (the block itself goes in Task 3).
 
-- [ ] **Step 7: Run tests, lint, types**
+- [x] **Step 7: Run tests, lint, types**
 
 Run: `pnpm vitest run src/styles src/app && pnpm lint && pnpm check-types`
 Expected: PASS.
 
-- [ ] **Step 8: Look at it running**
+- [x] **Step 8: Look at it running**
 
 Terra Default must be pixel-identical: pills still round, shadows and blur unchanged, dots still round. In the browser devtools (or WebKit inspector), set `--fx-shadow-color: transparent` and `--fx-blur-factor: 0` on `<html>`: every shadow and blur disappears. Set `--radius-pill: 2px`: chips square, dots stay round.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/styles/globals.css src/styles/tailwindTokens.test.ts src/app/theme-contract.test.ts src/components/ui src/modules src/settings
@@ -428,13 +428,13 @@ git commit -m "feat(theme): let the theme own the shadow, blur, and pill radius 
 **Interfaces:**
 - Produces: `useTheme()` no longer exposes `customThemes`; `resolveEditorTheme(pref, themeId, mode)` (three arguments).
 
-- [ ] **Step 1: Delete the files**
+- [x] **Step 1: Delete the files**
 
 ```bash
 git rm src/modules/theme/customThemes.ts src/modules/theme/customThemes.test.ts src/modules/theme/themeFiles.ts src/modules/theme/themeFiles.test.ts src/modules/theme/useThemeFileEditing.ts src/modules/theme/validateTheme.ts src/modules/theme/validateTheme.test.ts src/modules/theme/diagnostics.ts
 ```
 
-- [ ] **Step 2: Update ThemeProvider**
+- [x] **Step 2: Update ThemeProvider**
 
 In `src/modules/theme/ThemeProvider.tsx`: remove the `listCustomThemes, onCustomThemesChange` import; remove `customThemes: Theme[];` from `ThemeProviderState`; change `resolveTheme` to:
 
@@ -446,7 +446,7 @@ function resolveTheme(id: string): Theme {
 
 Remove the `const [customThemes, setCustomThemes] = useState<Theme[]>([]);` line and the whole `useEffect` that calls `listCustomThemes`. Change the `activeTheme` memo to `useMemo(() => resolveTheme(effectiveId), [effectiveId])`. Remove `customThemes` from the context value object and its dependency array.
 
-- [ ] **Step 3: Update the barrel, editor pairing, palette, and App**
+- [x] **Step 3: Update the barrel, editor pairing, palette, and App**
 
 `src/modules/theme/index.ts`: delete the line `export { useThemeFileEditing } from "./useThemeFileEditing";`.
 
@@ -458,7 +458,7 @@ Remove the `const [customThemes, setCustomThemes] = useState<Theme[]>([]);` line
 
 `src/app/App.tsx`: line 84 becomes `import { ThemeProvider } from "@/modules/theme";`; delete line 296 `useThemeFileEditing({ tabsRef, openFileTab });`. If `openFileTab` is now unused, `pnpm lint` says so; keep it if other code uses it.
 
-- [ ] **Step 4: Rewrite the builtins test's validation case**
+- [x] **Step 4: Rewrite the builtins test's validation case**
 
 In `src/modules/theme/themes/builtins.test.ts` remove the `validateTheme` import and replace the first `it.each` block with:
 
@@ -472,7 +472,7 @@ In `src/modules/theme/themes/builtins.test.ts` remove the `validateTheme` import
   );
 ```
 
-- [ ] **Step 5: Rewrite ThemesSection**
+- [x] **Step 5: Rewrite ThemesSection**
 
 Replace `src/settings/sections/ThemesSection.tsx` with:
 
@@ -747,12 +747,12 @@ function Label({ children }: { children: React.ReactNode }) {
 
 `listBuiltinThemes` is already exported from the theme barrel (`src/modules/theme/index.ts`).
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `pnpm lint && pnpm check-types && pnpm test`
 Expected: PASS. If `pnpm lint` reports an unused `openFileTab` or `tabsRef` in `App.tsx`, remove only what is genuinely unused.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A src/modules/theme src/modules/editor/lib/useEditorThemeExt.ts src/modules/command-palette/CommandPalette.tsx src/app/App.tsx src/settings/sections/ThemesSection.tsx
@@ -777,7 +777,7 @@ git commit -m "refactor(theme): remove custom JSON theme files, themes are built
 - Produces: `APP_FONT_FAMILY` and `TERMINAL_FONT_FAMILY` constants in `src/lib/fonts.ts`; `resolveFontFamily(userInput)` unchanged in shape; `useTerminalFont()` returns `{ fontFamily, fontWeight, fontSize }` from preferences only.
 - Removes: `type.sans`, `type.mono`, `type.display`, `type.fonts`, `terminal.fontFamily`, `terminal.fontWeight`, `terminal.fontSize` from the theme types and the tokens `--ui-font-sans`, `--ui-font-mono`, `--ui-font-display`.
 
-- [ ] **Step 1: Write the failing font tests**
+- [x] **Step 1: Write the failing font tests**
 
 In `src/lib/fonts.test.ts` change the constant to:
 
@@ -799,12 +799,12 @@ In `src/styles/tailwindTokens.test.ts` replace the test `keeps the wrapped theme
 
 In `src/styles/surfaceClasses.test.ts` delete the line `expect(b).toContain("var(--ui-font-display, inherit)");` from the chrome label test and add `expect(b).not.toContain("font-family");`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/lib/fonts.test.ts src/styles`
 Expected: FAIL on the new fallback chain and the font declarations.
 
-- [ ] **Step 3: Rewrite `src/lib/fonts.ts`**
+- [x] **Step 3: Rewrite `src/lib/fonts.ts`**
 
 ```ts
 // One face for the whole app, chosen for reading comfort. The terminal takes
@@ -839,7 +839,7 @@ export function resolveFontFamily(userInput: string): string {
 
 Replace every `detectMonoFontFamily()` call with `APP_FONT_FAMILY` in `src/modules/editor/lib/extensions.ts` and `src/modules/editor/lib/chromeTheme.ts`, and change their imports to `import { APP_FONT_FAMILY } from "@/lib/fonts";`. `src/modules/terminal/lib/useTerminalSession.ts:342` keeps calling `ensureMonoFontsLoaded()`.
 
-- [ ] **Step 4: Fonts in CSS**
+- [x] **Step 4: Fonts in CSS**
 
 `src/styles/globals.css`: delete the line `@import "./fonts.css";`. In `@theme inline` replace the three font lines with:
 
@@ -858,7 +858,7 @@ pnpm remove @fontsource-variable/inter @fontsource/dotgothic16 @fontsource/jetbr
 
 In `knip.json` remove the four `@fontsource*` entries from `ignoreDependencies`.
 
-- [ ] **Step 5: Remove the theme font machinery**
+- [x] **Step 5: Remove the theme font machinery**
 
 ```bash
 git rm src/modules/theme/fonts.ts src/modules/theme/fonts.test.ts src/modules/theme/resolveTerminalFont.ts src/modules/theme/resolveTerminalFont.test.ts src/modules/theme/themes/stardew.ts src/modules/theme/themes/windows-xp.ts src/modules/theme/themes/gameboy.ts
@@ -926,7 +926,7 @@ export function getDefaultTheme(): Theme {
 
 `src/modules/theme/themes/rebar.ts`: in both variants delete `fontFamily: "JetBrainsMono Nerd Font",` from `terminal`, and in `type` delete the `sans`, `display`, and `fonts` lines, keeping `chromeTracking` and `chromeTransform`.
 
-- [ ] **Step 6: Terminal font hook and settings copy**
+- [x] **Step 6: Terminal font hook and settings copy**
 
 `src/modules/terminal/lib/useTerminalFont.ts` becomes:
 
@@ -955,7 +955,7 @@ If `pnpm check-types` shows another file importing `TerminalFont` from `@/module
 
 `src/settings/sections/GeneralSection.tsx`, in `FontFamilyInput`: the `SettingRow` description becomes `"Terminal face. Leave blank for JetBrainsMono Nerd Font Mono."` and the input `placeholder` becomes `"JetBrainsMono Nerd Font Mono"`.
 
-- [ ] **Step 7: Token reference sync script**
+- [x] **Step 7: Token reference sync script**
 
 Create `scripts/theme-token-reference-sync.mjs`:
 
@@ -993,16 +993,16 @@ try {
 
 Add to `package.json` scripts: `"theme:sync-tokens": "node scripts/theme-token-reference-sync.mjs"`. Run `pnpm theme:sync-tokens`; the duplicated markers in `THEME.md` collapse to one pair and the `type` group loses its three font rows.
 
-- [ ] **Step 8: Run everything**
+- [x] **Step 8: Run everything**
 
 Run: `pnpm lint && pnpm check-types && pnpm test`
 Expected: PASS, including `tokens.test.ts` "keeps the THEME.md token reference in sync".
 
-- [ ] **Step 9: Look at it running**
+- [x] **Step 9: Look at it running**
 
 Every label, the editor, and the terminal render in JetBrainsMono Nerd Font. In a terminal run `echo -e "\ue7a8 \uf07b \ue628"`: three icons, each one cell wide, no overlap. Start Claude Code in a tab and check the TUI borders align.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A
@@ -1025,7 +1025,7 @@ they depended on, and adds pnpm theme:sync-tokens for the THEME.md token table."
 **Interfaces:**
 - Produces: `ThemeVariant.effects?: ThemeEffects` (`shadow: string`, `blur: "on" | "off"`, `wallpaper: boolean`), `ThemeVariant.icons?: IconSet` (`"catppuccin" | "nerd"`), `ThemeShape.pillRadius`, `TokenDef.map`, and `useTheme().activeVariant: ThemeVariant` (the resolved variant for the active mode). Removes `Theme.editorTheme`, `colors.sidebar*`, `shape.controlWidth`, `shape.liftColor`, `shape.liftDepth`.
 
-- [ ] **Step 1: Write the failing resolver tests**
+- [x] **Step 1: Write the failing resolver tests**
 
 In `src/modules/theme/resolveTheme.test.ts` replace the imports and the snapshot test:
 
@@ -1114,12 +1114,12 @@ In `src/modules/theme/themes/builtins.test.ts` replace the test `pairs editor th
   });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/modules/theme`
 Expected: FAIL. `--fx-blur-factor` and friends are undefined; `check-types` would also fail on `effects`.
 
-- [ ] **Step 3: Types**
+- [x] **Step 3: Types**
 
 `src/modules/theme/types.ts`: in `ThemeColors` delete the eight `sidebar*` keys. In `ThemeShape` delete `controlWidth`, `liftColor`, `liftDepth` and add `pillRadius: string;`. After `ThemeTypography` add:
 
@@ -1146,7 +1146,7 @@ export type IconSet = (typeof ICON_SETS)[number];
 
 In `ThemeVariant` add `effects?: ThemeEffects;` and `icons?: IconSet;`. In `Theme` delete the `editorTheme` block.
 
-- [ ] **Step 4: Tokens and the resolver**
+- [x] **Step 4: Tokens and the resolver**
 
 `src/modules/theme/tokens.ts`: `TokenDef.group` gains `"effects"`; add to `TokenDef`:
 
@@ -1173,7 +1173,7 @@ Delete the eight `colors.sidebar*` entries and `shape.controlWidth`, `shape.lift
 
 `scripts/theme-token-reference.mjs`: the `groups` array becomes `["colors", "shape", "type", "effects", "terminal", "syntax", "status", "emphasis"]`.
 
-- [ ] **Step 5: Editor pairing without `editorTheme`**
+- [x] **Step 5: Editor pairing without `editorTheme`**
 
 `src/modules/theme/resolveEditorTheme.ts` becomes:
 
@@ -1216,7 +1216,7 @@ export function resolveEditorTheme(
 
 In `src/modules/theme/resolveEditorTheme.test.ts` delete `editorTheme` from every fixture; a case that expected a mapped preset for a theme without `ansi` now expects `FALLBACK[mode]` (`github-light` for light, `atomone` for dark). Cases about an explicit preference and about `ansi` deriving are unchanged.
 
-- [ ] **Step 6: Expose the active variant**
+- [x] **Step 6: Expose the active variant**
 
 `src/modules/theme/ThemeProvider.tsx`: import `resolveVariant` from `./resolveVariant` and `type ThemeVariant` from `./types`; add `activeVariant: ThemeVariant;` to `ThemeProviderState`; after the `activeTheme` memo add:
 
@@ -1229,7 +1229,7 @@ In `src/modules/theme/resolveEditorTheme.test.ts` delete `editorTheme` from ever
 
 and include `activeVariant` in the context value and its dependency array.
 
-- [ ] **Step 7: Builtins and CSS defaults**
+- [x] **Step 7: Builtins and CSS defaults**
 
 ```bash
 sed -i '/^\s*sidebar[A-Za-z]*: /d' src/modules/theme/themes/terra-default.ts src/modules/theme/themes/rebar.ts src/modules/theme/themes/gruvbox.ts src/modules/theme/themes/kanagawa.ts src/modules/theme/themes/kanagawa-dragon.ts src/modules/theme/themes/nothing.ts
@@ -1246,12 +1246,12 @@ Delete the `editorTheme` line in `terra-default.ts`, `gruvbox.ts`, `kanagawa.ts`
 
 `src/styles/surfaceClasses.test.ts`: remove the `[".terra-control", "--control-border-width"]` row and the `--lift-color` and `--lift-depth` strings from the bevel test.
 
-- [ ] **Step 8: Sync docs and run everything**
+- [x] **Step 8: Sync docs and run everything**
 
 Run: `pnpm theme:sync-tokens && pnpm lint && pnpm check-types && pnpm test`
 Expected: PASS. If a builtin fails the contrast floor test, the derivation cannot lift that slot on that background: fix the theme's colour (usually the background or the ansi slot), not the test, and say so in the commit.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -1274,7 +1274,7 @@ resolveTheme snapshot with contrast-floor assertions on every derived token."
 **Interfaces:**
 - Produces: the `terra-label` utility. `letter-spacing` and `text-transform` inherit, so the class on a container styles every text node inside it; a nested `normal-case tracking-normal` resets a child that must stay content.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/styles/surfaceClasses.test.ts`: replace the chrome label test with:
 
@@ -1321,12 +1321,12 @@ Add a test:
   });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/styles/surfaceClasses.test.ts src/app/theme-contract.test.ts`
 Expected: FAIL with the 14 `uppercase` sites, the arbitrary tracking sites, and the missing anchors.
 
-- [ ] **Step 3: The utility**
+- [x] **Step 3: The utility**
 
 In `src/styles/globals.css` delete the `.terra-chrome-label { ... }` block from `@layer components` and, after `@utility rounded-circle`, add:
 
@@ -1340,7 +1340,7 @@ In `src/styles/globals.css` delete the `.terra-chrome-label { ... }` block from 
 }
 ```
 
-- [ ] **Step 4: Replace the literals**
+- [x] **Step 4: Replace the literals**
 
 Each edit replaces the quoted fragment inside the existing class string:
 
@@ -1357,7 +1357,7 @@ Each edit replaces the quoted fragment inside the existing class string:
 
 The nested resets at `NotificationBell.tsx:320`, `GitHistoryPane.tsx:959`, and `CommandPalette.tsx:384` (`normal-case tracking-normal`) stay.
 
-- [ ] **Step 5: Add the class to the anchors**
+- [x] **Step 5: Add the class to the anchors**
 
 - `TabBar.tsx:456`: `cn("truncate", isPreview && "italic")` becomes `cn("terra-label truncate", isPreview && "italic")`.
 - `SidebarRail.tsx:72`: `<span className="truncate">` becomes `<span className="terra-label truncate">`.
@@ -1369,16 +1369,16 @@ The nested resets at `NotificationBell.tsx:320`, `GitHistoryPane.tsx:959`, and `
 - `LspStatusPill.tsx:28`: prepend `terra-label ` to `PILL_CLASS`.
 - `DevServerChip.tsx:29`: `"flex items-center gap-1.5 font-medium text-foreground"` becomes `"terra-label flex items-center gap-1.5 font-medium text-foreground"`.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `pnpm lint && pnpm check-types && pnpm test`
 Expected: PASS.
 
-- [ ] **Step 7: Look at it running**
+- [x] **Step 7: Look at it running**
 
 Terra Default: no visible change (its tracking and transform are unset). Rebar: tab titles, rail labels, statusbar chips, and panel headings are now uppercase and tracked, matching its source-control headings. Nothing: the same, at its own tracking.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
@@ -1417,7 +1417,7 @@ export function FileIconView(props: {
 
 - Consumes: `useTheme().activeVariant.icons` from Task 5.
 
-- [ ] **Step 1: Write the failing provider test**
+- [x] **Step 1: Write the failing provider test**
 
 Create `src/modules/explorer/lib/nerdIcons.test.ts`:
 
@@ -1453,12 +1453,12 @@ describe("nerd icon provider", () => {
 
 Add `"@iconify-json/catppuccin"` to `HEAVY` in `src/app/eager-budget.test.ts` and extend its comment with one line: the Catppuccin icon JSON loads only when a theme selects that set.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/modules/explorer src/app/eager-budget.test.ts`
 Expected: FAIL. `nerdIcons` does not exist; the eager test reports `@iconify-json/catppuccin <- src/modules/explorer/lib/iconResolver.ts`.
 
-- [ ] **Step 3: Provider types, hook, and view**
+- [x] **Step 3: Provider types, hook, and view**
 
 Create `src/modules/explorer/lib/iconProvider.tsx`:
 
@@ -1551,7 +1551,7 @@ export function FileIconView({
 }
 ```
 
-- [ ] **Step 4: The Nerd provider**
+- [x] **Step 4: The Nerd provider**
 
 Create `src/modules/explorer/lib/nerdIcons.ts`:
 
@@ -1646,7 +1646,7 @@ export const nerdProvider: IconProvider = {
 };
 ```
 
-- [ ] **Step 5: The Catppuccin provider**
+- [x] **Step 5: The Catppuccin provider**
 
 ```bash
 git mv src/modules/explorer/lib/iconResolver.ts src/modules/explorer/lib/catppuccinIcons.ts
@@ -1669,7 +1669,7 @@ export const catppuccinProvider: IconProvider = {
 
 If the renamed test file calls `fileIconUrl` directly, keep those two functions exported; the eager graph is unaffected because only `iconProvider.tsx` imports this module, and it does so dynamically.
 
-- [ ] **Step 6: Consumers**
+- [x] **Step 6: Consumers**
 
 `src/modules/explorer/TreeRow.tsx`: replace the import at line 8 with `import { FileIconView, useIconProvider } from "./lib/iconProvider";`. Line 52 becomes:
 
@@ -1746,16 +1746,16 @@ The rest of `TabIcon` (preview and other kinds) is unchanged. If `@/modules/expl
 }
 ```
 
-- [ ] **Step 7: Run everything**
+- [x] **Step 7: Run everything**
 
 Run: `pnpm lint && pnpm check-types && pnpm test`
 Expected: PASS, including the eager-budget lock on `@iconify-json/catppuccin`.
 
-- [ ] **Step 8: Look at it running**
+- [x] **Step 8: Look at it running**
 
 Terra Default shows Catppuccin icons after a brief empty gap on the first paint (the set is loading). In the WebKit inspector, set the active variant to `icons: "nerd"` by temporarily editing `terra-default.ts`: the tree shows monochrome glyphs, folders in the primary colour, and editor tabs show the same glyphs. Revert the edit.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -1773,7 +1773,7 @@ git commit -m "feat(explorer): theme-selected icon set, Nerd Font glyphs or lazi
 **Interfaces:**
 - Produces: `wallpaperAllowed(theme: Theme, mode: ThemeMode, prefs: { active: boolean }): boolean`. `SurfaceLayer` takes `{ theme: Theme; mode: ThemeMode }` props.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/modules/theme/wallpaper.test.ts`:
 
@@ -1815,12 +1815,12 @@ describe("wallpaperAllowed", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/modules/theme/wallpaper.test.ts`
 Expected: FAIL, module not found.
 
-- [ ] **Step 3: The helper**
+- [x] **Step 3: The helper**
 
 Create `src/modules/theme/wallpaper.ts`:
 
@@ -1839,7 +1839,7 @@ export function wallpaperAllowed(
 }
 ```
 
-- [ ] **Step 4: Wire the layer**
+- [x] **Step 4: Wire the layer**
 
 `src/modules/theme/SurfaceLayer.tsx`: import `wallpaperAllowed` from `./wallpaper` and `type { Theme, ThemeMode }` from `./types`. `SurfaceLayer` becomes:
 
@@ -1858,16 +1858,16 @@ export function SurfaceLayer({ theme, mode }: { theme: Theme; mode: ThemeMode })
 
 `src/modules/theme/ThemeProvider.tsx`: `<SurfaceLayer />` becomes `<SurfaceLayer theme={activeTheme} mode={resolvedMode} />`. The provider's initial `themeId` already comes from localStorage, so the first paint knows the theme and Nothing never flashes the image.
 
-- [ ] **Step 5: Settings copy**
+- [x] **Step 5: Settings copy**
 
 In `src/settings/sections/ThemesSection.tsx` destructure `activeVariant` from `useTheme()` and add `const wallpaperDeclined = activeVariant.effects?.wallpaper === false;`. In the background block, change the condition around the sliders to `backgroundKind === "image" && backgroundImageId && !wallpaperDeclined ? (...sliders...) : wallpaperDeclined ? (<p className="text-[11px] text-muted-foreground">The active theme declines the wallpaper. Your image is kept and shows again under a theme that accepts it.</p>) : (...existing empty-state paragraph...)`. The Choose, Replace, and Remove buttons stay available in every state.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `pnpm lint && pnpm check-types && pnpm test`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -1883,7 +1883,7 @@ git commit -m "feat(theme): let a theme decline the wallpaper"
 - Modify: `src/modules/theme/resolveTheme.test.ts` (acceptance snapshot), `THEME.md`, `TERRA.md:149` and the explorer bullet, `docs/superpowers/specs/2026-09-06-theme-engine-overhaul-design.md`, `eager-budget.json`, `.size-limit.json`
 - Create: `docs/adr/0003-theme-consumption-through-scales.md`
 
-- [ ] **Step 1: Rewrite Nothing**
+- [x] **Step 1: Rewrite Nothing**
 
 Replace `src/modules/theme/themes/nothing.ts` with:
 
@@ -2020,7 +2020,7 @@ export const nothing: Theme = {
 };
 ```
 
-- [ ] **Step 2: Acceptance snapshot**
+- [x] **Step 2: Acceptance snapshot**
 
 Append to `describe("resolveTheme", ...)` in `src/modules/theme/resolveTheme.test.ts`:
 
@@ -2043,7 +2043,7 @@ Append to `describe("resolveTheme", ...)` in `src/modules/theme/resolveTheme.tes
 
 Run `pnpm vitest run src/modules/theme/resolveTheme.test.ts -u` once to write the snapshot, then read `src/modules/theme/__snapshots__/resolveTheme.test.ts.snap` and confirm it is a single case.
 
-- [ ] **Step 3: THEME.md**
+- [x] **Step 3: THEME.md**
 
 Replace `THEME.md` with the following, then run `pnpm theme:sync-tokens` to fill the token block:
 
@@ -2238,7 +2238,7 @@ A field that is not a CSS variable (`icons`, `effects.wallpaper`) lives on the
 variant type and is read by its consumer through `useTheme().activeVariant`.
 ````
 
-- [ ] **Step 4: TERRA.md**
+- [x] **Step 4: TERRA.md**
 
 Replace the `theme/` bullet (line 149) with:
 
@@ -2248,7 +2248,7 @@ Replace the `theme/` bullet (line 149) with:
 
 In the `explorer/` bullet replace `file tree with Material/Catppuccin icons (\`iconResolver.ts\`)` with `file tree with a theme-selected icon set (\`lib/iconProvider.tsx\`: Catppuccin SVGs loaded on first use, or Nerd Font glyphs)`.
 
-- [ ] **Step 5: ADR 0003**
+- [x] **Step 5: ADR 0003**
 
 Create `docs/adr/0003-theme-consumption-through-scales.md`:
 
@@ -2305,7 +2305,7 @@ the commit message. The eager bundle shrinks by the font CSS, the Catppuccin
 JSON, and the custom theme code.
 ```
 
-- [ ] **Step 6: Spec amendments**
+- [x] **Step 6: Spec amendments**
 
 In `docs/superpowers/specs/2026-09-06-theme-engine-overhaul-design.md`:
 
@@ -2315,7 +2315,7 @@ In `docs/superpowers/specs/2026-09-06-theme-engine-overhaul-design.md`:
 - In "Dividers": replace "and the enclosing surface's width" with "at the 1 px initial width unless the divider itself carries a surface class".
 - In "Order of work": replace the list with the nine task titles of this plan in order.
 
-- [ ] **Step 7: Budgets and the full CI run**
+- [x] **Step 7: Budgets and the full CI run**
 
 ```bash
 pnpm lint && pnpm check-types && pnpm test && pnpm build && pnpm size:eager && pnpm knip && pnpm audit --prod && pnpm audit && pnpm size
@@ -2323,11 +2323,11 @@ pnpm lint && pnpm check-types && pnpm test && pnpm build && pnpm size:eager && p
 
 Read the `size:eager` output for `index.html` and `settings.html`. Set each entry in `eager-budget.json` to the measured gzipped KB rounded up to the next multiple of 5. If `pnpm size` reports total client JS more than 100 KB under the 1500 KB limit, lower `.size-limit.json` to the measured value rounded up to the next 50 KB. Record both old and new numbers in the commit message.
 
-- [ ] **Step 8: Look at it running, both windows, all six themes**
+- [x] **Step 8: Look at it running, both windows, all six themes**
 
 Nothing dark against the reference: dotted 2px frame, dotted dividers, uppercase tracked tabs and chips, square chips, round status dots, glyph icons with folders in red, no wallpaper, no shadow, no blur, lowercase breadcrumb path. Switch back to Terra Default: wallpaper returns, Catppuccin icons return, shadows and blur return. Open Settings: the Themes section lists six themes, and under Nothing the background block says the theme declines the wallpaper.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
