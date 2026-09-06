@@ -64,11 +64,11 @@ exports[`resolveTheme > resolves Nothing dark to its structural identity 1`] = `
   ],
   [
     "--border",
-    "#6e6e6a",
+    "#5a5a56",
   ],
   [
     "--input",
-    "#6e6e6a",
+    "#5a5a56",
   ],
   [
     "--ring",
@@ -80,7 +80,7 @@ exports[`resolveTheme > resolves Nothing dark to its structural identity 1`] = `
   ],
   [
     "--border-style",
-    "dotted",
+    "solid",
   ],
   [
     "--frame-border-width",
@@ -232,27 +232,27 @@ exports[`resolveTheme > resolves Nothing dark to its structural identity 1`] = `
   ],
   [
     "--syntax-comment",
-    "#7a7a76",
+    "#6e6e6a",
   ],
   [
     "--syntax-keyword",
-    "#c0b7bc",
+    "#ff4b3e",
   ],
   [
     "--syntax-string",
-    "#b6b6b3",
+    "#5fd48a",
   ],
   [
     "--syntax-number",
-    "#d2cfc7",
+    "#ffb454",
   ],
   [
     "--syntax-constant",
-    "#d8ced3",
+    "#ff8f6b",
   ],
   [
     "--syntax-func",
-    "#909aa2",
+    "#45cbe6",
   ],
   [
     "--syntax-variable",
@@ -260,75 +260,75 @@ exports[`resolveTheme > resolves Nothing dark to its structural identity 1`] = `
   ],
   [
     "--syntax-property",
-    "#a8afaf",
+    "#cfcfcb",
   ],
   [
     "--syntax-gutter-fg",
-    "#7a7a76",
+    "#63635e",
   ],
   [
     "--syntax-type",
-    "#bfc7c7",
+    "#8fd8e0",
   ],
   [
     "--syntax-operator",
-    "#ededeb",
+    "#9a9a96",
   ],
   [
     "--syntax-tag",
-    "#a8afaf",
+    "#ff4b3e",
   ],
   [
     "--syntax-tag-bracket",
-    "#7a7a76",
+    "#6e6e6a",
   ],
   [
     "--syntax-attr",
-    "#e9e6dc",
+    "#ffb454",
   ],
   [
     "--syntax-attr-value",
-    "#b6b6b3",
+    "#5fd48a",
   ],
   [
     "--syntax-heading",
-    "#909aa2",
+    "#ff4b3e",
   ],
   [
     "--syntax-link",
-    "#a8afaf",
+    "#62d0e8",
   ],
   [
     "--syntax-invalid",
-    "#ff5347",
+    "#ff5f56",
   ],
   [
     "--status-added",
-    "#b6b6b3",
+    "#5fd48a",
   ],
   [
     "--status-modified",
-    "#d2cfc7",
+    "#ffb454",
   ],
   [
     "--status-deleted",
-    "#ea3a2f",
+    "#ff4b3e",
   ],
   [
     "--status-renamed",
-    "#909aa2",
+    "#45cbe6",
   ],
   [
     "--status-warning",
-    "#d2cfc7",
+    "#ffcc4d",
   ],
   [
     "--status-conflict",
-    "#a8afaf",
+    "#ff8f6b",
   ],
   [
     "--status-ok",
-    "#b6b6b3",
+    "#5fd48a",
   ],
   [
     "--emph-faint",

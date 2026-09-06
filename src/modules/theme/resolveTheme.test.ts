@@ -154,7 +154,7 @@ describe("resolveTheme", () => {
     const nothing = listBuiltinThemes().find((t) => t.id === "nothing");
     expect(nothing).toBeDefined();
     const vars = resolveTheme(nothing as Theme, "dark") ?? [];
-    expect(get(vars, "--border-style")).toBe("dotted");
+    expect(get(vars, "--border-style")).toBe("solid");
     expect(get(vars, "--frame-border-width")).toBe("2px");
     expect(get(vars, "--radius-pill")).toBe("2px");
     expect(get(vars, "--chrome-transform")).toBe("uppercase");

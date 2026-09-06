@@ -1,18 +1,22 @@
 import type { Theme } from "../types";
 
-// Nothing OS: a monochrome void, one red signal, dots you can see.
+// Nothing OS: a monochrome void, one red signal, code that lights up.
 //
-// The identity lives in structure, not colour: a 2px dotted frame and dotted
-// dividers, square corners and square pills, uppercase tracked chrome labels,
-// glyph icons, no wallpaper, no shadow, no blur. Red is the only saturated
-// colour on screen. The ansi palette is near-monochrome so the derived editor
-// palette stays monochrome too, and `syntax.tag` is pinned off slot 1 so tags
-// do not fire the signal in every file. `emphasis.strong` at 100% keeps the
-// chrome from drawing its dotted rules at 60% alpha, where the dots vanish.
+// The chrome identity lives in structure, not colour: 2px solid rules, square
+// corners and square pills, uppercase tracked chrome labels, glyph icons, no
+// shadow, no blur. The ansi palette stays near-monochrome so the terminal
+// holds the void, and the surfaces that carry meaning carry hue: every
+// `syntax` and `status` role is pinned rather than derived, on one four lamp
+// palette (red keywords and deletions, amber numbers and edits, green strings
+// and additions, cyan callables and renames) over neutral variables,
+// properties and operators. `emphasis.strong` at 100%
+// keeps the chrome from drawing its rules at 60% alpha, and `border` is
+// softened against the dotted-era value so a continuous 2px line lands at the
+// weight the dots used to.
 export const nothing: Theme = {
   id: "nothing",
   name: "Nothing",
-  description: "Monochrome void, dotted rules, one red signal.",
+  description: "Monochrome void, hard rules, one red signal.",
   variants: {
     dark: {
       colors: {
@@ -31,11 +35,11 @@ export const nothing: Theme = {
         accent: "#1f1f1f",
         accentForeground: "#ededeb",
         destructive: "#d63b2e",
-        border: "#6e6e6a",
-        input: "#6e6e6a",
+        border: "#5a5a56",
+        input: "#5a5a56",
         ring: "#d63b2e",
         radius: "2px",
-        borderStyle: "dotted",
+        borderStyle: "solid",
       },
       emphasis: {
         faint: "12%",
@@ -70,7 +74,35 @@ export const nothing: Theme = {
           "#ffffff",
         ],
       },
-      syntax: { tag: "#a8afaf" },
+      syntax: {
+        comment: "#6e6e6a",
+        keyword: "#ff4b3e",
+        string: "#5fd48a",
+        number: "#ffb454",
+        constant: "#ff8f6b",
+        func: "#45cbe6",
+        variable: "#ededeb",
+        property: "#cfcfcb",
+        gutterFg: "#63635e",
+        type: "#8fd8e0",
+        operator: "#9a9a96",
+        tag: "#ff4b3e",
+        tagBracket: "#6e6e6a",
+        attr: "#ffb454",
+        attrValue: "#5fd48a",
+        heading: "#ff4b3e",
+        link: "#62d0e8",
+        invalid: "#ff5f56",
+      },
+      status: {
+        added: "#5fd48a",
+        modified: "#ffb454",
+        deleted: "#ff4b3e",
+        renamed: "#45cbe6",
+        warning: "#ffcc4d",
+        conflict: "#ff8f6b",
+        ok: "#5fd48a",
+      },
       shape: {
         frameWidth: "2px",
         frameRadius: "2px",
@@ -79,7 +111,7 @@ export const nothing: Theme = {
         pillRadius: "2px",
       },
       type: { chromeTracking: "0.08em", chromeTransform: "uppercase" },
-      effects: { shadow: "transparent", blur: "off", wallpaper: false },
+      effects: { shadow: "transparent", blur: "off" },
       icons: "nerd",
     },
     light: {
@@ -99,11 +131,11 @@ export const nothing: Theme = {
         accent: "#eaeae8",
         accentForeground: "#0a0a0a",
         destructive: "#c8342a",
-        border: "#8a8a86",
-        input: "#8a8a86",
+        border: "#9e9e9a",
+        input: "#9e9e9a",
         ring: "#c8342a",
         radius: "2px",
-        borderStyle: "dotted",
+        borderStyle: "solid",
       },
       emphasis: {
         faint: "12%",
@@ -138,7 +170,35 @@ export const nothing: Theme = {
           "#141414",
         ],
       },
-      syntax: { tag: "#56605e" },
+      syntax: {
+        comment: "#6e6e68",
+        keyword: "#c8241a",
+        string: "#1f7a4d",
+        number: "#8a5a00",
+        constant: "#a8461c",
+        func: "#0e6b7d",
+        variable: "#0a0a0a",
+        property: "#3a3a36",
+        gutterFg: "#808079",
+        type: "#2c6f77",
+        operator: "#4a4a46",
+        tag: "#c8241a",
+        tagBracket: "#6e6e68",
+        attr: "#8a5a00",
+        attrValue: "#1f7a4d",
+        heading: "#c8241a",
+        link: "#0e6b7d",
+        invalid: "#c42419",
+      },
+      status: {
+        added: "#1f7a4d",
+        modified: "#8a5a00",
+        deleted: "#c8241a",
+        renamed: "#0e6b7d",
+        warning: "#8a6a00",
+        conflict: "#a8461c",
+        ok: "#1f7a4d",
+      },
       shape: {
         frameWidth: "2px",
         frameRadius: "2px",
@@ -147,7 +207,7 @@ export const nothing: Theme = {
         pillRadius: "2px",
       },
       type: { chromeTracking: "0.08em", chromeTransform: "uppercase" },
-      effects: { shadow: "transparent", blur: "off", wallpaper: false },
+      effects: { shadow: "transparent", blur: "off" },
       icons: "nerd",
     },
   },
