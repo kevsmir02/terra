@@ -5,6 +5,7 @@ export {
   disposeSession,
   leafHasForegroundProcess,
   leafIdForPty,
+  persistedScrollback,
   ptyIdForLeaf,
   respawnSession,
   whenSessionReady,
@@ -19,6 +20,7 @@ export { useTerminalDropStore } from "./lib/dropStore";
 export { pasteIntoLeaf } from "./lib/rendererPool";
 export { formatDroppedPaths } from "./lib/quoteShellPath";
 export { configureTerminalLinks } from "./lib/linkDeps";
+export { stashRestoredScrollback } from "./lib/scrollbackPersist";
 export {
   findLeafCwd,
   hasLeaf,

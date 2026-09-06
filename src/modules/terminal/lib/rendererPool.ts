@@ -7,6 +7,11 @@ import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { lazyPathLinkProvider } from "./linkDeps";
+import {
+  capScrollback,
+  PERSIST_MAX_BYTES,
+  PERSIST_SCROLLBACK_LINES,
+} from "./scrollbackPersist";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type FontWeight, Terminal } from "@xterm/xterm";
 import { shouldCursorBlink } from "./cursorBlink";
@@ -1032,6 +1037,23 @@ function applyCursorBlinkOnSlot(slot: Slot, focused: boolean): void {
   const desired = shouldCursorBlink(cursorBlinkEnabled, windowActive, focused);
   if (slot.term.options.cursorBlink === desired) return;
   slot.term.options.cursorBlink = desired;
+}
+
+// Buffer text worth carrying across a relaunch: a parked slot still holds
+// its leaf, and an alternate-screen app (a TUI) has nothing worth replaying.
+export function serializeLeafForPersistence(leafId: number): string | null {
+  const slot = slots.find(
+    (s) => s.currentLeafId === leafId || s.retainedLeafId === leafId,
+  );
+  if (!slot || isAltScreen(slot)) return null;
+  try {
+    return capScrollback(
+      slot.serializeAddon.serialize({ scrollback: PERSIST_SCROLLBACK_LINES }),
+      PERSIST_MAX_BYTES,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function getSlotForLeaf(leafId: number): Slot | null {

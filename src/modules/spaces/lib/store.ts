@@ -61,6 +61,12 @@ export async function saveState(id: string, state: SpaceState): Promise<void> {
   await store.set(stateKey(id), state);
 }
 
+// The store autosaves on a timer; a write made while the window is closing
+// needs this to reach disk.
+export async function saveNow(): Promise<void> {
+  await store.save();
+}
+
 export async function deleteSpaceData(id: string): Promise<void> {
   await store.delete(stateKey(id));
 }

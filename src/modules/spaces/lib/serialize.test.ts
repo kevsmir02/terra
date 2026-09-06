@@ -173,3 +173,53 @@ describe("hydrateTabs", () => {
     ]);
   });
 });
+
+describe("scrollback round trip", () => {
+  it("embeds the provider's text per leaf and omits leaves without any", () => {
+    const tree: PaneNode = {
+      kind: "split",
+      id: 9,
+      dir: "row",
+      children: [
+        { kind: "leaf", id: 2, cwd: "/a" },
+        { kind: "leaf", id: 3, cwd: "/b" },
+      ],
+    };
+    const [tab] = serializeTabs(
+      [term({ paneTree: tree, activeLeafId: 2 })],
+      (leafId) => (leafId === 2 ? "buffer-two" : null),
+    );
+    expect(tab.kind).toBe("terminal");
+    if (tab.kind !== "terminal" || tab.tree.kind !== "split")
+      throw new Error("shape");
+    expect(tab.tree.children[0]).toMatchObject({ scrollback: "buffer-two" });
+    expect(tab.tree.children[1]).not.toHaveProperty("scrollback");
+  });
+
+  it("does not write scrollback without a provider", () => {
+    const [tab] = serializeTabs([term({})]);
+    if (tab.kind !== "terminal") throw new Error("shape");
+    expect(tab.tree).not.toHaveProperty("scrollback");
+  });
+
+  it("hands restored text to the callback under the new leaf id and keeps it off the tree", () => {
+    const serialized: SerializedTab[] = [
+      {
+        kind: "terminal",
+        tree: {
+          kind: "leaf",
+          cwd: "/a",
+          active: true,
+          scrollback: "old output",
+        },
+      },
+    ];
+    const seen: Array<[number, string]> = [];
+    const [tab] = hydrateTabs(serialized, "s1", counter(), (leafId, text) =>
+      seen.push([leafId, text]),
+    );
+    if (tab.kind !== "terminal") throw new Error("shape");
+    expect(seen).toEqual([[leafIdsOf(tab.paneTree)[0], "old output"]]);
+    expect(tab.paneTree).not.toHaveProperty("scrollback");
+  });
+});

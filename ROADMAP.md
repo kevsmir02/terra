@@ -10,7 +10,6 @@ Terra is developed, used, and released on Linux (Fedora day to day). The macOS a
 
 ## Next
 
-- Terminal scrollback restore: workspace, tab, and pane-tree state already restore on relaunch; scrollback contents do not.
 - SSH and remote workspaces.
 
 ## Maybe, later

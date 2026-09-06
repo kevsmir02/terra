@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Tab } from "@/modules/tabs";
-import { isSerializableTab, serializeTabs } from "./serialize";
-import { saveState } from "./store";
+import {
+  isSerializableTab,
+  type ScrollbackProvider,
+  serializeTabs,
+} from "./serialize";
+import { saveNow, saveState } from "./store";
 import { useSpaces } from "./useSpaces";
 
 const DEBOUNCE_MS = 3000;
@@ -37,6 +41,9 @@ export function useSpacePersistence({
   const last = useRef<Map<string, LastWrite>>(new Map());
   const seeded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // After the exit flush wrote scrollback, a later plain flush must not
+  // clobber it while the window tears down.
+  const closing = useRef(false);
   const latest = useRef<Snapshot>({ tabs, activeId, activeSpaceId });
   latest.current = { tabs, activeId, activeSpaceId, activeSidebarPct };
 
@@ -55,51 +62,83 @@ export function useSpacePersistence({
     }
   }
 
-  const flush = useCallback((snap: Snapshot, activeSidebarPct?: number) => {
-    const groups = new Map<string, Tab[]>();
-    for (const t of snap.tabs) {
-      const arr = groups.get(t.spaceId);
-      if (arr) arr.push(t);
-      else groups.set(t.spaceId, [t]);
-    }
+  const flush = useCallback(
+    async (
+      snap: Snapshot,
+      activeSidebarPct?: number,
+      scrollbackFor?: ScrollbackProvider,
+    ): Promise<void> => {
+      if (closing.current && !scrollbackFor) return;
+      const writes: Promise<void>[] = [];
+      const groups = new Map<string, Tab[]>();
+      for (const t of snap.tabs) {
+        const arr = groups.get(t.spaceId);
+        if (arr) arr.push(t);
+        else groups.set(t.spaceId, [t]);
+      }
 
-    const setPct = useSpaces.getState().setPanelSizes;
-    for (const [spaceId, group] of groups) {
-      const serialized = serializeTabs(group);
-      const prev = last.current.get(spaceId);
-      let activeTabIndex = prev?.activeTabIndex ?? 0;
-      if (spaceId === snap.activeSpaceId) {
-        const idx = group
-          .filter(isSerializableTab)
-          .findIndex((t) => t.id === snap.activeId);
-        if (idx >= 0) activeTabIndex = idx;
+      const setPct = useSpaces.getState().setPanelSizes;
+      for (const [spaceId, group] of groups) {
+        const serialized = serializeTabs(group, scrollbackFor);
+        const prev = last.current.get(spaceId);
+        let activeTabIndex = prev?.activeTabIndex ?? 0;
+        if (spaceId === snap.activeSpaceId) {
+          const idx = group
+            .filter(isSerializableTab)
+            .findIndex((t) => t.id === snap.activeId);
+          if (idx >= 0) activeTabIndex = idx;
+        }
+        const json = JSON.stringify(serialized);
+        const panelSizes =
+          spaceId === snap.activeSpaceId &&
+          typeof activeSidebarPct === "number" &&
+          Number.isFinite(activeSidebarPct)
+            ? [activeSidebarPct, 100 - activeSidebarPct]
+            : prev?.panelSizes;
+        if (
+          prev &&
+          prev.json === json &&
+          prev.activeTabIndex === activeTabIndex &&
+          JSON.stringify(prev.panelSizes) === JSON.stringify(panelSizes)
+        ) {
+          continue;
+        }
+        last.current.set(spaceId, { json, activeTabIndex, panelSizes });
+        writes.push(
+          saveState(spaceId, {
+            tabs: serialized,
+            activeTabIndex,
+            ...(panelSizes && { panelSizes }),
+          }).catch(() => undefined),
+        );
+        if (spaceId === snap.activeSpaceId && panelSizes) {
+          setPct(spaceId, panelSizes);
+        }
       }
-      const json = JSON.stringify(serialized);
-      const panelSizes =
-        spaceId === snap.activeSpaceId &&
-        typeof activeSidebarPct === "number" &&
-        Number.isFinite(activeSidebarPct)
-          ? [activeSidebarPct, 100 - activeSidebarPct]
-          : prev?.panelSizes;
-      if (
-        prev &&
-        prev.json === json &&
-        prev.activeTabIndex === activeTabIndex &&
-        JSON.stringify(prev.panelSizes) === JSON.stringify(panelSizes)
-      ) {
-        continue;
+      await Promise.all(writes);
+    },
+    [],
+  );
+
+  // Exit path: every leaf's buffer rides along, then the store is forced to
+  // disk. Plain flushes are ignored from here on.
+  const flushWithScrollback = useCallback(
+    async (scrollbackFor: ScrollbackProvider): Promise<void> => {
+      if (!enabled) return;
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
       }
-      last.current.set(spaceId, { json, activeTabIndex, panelSizes });
-      void saveState(spaceId, {
-        tabs: serialized,
-        activeTabIndex,
-        ...(panelSizes && { panelSizes }),
-      });
-      if (spaceId === snap.activeSpaceId && panelSizes) {
-        setPct(spaceId, panelSizes);
-      }
-    }
-  }, []);
+      await flush(
+        latest.current,
+        latest.current.activeSidebarPct,
+        scrollbackFor,
+      );
+      closing.current = true;
+      await saveNow();
+    },
+    [enabled, flush],
+  );
 
   useEffect(() => {
     if (!enabled) return;
@@ -107,7 +146,7 @@ export function useSpacePersistence({
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;
-      flush(snap, activeSidebarPct);
+      void flush(snap, activeSidebarPct);
     }, DEBOUNCE_MS);
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -119,10 +158,10 @@ export function useSpacePersistence({
     if (!enabled) return;
     const onHidden = () => {
       if (document.visibilityState === "hidden")
-        flush(latest.current, latest.current.activeSidebarPct);
+        void flush(latest.current, latest.current.activeSidebarPct);
     };
     const onLeave = () =>
-      flush(latest.current, latest.current.activeSidebarPct);
+      void flush(latest.current, latest.current.activeSidebarPct);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("blur", onLeave);
     window.addEventListener("beforeunload", onLeave);
@@ -130,7 +169,9 @@ export function useSpacePersistence({
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener<"blur">("blur", onLeave);
       window.removeEventListener("beforeunload", onLeave);
-      flush(latest.current, latest.current.activeSidebarPct);
+      void flush(latest.current, latest.current.activeSidebarPct);
     };
   }, [enabled, activeSidebarPct, flush]);
+
+  return { flushWithScrollback };
 }

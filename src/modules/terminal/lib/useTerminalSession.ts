@@ -10,6 +10,12 @@ import {
   useRef,
 } from "react";
 import { outputRange, stepCommandLine } from "./commandMarks";
+import {
+  capScrollback,
+  PERSIST_MAX_BYTES,
+  peekRestoredScrollback,
+  takeRestoredScrollback,
+} from "./scrollbackPersist";
 import { DormantRing } from "./dormantRing";
 import {
   createShellIntegrationState,
@@ -46,6 +52,7 @@ import {
   refreshLeafSlot,
   releaseSlot,
   setSlotFocused,
+  serializeLeafForPersistence,
 } from "./rendererPool";
 import { useTerminalFont } from "./useTerminalFont";
 
@@ -88,6 +95,22 @@ type Session = {
 };
 
 const sessions = new Map<number, Session>();
+
+// A buffer persisted at the last exit replays before the shell spawns; the
+// trailing newline keeps the new prompt off the old one.
+function restoredSnapshot(leafId: number): string | null {
+  const text = takeRestoredScrollback(leafId);
+  return text ? `${text}\r\n` : null;
+}
+
+/** Buffer text to persist for a leaf at exit, live or retained, or null. */
+export function persistedScrollback(leafId: number): string | null {
+  const live = serializeLeafForPersistence(leafId);
+  if (live !== null) return live;
+  const s = sessions.get(leafId);
+  if (s?.snapshot) return capScrollback(s.snapshot, PERSIST_MAX_BYTES);
+  return peekRestoredScrollback(leafId);
+}
 
 const readyLeaves = new Set<number>();
 const readyWaiters = new Map<
@@ -329,7 +352,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     cols: 0,
     rows: 0,
     container: null,
-    snapshot: null,
+    snapshot: restoredSnapshot(leafId),
     searchQuery: null,
     dormantRing: new DormantRing(),
     pendingInput: "",

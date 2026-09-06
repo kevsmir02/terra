@@ -82,6 +82,7 @@ import {
   leafIds,
   type PaneBounds,
   pasteIntoLeaf,
+  persistedScrollback,
   type TerminalPaneHandle,
   useTerminalDropStore,
   useTerminalFileDrop,
@@ -208,13 +209,17 @@ export default function App() {
     undefined,
   );
 
-  useSpacePersistence({
+  const { flushWithScrollback } = useSpacePersistence({
     tabs,
     activeId,
     activeSpaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
     enabled: spacesHydrated,
     activeSidebarPct,
   });
+  const persistScrollback = useCallback(
+    () => flushWithScrollback(persistedScrollback),
+    [flushWithScrollback],
+  );
 
   const prevSpaceRef = useRef(activeSpaceId);
   useEffect(() => {
@@ -358,8 +363,10 @@ export default function App() {
     handlePathDeleted,
   } = useTabCloseGuards({ tabs, disposeTab });
 
-  const { pendingAppClose, confirmAppClose, cancelAppClose } =
-    useAppCloseGuard(tabsRef);
+  const { pendingAppClose, confirmAppClose, cancelAppClose } = useAppCloseGuard(
+    tabsRef,
+    { beforeClose: persistScrollback },
+  );
 
   useEffect(() => {
     const live = new Set<number>();
