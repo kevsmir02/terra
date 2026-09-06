@@ -4,9 +4,10 @@ use tauri::ipc::{Channel, Response};
 use tauri::{Emitter, Manager, State};
 
 use super::adb::{
-    boot_completed, build_sdk_install_command, create_avd, emu_kill, ensure_safe_serial,
-    free_emulator_port, host_has_display, install_catalog, launch_avd, list_avd_names, list_devices,
-    list_system_images, log_tail, resolve_adb_path, resolve_avdmanager_path, resolve_emulator_path,
+    boot_completed, build_sdk_bootstrap_command, build_sdk_install_command, create_avd,
+    default_sdk_root, emu_kill, ensure_safe_serial, free_emulator_port, host_has_display,
+    install_catalog, launch_avd, list_avd_names, list_devices, list_system_images, log_tail,
+    missing_bootstrap_tools, resolve_adb_path, resolve_avdmanager_path, resolve_emulator_path,
     resolve_sdkmanager_path, running_avds, sdk_root_for, AvdEntry, DeviceEntry, SystemImage,
     GPU_FALLBACK,
 };
@@ -88,21 +89,35 @@ pub async fn device_list_system_images() -> Result<Vec<SystemImage>, String> {
         .map_err(|e| format!("device_list_system_images join: {e}"))
 }
 
-/// What Terra can offer when the SDK has no system image yet. `canInstall` is
-/// the whole gate: with no sdkmanager there is nothing to run, so the UI shows
-/// instructions rather than a button it cannot honour.
+/// What the dock can offer, and how far from a running emulator the machine is.
+///
+/// A tagged union rather than the `can_install` boolean it replaces, which
+/// conflated "no cmdline-tools" with "no image for this architecture" and so
+/// left the first-run case, the one that needs the most help, with nothing to
+/// say but a pointer at Android Studio.
 #[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SdkSetup {
-    pub can_install: bool,
-    /// Why not, when `can_install` is false.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
-    pub candidates: Vec<SystemImage>,
-    /// SDK packages the install will pull in alongside the image, because they
-    /// are missing too. The UI names them so the download size is not a
-    /// surprise.
-    pub extra_packages: Vec<String>,
+#[serde(tag = "stage", rename_all = "camelCase")]
+pub enum SdkSetup {
+    /// No cmdline-tools at all. The offer is the whole standalone SDK
+    /// (`docs/adr/0005-terra-bootstraps-the-standalone-android-sdk.md`).
+    #[serde(rename_all = "camelCase")]
+    Bootstrap {
+        candidates: Vec<SystemImage>,
+        /// Where it would install, so the offer can say so before it is taken.
+        sdk_root: String,
+    },
+    /// sdkmanager resolves and only a system image is missing.
+    #[serde(rename_all = "camelCase")]
+    Image {
+        candidates: Vec<SystemImage>,
+        /// SDK packages the install pulls in alongside the image, because they
+        /// are missing too. The UI names them so the download size is not a
+        /// surprise.
+        extra_packages: Vec<String>,
+    },
+    /// Nothing Terra can offer here, and why.
+    #[serde(rename_all = "camelCase")]
+    Blocked { reason: String },
 }
 
 /// Packages the install adds when the SDK lacks them. Resolution, not a stored
@@ -118,53 +133,85 @@ fn missing_sdk_tools() -> Vec<String> {
     packages
 }
 
+fn join_and(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => (*one).to_string(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 #[tauri::command]
 pub async fn device_sdk_setup() -> Result<SdkSetup, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let candidates = install_catalog();
-        let setup = match resolve_sdkmanager_path() {
-            Err(reason) => SdkSetup {
-                can_install: false,
-                reason: Some(reason),
-                candidates: Vec::new(),
-                extra_packages: Vec::new(),
-            },
-            Ok(_) if candidates.is_empty() => SdkSetup {
-                can_install: false,
-                reason: Some(format!(
+        if candidates.is_empty() {
+            return SdkSetup::Blocked {
+                reason: format!(
                     "no Android system image for this architecture ({})",
                     std::env::consts::ARCH
-                )),
-                candidates,
-                extra_packages: Vec::new(),
-            },
-            Ok(_) => SdkSetup {
-                can_install: true,
-                reason: None,
-                candidates,
+                ),
+            };
+        }
+        if resolve_sdkmanager_path().is_ok() {
+            return SdkSetup::Image {
                 extra_packages: missing_sdk_tools(),
-            },
+                candidates,
+            };
+        }
+        let missing = missing_bootstrap_tools();
+        if !missing.is_empty() {
+            return SdkSetup::Blocked {
+                reason: format!(
+                    "no Android SDK, and setting one up here needs {}",
+                    join_and(&missing)
+                ),
+            };
+        }
+        let Some(root) = default_sdk_root() else {
+            return SdkSetup::Blocked {
+                reason: "no home directory to install the Android SDK into".to_string(),
+            };
         };
-        setup
+        // Build the line now and keep only the verdict: a root Terra cannot
+        // write a command for belongs on screen as a reason, not as a button
+        // that fails once pressed.
+        match build_sdk_bootstrap_command(&root, &candidates[0].package) {
+            Err(reason) => SdkSetup::Blocked { reason },
+            Ok(_) => SdkSetup::Bootstrap {
+                sdk_root: root.display().to_string(),
+                candidates,
+            },
+        }
     })
     .await
     .map_err(|e| format!("device_sdk_setup join: {e}"))
 }
 
-/// The `sdkmanager` line for one catalog image, for the caller to run in a
-/// terminal tab. Terra does not run it: the download is multi-gigabyte and
-/// prompts for Google's SDK licences, and both belong in front of the user
-/// (`docs/adr/0004-sdk-install-runs-in-a-terminal-tab.md`).
+/// The line for one catalog image, for the caller to run in a terminal tab.
+/// With cmdline-tools present that is `sdkmanager` alone; without them it is
+/// the bootstrap, which fetches and verifies cmdline-tools first and ends in
+/// the same `sdkmanager` call.
+///
+/// Terra runs neither: the download is multi-gigabyte and prompts for Google's
+/// SDK licences, and both belong in front of the user
+/// (`docs/adr/0004-sdk-install-runs-in-a-terminal-tab.md`,
+/// `docs/adr/0005-terra-bootstraps-the-standalone-android-sdk.md`).
 #[tauri::command]
 pub async fn device_sdk_install_command(package: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let sdkmanager = resolve_sdkmanager_path()?;
-        let root = sdk_root_for(&sdkmanager).ok_or_else(|| {
-            "cannot locate the Android SDK root to install into".to_string()
-        })?;
-        let mut packages = missing_sdk_tools();
-        packages.push(package);
-        build_sdk_install_command(&sdkmanager, &root, &packages)
+    tauri::async_runtime::spawn_blocking(move || match resolve_sdkmanager_path() {
+        Ok(sdkmanager) => {
+            let root = sdk_root_for(&sdkmanager)
+                .ok_or_else(|| "cannot locate the Android SDK root to install into".to_string())?;
+            let mut packages = missing_sdk_tools();
+            packages.push(package);
+            build_sdk_install_command(&sdkmanager, &root, &packages)
+        }
+        Err(_) => {
+            let root = default_sdk_root()
+                .ok_or_else(|| "no home directory to install the Android SDK into".to_string())?;
+            build_sdk_bootstrap_command(&root, &package)
+        }
     })
     .await
     .map_err(|e| format!("device_sdk_install_command join: {e}"))?
