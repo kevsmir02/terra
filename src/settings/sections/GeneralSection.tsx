@@ -20,6 +20,7 @@ import {
   setAgentNotifications,
   setAutostart,
   setExplorerGitDecorations,
+  setExplorerOpenOnDoubleClick,
   setRestoreWindowState,
   setShowHidden,
   setTerminalCopyOnSelect,
@@ -80,6 +81,9 @@ export function GeneralSection() {
   const showHidden = usePreferencesStore((s) => s.showHidden);
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
+  );
+  const explorerOpenOnDoubleClick = usePreferencesStore(
+    (s) => s.explorerOpenOnDoubleClick,
   );
   const terminalWebglEnabled = usePreferencesStore(
     (s) => s.terminalWebglEnabled,
@@ -203,6 +207,15 @@ export function GeneralSection() {
           <Switch
             checked={explorerGitDecorations}
             onCheckedChange={(v) => void setExplorerGitDecorations(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Open files on double click"
+          description="A single click only selects a file in the explorer; a double click opens it in a tab."
+        >
+          <Switch
+            checked={explorerOpenOnDoubleClick}
+            onCheckedChange={(v) => void setExplorerOpenOnDoubleClick(v)}
           />
         </SettingRow>
       </div>

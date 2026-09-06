@@ -194,6 +194,9 @@ export const FileExplorer = memo(
   ) {
     const tree = useFileTree(rootPath, { onPathRenamed, onPathDeleted });
     const gitDecorations = usePreferencesStore((s) => s.explorerGitDecorations);
+    const openOnDoubleClick = usePreferencesStore(
+      (s) => s.explorerOpenOnDoubleClick,
+    );
     const { lookup: lookupGitStatus } = useGitStatus(
       rootPath,
       gitDecorations ? gitStatus : null,
@@ -461,6 +464,7 @@ export const FileExplorer = memo(
               isDropTarget={dropTargetDir === row.path}
               onOpenFile={onOpenFile}
               onSelectPath={setSelectedPath}
+              openOnDoubleClick={openOnDoubleClick}
               gitStatusCode={row.gitStatusCode}
               gitignored={gitDecorations && row.gitignored}
             />

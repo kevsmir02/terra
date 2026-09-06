@@ -109,6 +109,7 @@ export type Preferences = {
   editorWordWrap: boolean;
   showHidden: boolean;
   explorerGitDecorations: boolean;
+  explorerOpenOnDoubleClick: boolean;
   terminalWebglEnabled: boolean;
   terminalCursorBlink: boolean;
   terminalCopyOnSelect: boolean;
@@ -156,6 +157,7 @@ const KEY_EDITOR_WORD_WRAP = "editorWordWrap";
 const KEY_SHOW_HIDDEN = "showHidden";
 const LEGACY_KEY_SHOW_HIDDEN_DIRS = "showHiddenDirectories";
 const KEY_EXPLORER_GIT_DECORATIONS = "explorerGitDecorations";
+const KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK = "explorerOpenOnDoubleClick";
 const KEY_TERMINAL_WEBGL_ENABLED = "terminalWebglEnabled";
 const KEY_TERMINAL_CURSOR_BLINK = "terminalCursorBlink";
 const KEY_TERMINAL_COPY_ON_SELECT = "terminalCopyOnSelect";
@@ -210,6 +212,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorWordWrap: false,
   showHidden: false,
   explorerGitDecorations: true,
+  explorerOpenOnDoubleClick: false,
   terminalWebglEnabled: true,
   terminalCursorBlink: false,
   terminalCopyOnSelect: false,
@@ -285,6 +288,9 @@ export async function loadPreferences(): Promise<Preferences> {
     explorerGitDecorations:
       get<boolean>(KEY_EXPLORER_GIT_DECORATIONS) ??
       DEFAULT_PREFERENCES.explorerGitDecorations,
+    explorerOpenOnDoubleClick:
+      get<boolean>(KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK) ??
+      DEFAULT_PREFERENCES.explorerOpenOnDoubleClick,
     terminalWebglEnabled:
       get<boolean>(KEY_TERMINAL_WEBGL_ENABLED) ??
       DEFAULT_PREFERENCES.terminalWebglEnabled,
@@ -433,6 +439,12 @@ export async function setExplorerGitDecorations(value: boolean): Promise<void> {
   await writePref(KEY_EXPLORER_GIT_DECORATIONS, value);
 }
 
+export async function setExplorerOpenOnDoubleClick(
+  value: boolean,
+): Promise<void> {
+  await writePref(KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK, value);
+}
+
 export async function setTerminalWebglEnabled(value: boolean): Promise<void> {
   await writePref(KEY_TERMINAL_WEBGL_ENABLED, value);
 }
@@ -554,6 +566,7 @@ export async function onPreferencesChange(
     [KEY_EDITOR_WORD_WRAP]: "editorWordWrap",
     [KEY_SHOW_HIDDEN]: "showHidden",
     [KEY_EXPLORER_GIT_DECORATIONS]: "explorerGitDecorations",
+    [KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK]: "explorerOpenOnDoubleClick",
     [KEY_TERMINAL_WEBGL_ENABLED]: "terminalWebglEnabled",
     [KEY_TERMINAL_CURSOR_BLINK]: "terminalCursorBlink",
     [KEY_TERMINAL_COPY_ON_SELECT]: "terminalCopyOnSelect",
