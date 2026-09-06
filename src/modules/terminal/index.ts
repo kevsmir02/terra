@@ -8,6 +8,7 @@ export {
   persistedScrollback,
   ptyIdForLeaf,
   respawnSession,
+  submitToNewTab,
   whenSessionReady,
 } from "./lib/useTerminalSession";
 export {

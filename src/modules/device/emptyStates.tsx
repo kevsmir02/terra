@@ -70,9 +70,13 @@ export function AdbMissing({ narrow }: { narrow?: boolean }) {
 export function NoDevices({
   narrow,
   onRefresh,
+  runInTerminal,
 }: {
   narrow?: boolean;
   onRefresh: () => void;
+  /** Host callback that opens a terminal tab running a command; without it the
+   *  SDK install offer is withheld rather than shown as a dead button. */
+  runInTerminal?: (command: string) => void;
 }) {
   const { avds, boot, error, busy, launch, stop, create } = useAvds(() =>
     onRefresh(),
@@ -128,7 +132,7 @@ export function NoDevices({
           })}
         </div>
       ) : avds ? (
-        <CreateAvd onCreate={create} />
+        <CreateAvd runInTerminal={runInTerminal} onCreate={create} />
       ) : null}
 
       <button

@@ -9,8 +9,11 @@ import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
 
 export function DeviceDropdown({
   onPick,
+  runInTerminal,
 }: {
   onPick: (device: DeviceEntry) => void;
+  /** Opens a terminal tab running a command; the SDK install offer needs it. */
+  runInTerminal?: (command: string) => void;
 }) {
   const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -198,6 +201,7 @@ export function DeviceDropdown({
               })}
               {showCreate && (
                 <CreateAvd
+                  runInTerminal={runInTerminal}
                   onCreate={async (name, pkg) => {
                     setCreating(true);
                     try {

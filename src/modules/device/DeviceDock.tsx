@@ -7,6 +7,10 @@ import type { DeviceEntry } from "./generated/DeviceEntry";
 type Props = {
   device: DeviceEntry;
   onStop: () => void;
+  /** Opens a terminal tab running a command, for the SDK install offer the
+   *  fallback states carry. Provided by App, so the module keeps no dependency
+   *  on tabs or terminals. */
+  runInTerminal?: (command: string) => void;
 };
 
 /**
@@ -18,7 +22,7 @@ type Props = {
  * on the panel element, so without it the video would spill over the workspace
  * while the dock is collapsed to zero width.
  */
-export function DeviceDock({ device, onStop }: Props) {
+export function DeviceDock({ device, onStop, runInTerminal }: Props) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border-l border-border/(--emph-strong) bg-card">
       <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/(--emph-strong) px-2">
@@ -49,7 +53,11 @@ export function DeviceDock({ device, onStop }: Props) {
       <div className="min-h-0 flex-1">
         {/* Keyed on serial so switching devices mounts a fresh pane instead
             of reusing one that may be stuck in another device's error state. */}
-        <DevicePreviewPane key={device.serial} device={device} />
+        <DevicePreviewPane
+          key={device.serial}
+          device={device}
+          runInTerminal={runInTerminal}
+        />
       </div>
     </div>
   );

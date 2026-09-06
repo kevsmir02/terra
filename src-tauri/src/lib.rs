@@ -287,6 +287,8 @@ pub fn run() {
             device::commands::device_launch_avd,
             device::commands::device_stop_avd,
             device::commands::device_list_system_images,
+            device::commands::device_sdk_setup,
+            device::commands::device_sdk_install_command,
             device::commands::device_create_avd,
             device::commands::device_open,
             device::commands::device_close,
