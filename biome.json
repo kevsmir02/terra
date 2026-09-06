@@ -10,7 +10,8 @@
       "src/**/*.ts",
       "src/**/*.tsx",
       "!src/components/ui/**",
-      "!src/components/ai-elements/**"
+      "!src/components/ai-elements/**",
+      "!src/modules/device/generated/**"
     ]
   },
   "formatter": {
