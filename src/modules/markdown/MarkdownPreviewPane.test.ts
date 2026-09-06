@@ -36,3 +36,17 @@ describe("MarkdownPreviewPane scroll affordance", () => {
     expect(src).not.toMatch(/overflow-auto/);
   });
 });
+
+// An agent rewriting a document while its preview is open is the normal case;
+// the pane must follow the disk and release its watch when it unmounts.
+describe("MarkdownPreviewPane live reload", () => {
+  it("watches the file's folder while mounted and releases it on unmount", () => {
+    expect(src).toMatch(/watchAdd\(/);
+    expect(src).toMatch(/watchRemove\(/);
+  });
+
+  it("re-reads on fs change events and on editor writes", () => {
+    expect(src).toMatch(/listenFsChanged\(/);
+    expect(src).toMatch(/"fs:file-written"/);
+  });
+});
