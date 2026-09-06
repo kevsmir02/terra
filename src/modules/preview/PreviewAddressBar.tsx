@@ -47,6 +47,8 @@ const PORT_PRESETS: readonly PortPreset[] = [
   { port: 11434, label: "Ollama", hint: "ollama api" },
 ];
 
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1"] as const;
+
 export type PreviewAddressBarHandle = {
   focus: () => void;
 };
@@ -98,10 +100,14 @@ export const PreviewAddressBar = forwardRef<PreviewAddressBarHandle, Props>(
     const tryPort = async (port: number) => {
       setNotice(null);
       setCheckingPort(port);
-      const url = `http://localhost:${port}`;
-      const ok = await probeUrl(url);
+      // A server bound to 127.0.0.1 answers nothing on a `localhost` that
+      // resolves to ::1 first, so both loopback spellings are probed at once
+      // and the name wins when they both answer.
+      const candidates = LOOPBACK_HOSTS.map((h) => `http://${h}:${port}`);
+      const reachable = await Promise.all(candidates.map(probeUrl));
+      const url = candidates[reachable.indexOf(true)];
       setCheckingPort(null);
-      if (!ok) {
+      if (!url) {
         setNotice(`No server listening on :${port}.`);
         return;
       }
