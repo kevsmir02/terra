@@ -6,6 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { createPathLinkProvider } from "./pathLinks";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type FontWeight, Terminal } from "@xterm/xterm";
 import { shouldCursorBlink } from "./cursorBlink";
@@ -250,6 +251,10 @@ function createSlot(): Slot {
     lastH: 0,
     lastUsedAt: 0,
   };
+
+  term.registerLinkProvider(
+    createPathLinkProvider(term, () => slot.currentLeafId),
+  );
 
   term.attachCustomKeyEventHandler((event) => {
     // During IME composition the browser is assembling a multi-keystroke

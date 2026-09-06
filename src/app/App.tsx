@@ -71,8 +71,10 @@ import {
   useWorkspaceCwd,
 } from "@/modules/tabs";
 import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
+import { invoke } from "@tauri-apps/api/core";
 import {
   clearFocusedTerminal,
+  configureTerminalLinks,
   disposeSession,
   findLeafCwd,
   formatDroppedPaths,
@@ -1018,6 +1020,24 @@ export default function App() {
     },
     [openFileTab],
   );
+
+  // Path links in terminal output: the provider itself is registered per
+  // renderer slot and only runs for the hovered line.
+  useEffect(() => {
+    configureTerminalLinks({
+      cwdForLeaf,
+      home: () => home,
+      exists: (path) =>
+        invoke<{ kind: string }>("fs_stat", { path }).then(
+          (stat) => stat.kind !== "dir",
+        ),
+      open: (path, line) => {
+        if (line) openContentHit(path, line);
+        else handleOpenFile(path, true);
+      },
+    });
+    return () => configureTerminalLinks(null);
+  }, [cwdForLeaf, home, openContentHit, handleOpenFile]);
 
   useEffect(() => {
     setLspNavigator({ openFile: openContentHit });

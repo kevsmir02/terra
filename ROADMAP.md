@@ -10,8 +10,6 @@ Terra is developed, used, and released on Linux (Fedora day to day). The macOS a
 
 ## Next
 
-- Terminal to editor quick bridge: click file and error paths in terminal output to jump to the line in CodeMirror, and send paths from the explorer to the active PTY.
-- Relative paths on drop: when a dropped file sits under the pane's shell cwd, paste the path relative to it so it stays short for the shell and for CLI agents.
 - Terminal scrollback restore: workspace, tab, and pane-tree state already restore on relaunch; scrollback contents do not.
 - SSH and remote workspaces.
 
