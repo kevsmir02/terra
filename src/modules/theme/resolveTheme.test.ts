@@ -117,4 +117,19 @@ describe("resolveTheme", () => {
     expect(resolveTheme({ id: "empty", name: "Empty", variants: {} }, "dark"))
       .toBeNull();
   });
+
+  // The one snapshot kept: Nothing dark is the acceptance case for the
+  // structural tokens, and at roughly 90 lines it is reviewable.
+  it("resolves Nothing dark to its structural identity", () => {
+    const nothing = listBuiltinThemes().find((t) => t.id === "nothing");
+    expect(nothing).toBeDefined();
+    const vars = resolveTheme(nothing as Theme, "dark") ?? [];
+    expect(get(vars, "--border-style")).toBe("dotted");
+    expect(get(vars, "--frame-border-width")).toBe("2px");
+    expect(get(vars, "--radius-pill")).toBe("2px");
+    expect(get(vars, "--chrome-transform")).toBe("uppercase");
+    expect(get(vars, "--fx-shadow-color")).toBe("transparent");
+    expect(get(vars, "--fx-blur-factor")).toBe("0");
+    expect(vars).toMatchSnapshot();
+  });
 });

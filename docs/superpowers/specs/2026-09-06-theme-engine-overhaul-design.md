@@ -64,8 +64,9 @@ acceptance case; the contract must hold for every future theme.
 ## Theme file contract
 
 A theme is a TypeScript object with `id`, `name`, optional `author` and
-`description`, and `variants.light` / `variants.dark`. `editorTheme` stays
-optional and is removed from any builtin that also declares `terminal.ansi`.
+`description`, and `variants.light` / `variants.dark`. `editorTheme` is
+removed from `Theme` entirely; every kept builtin declares `terminal.ansi`, so
+the derived path always won.
 
 Per variant:
 
@@ -105,10 +106,6 @@ New token semantics:
 re-emits the `border`, `border-t/b/l/r` utilities to read
 `--surface-border-width`. The same two techniques extend to:
 
-- `--tracking-*`: the `@theme inline` block maps each Tailwind tracking step
-  to a theme-facing variable with the Tailwind default as fallback, so
-  `tracking-wide` follows the theme. Arbitrary `tracking-[...]` values are
-  forbidden in chrome (see test).
 - `--blur-*`: each step becomes `calc(var(--fx-blur-factor) * <default>)`,
   where `--fx-blur-factor` is `1` for `on` and `0` for `off`. `applyTheme`
   writes the factor from the keyword.
@@ -117,7 +114,10 @@ re-emits the `border`, `border-t/b/l/r` utilities to read
   `@utility`, identical to Tailwind's output except that the tint reads
   `var(--fx-shadow-color, rgb(0 0 0 / 0.1))`. Arbitrary `shadow-[...]` is
   forbidden.
-- `rounded-full` is re-emitted as `border-radius: var(--radius-pill, 9999px)`.
+- `rounded-full` is retired. A same-named `@utility` merges with Tailwind's
+  and Tailwind's declaration wins, so pills use a new `rounded-pill` utility
+  (`border-radius: var(--radius-pill, 9999px)`) and the contract test forbids
+  `rounded-full`.
 - A new `rounded-circle` utility (`border-radius: 50%`) is for geometric
   circles: status dots, avatars, spinners. It never reads a theme variable.
   Existing `rounded-full` on such elements is migrated to `rounded-circle`.
@@ -130,8 +130,8 @@ re-emits the `border`, `border-t/b/l/r` utilities to read
   zero-size box (`border-t` with `h-0`, or `border-l` with `w-0`): the
   shadcn `separator`, the `resizable` handle line, and the separators in
   `command`, `dropdown-menu`, `context-menu`, `select`, plus the two in
-  `Header.tsx`. They inherit the theme's border style and the enclosing
-  surface's width.
+  `Header.tsx`. They inherit the theme's border style at the 1 px initial
+  width unless the divider itself carries a surface class.
 
 ### Labels
 
@@ -142,7 +142,8 @@ only:
 
 - tab titles in `TabBar`
 - header buttons and menu labels
-- statusbar chips and the breadcrumb
+- statusbar chips (the breadcrumb path is content and stays lowercase, as in
+  the reference)
 - sidebar rail labels (Files, Source, Devices)
 - panel section headings (explorer root, source control groups, git history
   headings, notification bell sections, space settings groups)
@@ -151,7 +152,9 @@ only:
 
 Content keeps its own case: file names in the tree, commit messages, diff
 text, terminal, editor, markdown, toast bodies. Every hardcoded `uppercase`
-and arbitrary tracking value on chrome text is replaced by the class.
+and arbitrary tracking value on chrome text is replaced by the class. Named
+`tracking-*` steps keep Tailwind's values; only arbitrary `tracking-[...]` is
+forbidden.
 
 ### Contract test
 
@@ -297,17 +300,14 @@ records the numbers.
 
 ## Order of work
 
-1. Structural fixes with no visual change on current themes: frame style
-   variable, dividers as borders, scale bridges and re-emissions,
-   `rounded-circle`, the contract test with an allowlist that passes.
-2. Theme file contract: types, tokens, remove dead fields, `effects`,
-   `icons`, `pillRadius`; update the five kept builtins; delete three.
-3. Single font: CSS, terminal default, remove loaders and packages.
-4. Custom theme removal.
-5. Label class rollout across chrome; remove `uppercase` and arbitrary
-   tracking.
-6. Icon seam and Nerd provider; lazy Catppuccin; eager-budget lock.
-7. Wallpaper flag, fast path, settings state.
-8. Nothing rebuilt; snapshot replaced; docs, ADR, budgets re-measured.
+1. Frame border style and dividers as borders.
+2. Theme-owned scales, pill and circle radii.
+3. Remove custom JSON theme files.
+4. One font for the whole app, three font-heavy themes deleted.
+5. Theme file contract.
+6. Chrome labels wear `terra-label`.
+7. Icon seam with a Nerd Font glyph set and a lazy Catppuccin set.
+8. The theme decides whether the wallpaper shows.
+9. Nothing rebuilt, docs, ADR, budgets.
 
 Each step leaves CI green and is its own commit.
