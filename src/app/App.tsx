@@ -137,6 +137,14 @@ export default function App() {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
+  const cwdForLeaf = useCallback((leafId: number): string | undefined => {
+    const tab = tabsRef.current.find(
+      (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
+    );
+    if (tab?.kind !== "terminal") return undefined;
+    return findLeafCwd(tab.paneTree, leafId) ?? tab.cwd;
+  }, []);
+
   const activeTerminalTab = useMemo(() => {
     const t = tabs.find((x) => x.id === activeId);
     return t && t.kind === "terminal" ? t : null;
@@ -156,7 +164,7 @@ export default function App() {
     useState<GitHistorySearchHandle | null>(null);
   const { zoomIn, zoomOut, zoomReset } = useZoom();
   useApplyEditorFontSize();
-  useTerminalFileDrop();
+  useTerminalFileDrop({ cwdForLeaf });
   const explorerRef = useRef<FileExplorerHandle>(null);
 
   // Drives session disposal off the pane tree, not React lifecycles —
@@ -442,9 +450,12 @@ export default function App() {
     [newTab],
   );
 
-  const pastePathIntoLeaf = useCallback((leafId: number, path: string) => {
-    pasteIntoLeaf(leafId, formatDroppedPaths([path]));
-  }, []);
+  const pastePathIntoLeaf = useCallback(
+    (leafId: number, path: string) => {
+      pasteIntoLeaf(leafId, formatDroppedPaths([path], cwdForLeaf(leafId)));
+    },
+    [cwdForLeaf],
+  );
 
   const pastePathIntoActiveTerminal = useCallback(
     (path: string) => {
