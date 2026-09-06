@@ -26,7 +26,8 @@
     "size:eager": "node scripts/eager-size.mjs dist",
     "size": "size-limit",
     "knip": "knip",
-    "theme:sync-tokens": "node scripts/theme-token-reference-sync.mjs"
+    "theme:sync-tokens": "node scripts/theme-token-reference-sync.mjs",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath scripts/git-hooks || true"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

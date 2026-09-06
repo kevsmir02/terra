@@ -61,7 +61,7 @@ Production-grade or it does not ship. A change is done when all of these hold:
 - **Comments**: default to none, the code should explain itself. If genuinely needed, 1-2 lines on *why*, never *what*.
 - **No em-dash** anywhere: code, comments, commits, docs.
 - **No emojis** anywhere.
-- **Commits**: `type(scope): summary` in the imperative, matching the log. **No AI attribution**: never `Co-Authored-By:` for Claude or any assistant, never a "Generated with Claude Code" line. Earlier commits carry these; do not copy them when matching commit style. A `commit-msg` hook strips them as a backstop.
+- **Commits**: `type(scope): summary` in the imperative, matching the log. **No AI attribution**: never `Co-Authored-By:` for Claude or any assistant, never a "Generated with Claude Code" line. Earlier commits carry these; do not copy them when matching commit style. The `commit-msg` hook in `scripts/git-hooks` (wired by the `prepare` script through `core.hooksPath`) strips them as a backstop.
 - **Imports**: always `@/...` on the frontend, never relative across modules.
 - **pnpm only**, never npm/npx/yarn.
 - **Issues**: GitHub Issues on `kevsmir02/terra` via the `gh` CLI. Triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
