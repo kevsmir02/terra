@@ -316,7 +316,6 @@ function createSlot(): Slot {
     }
 
     const readlineSequence = terminalReadlineSequence(event, {
-      isMac: false,
       isAlternateScreen: isAltScreen(slot),
     });
     if (readlineSequence) {
