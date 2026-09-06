@@ -83,6 +83,7 @@ import {
   type PaneBounds,
   pasteIntoLeaf,
   persistedScrollback,
+  submitToNewTab,
   type TerminalPaneHandle,
   useTerminalDropStore,
   useTerminalFileDrop,
@@ -954,6 +955,28 @@ export default function App() {
     [reorderTab],
   );
 
+  // The Android SDK install runs where the user can watch it, answer Google's
+  // licence prompts and cancel: a terminal tab, not a hidden child process
+  // (docs/adr/0004-sdk-install-runs-in-a-terminal-tab.md).
+  const runInTerminal = useCallback(
+    (command: string) => {
+      const spaceId = activeSpaceId ?? DEFAULT_SPACE_ID;
+      const root = useSpaces
+        .getState()
+        .spaces.find((s) => s.id === spaceId)?.root;
+      const tabId = newTabInSpace(spaceId, root ?? undefined, command);
+      submitToNewTab(
+        command,
+        () => {
+          const tab = tabsRef.current.find((t) => t.id === tabId);
+          return tab?.kind === "terminal" ? tab.activeLeafId : null;
+        },
+        () => setActiveId(tabId),
+      );
+    },
+    [activeSpaceId, newTabInSpace, setActiveId],
+  );
+
   const handleNewTabInSpace = useCallback(
     (spaceId: string) => {
       const root = useSpaces
@@ -1169,7 +1192,10 @@ export default function App() {
                         onNavigateToPath={cdInNewTab}
                       />
                     ) : (
-                      <DeviceDropdown onPick={dockDevice} />
+                      <DeviceDropdown
+                        onPick={dockDevice}
+                        runInTerminal={runInTerminal}
+                      />
                     )}
                   </div>
                 </div>
@@ -1215,7 +1241,11 @@ export default function App() {
                   if (size.inPixels > 0) persistDockWidth(size.inPixels);
                 }}
               >
-                <DeviceDock device={dockedDevice} onStop={stopDevice} />
+                <DeviceDock
+                  device={dockedDevice}
+                  onStop={stopDevice}
+                  runInTerminal={runInTerminal}
+                />
               </ResizablePanel>
             </ResizablePanelGroup>
           </main>

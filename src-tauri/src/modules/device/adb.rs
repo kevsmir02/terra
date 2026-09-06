@@ -141,15 +141,10 @@ pub fn resolve_emulator_path() -> Result<PathBuf, String> {
     )
 }
 
-/// `avdmanager` ships in cmdline-tools (versioned dir) and, on older SDKs, in
-/// the legacy `tools/bin`. It is a `.bat` on Windows rather than an `.exe`.
-pub fn resolve_avdmanager_path() -> Result<PathBuf, String> {
-    let file = if cfg!(windows) {
-        "avdmanager.bat"
-    } else {
-        "avdmanager"
-    };
-    if let Ok(path) = which::which("avdmanager") {
+/// cmdline-tools binaries live in a versioned dir and, on older SDKs, in the
+/// legacy `tools/bin`. They are `.bat` on Windows rather than `.exe`.
+fn resolve_cmdline_tool(tool: &str, file: &str, missing: &str) -> Result<PathBuf, String> {
+    if let Ok(path) = which::which(tool) {
         return Ok(path);
     }
     for root in sdk_roots() {
@@ -166,7 +161,33 @@ pub fn resolve_avdmanager_path() -> Result<PathBuf, String> {
             return Ok(found);
         }
     }
-    Err("avdmanager not found. Install the Android SDK Command-line Tools".to_string())
+    Err(missing.to_string())
+}
+
+pub fn resolve_avdmanager_path() -> Result<PathBuf, String> {
+    let file = if cfg!(windows) {
+        "avdmanager.bat"
+    } else {
+        "avdmanager"
+    };
+    resolve_cmdline_tool(
+        "avdmanager",
+        file,
+        "avdmanager not found. Install the Android SDK Command-line Tools",
+    )
+}
+
+pub fn resolve_sdkmanager_path() -> Result<PathBuf, String> {
+    let file = if cfg!(windows) {
+        "sdkmanager.bat"
+    } else {
+        "sdkmanager"
+    };
+    resolve_cmdline_tool(
+        "sdkmanager",
+        file,
+        "sdkmanager not found. Install the Android SDK Command-line Tools",
+    )
 }
 
 /// Enumerate installed system images by walking `<sdk>/system-images`, which is
@@ -422,9 +443,113 @@ pub fn launch_avd(
     })
 }
 
-/// Create an AVD from an already-installed system image. Downloading a new
-/// image is deliberately out of scope, that needs sdkmanager, license
-/// acceptance and a progress UI.
+/// System images Terra offers to install. A hardcoded shortlist rather than
+/// `sdkmanager --list`, which is slow and hits the network; the cost of the
+/// choice is bumping this constant when a new Android ships.
+const CATALOG_API_LEVELS: &[&str] = &["36", "35", "34"];
+
+/// Google APIs images carry Play services without the Play Store's locked
+/// system partition, which `adb root` and most preview work need.
+const CATALOG_TAG: &str = "google_apis";
+
+/// The system-image ABI matching the host. An emulator on a foreign ABI has to
+/// translate every instruction, so Terra offers nothing rather than something
+/// unusable.
+pub fn host_image_abi() -> Option<&'static str> {
+    match std::env::consts::ARCH {
+        "x86_64" => Some("x86_64"),
+        "aarch64" => Some("arm64-v8a"),
+        _ => None,
+    }
+}
+
+pub fn install_catalog() -> Vec<SystemImage> {
+    let Some(abi) = host_image_abi() else {
+        return Vec::new();
+    };
+    CATALOG_API_LEVELS
+        .iter()
+        .map(|api| {
+            let api_level = format!("android-{api}");
+            SystemImage {
+                package: format!("system-images;{api_level};{CATALOG_TAG};{abi}"),
+                api_level,
+                tag: CATALOG_TAG.to_string(),
+                abi: abi.to_string(),
+            }
+        })
+        .collect()
+}
+
+/// Packages Terra may name alongside a system image, when the SDK lacks them.
+const CATALOG_TOOLS: &[&str] = &["emulator", "platform-tools"];
+
+/// The SDK root sdkmanager should write into. sdkmanager normally lives at
+/// `<root>/cmdline-tools/<version>/bin/`, so the root is the nearest ancestor
+/// that still holds `cmdline-tools`; a copy found on PATH says nothing about
+/// the root, and falls back to the first probe root that exists.
+pub fn sdk_root_for(sdkmanager: &Path) -> Option<PathBuf> {
+    sdkmanager
+        .ancestors()
+        .skip(1)
+        .take(5)
+        .find(|dir| dir.join("cmdline-tools").is_dir())
+        .map(PathBuf::from)
+        .or_else(|| sdk_roots().into_iter().find(|root| root.is_dir()))
+}
+
+/// Single-quote for a POSIX shell, `'\''` being the one way to embed a quote.
+/// zsh, bash and fish all read the result identically.
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+/// A path is only safe to splice into a command line if it survives the trip
+/// intact: a non-UTF-8 path would be mangled by a lossy conversion, and a
+/// control character (a newline above all) ends the line the shell is reading.
+fn shell_path(path: &Path) -> Result<String, String> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| format!("path is not valid UTF-8: {}", path.display()))?;
+    if text.chars().any(char::is_control) {
+        return Err(format!("path contains a control character: {text}"));
+    }
+    Ok(shell_quote(text))
+}
+
+/// Build the `sdkmanager` line Terra hands to a terminal tab, so the download
+/// runs where the user can watch it, answer the SDK licence prompts and cancel.
+///
+/// This is a shell *line*, not an argv: package ids contain `;` and an SDK root
+/// can contain a space. Every package is checked against what Terra offers, so
+/// a value arriving over IPC can never name an arbitrary one, and every element
+/// is quoted, so none of them can end the command.
+pub fn build_sdk_install_command(
+    sdkmanager: &Path,
+    sdk_root: &Path,
+    packages: &[String],
+) -> Result<String, String> {
+    if packages.is_empty() {
+        return Err("no packages to install".to_string());
+    }
+    let catalog = install_catalog();
+    for package in packages {
+        let offered = CATALOG_TOOLS.contains(&package.as_str())
+            || catalog.iter().any(|image| &image.package == package);
+        if !offered {
+            return Err(format!("package not offered by Terra: {package}"));
+        }
+    }
+    let mut line = vec![
+        shell_path(sdkmanager)?,
+        format!("--sdk_root={}", shell_path(sdk_root)?),
+    ];
+    line.extend(packages.iter().map(|package| shell_quote(package)));
+    Ok(line.join(" "))
+}
+
+/// Create an AVD from an already-installed system image. Installing one is
+/// `build_sdk_install_command`, which runs in a terminal tab rather than here.
 pub fn create_avd(avdmanager: &Path, name: &str, package: &str) -> Result<(), String> {
     use std::io::Write;
 
@@ -754,5 +879,104 @@ emulator-5554   device\n";
     #[test]
     fn exe_suffix_matches_platform() {
         assert_eq!(exe("adb"), if cfg!(windows) { "adb.exe" } else { "adb" });
+    }
+
+    #[test]
+    fn install_command_refuses_a_package_terra_does_not_offer() {
+        let tool = PathBuf::from("/sdk/cmdline-tools/latest/bin/sdkmanager");
+        let root = PathBuf::from("/sdk");
+        for package in [
+            "system-images;android-36;google_apis_playstore;x86_64",
+            "--uninstall",
+            "emulator; rm -rf /",
+            "",
+        ] {
+            assert!(
+                build_sdk_install_command(&tool, &root, &[package.to_string()]).is_err(),
+                "accepted {package}"
+            );
+        }
+        assert!(build_sdk_install_command(&tool, &root, &[]).is_err());
+    }
+
+    #[test]
+    fn install_command_quotes_every_element() {
+        let tool = PathBuf::from("/an sdk/cmdline-tools/latest/bin/sdkmanager");
+        let root = PathBuf::from("/an sdk/it's here");
+        let package = install_catalog()
+            .first()
+            .expect("a catalog on a supported host")
+            .package
+            .clone();
+        let line = build_sdk_install_command(&tool, &root, &["emulator".to_string(), package])
+            .expect("a command");
+        assert!(line.starts_with("'/an sdk/cmdline-tools/latest/bin/sdkmanager' "));
+        assert!(line.contains(r"--sdk_root='/an sdk/it'\''s here'"));
+        assert!(line.ends_with(&format!("'emulator' '{}'", install_catalog()[0].package)));
+    }
+
+    /// The real invariant: whatever the shell parses out of the line is exactly
+    /// the argv we meant, with the `;` in a package id and the space and quote
+    /// in the root intact rather than splitting or ending the command.
+    #[test]
+    #[cfg(unix)]
+    fn shell_parses_the_install_line_back_into_the_argv() {
+        let tool = PathBuf::from("/an sdk/cmdline-tools/latest/bin/sdkmanager");
+        let root = PathBuf::from("/an sdk/it's here");
+        let package = install_catalog()[0].package.clone();
+        let line = build_sdk_install_command(&tool, &root, &["emulator".to_string(), package.clone()])
+            .expect("a command");
+        let out = Command::new("sh")
+            .arg("-c")
+            .arg(format!("set -- {line}; for a; do printf '%s\\n' \"$a\"; done"))
+            .output()
+            .expect("sh");
+        assert!(out.status.success());
+        let argv: Vec<String> = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            argv,
+            vec![
+                "/an sdk/cmdline-tools/latest/bin/sdkmanager".to_string(),
+                "--sdk_root=/an sdk/it's here".to_string(),
+                "emulator".to_string(),
+                package,
+            ]
+        );
+    }
+
+    #[test]
+    fn install_command_refuses_a_path_that_would_end_the_line() {
+        let root = PathBuf::from("/sdk");
+        let package = install_catalog()[0].package.clone();
+        let newline = PathBuf::from("/sdk/bin/sdk\nmanager");
+        assert!(build_sdk_install_command(&newline, &root, std::slice::from_ref(&package)).is_err());
+        let tool = PathBuf::from("/sdk/cmdline-tools/latest/bin/sdkmanager");
+        assert!(build_sdk_install_command(&tool, Path::new("/sdk\r"), &[package]).is_err());
+    }
+
+    #[test]
+    fn catalog_packages_are_all_installable() {
+        let tool = PathBuf::from("/sdk/cmdline-tools/latest/bin/sdkmanager");
+        let root = PathBuf::from("/sdk");
+        for image in install_catalog() {
+            assert_eq!(image.tag, CATALOG_TAG);
+            assert!(image.package.starts_with("system-images;"));
+            build_sdk_install_command(&tool, &root, &[image.package]).expect("installable");
+        }
+    }
+
+    #[test]
+    fn sdk_root_is_the_ancestor_holding_cmdline_tools() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().join("Sdk");
+        let bin = root.join("cmdline-tools").join("latest").join("bin");
+        std::fs::create_dir_all(&bin).expect("layout");
+        assert_eq!(
+            sdk_root_for(&bin.join("sdkmanager")).as_deref(),
+            Some(root.as_path())
+        );
     }
 }

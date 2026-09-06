@@ -1,7 +1,7 @@
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { MutableRefObject } from "react";
 import { useSpaces } from "./useSpaces";
-import { submitToLeaf } from "@/modules/terminal/lib/useTerminalSession";
+import { submitToNewTab } from "@/modules/terminal";
 import type { Tab } from "@/modules/tabs";
 import { useEffect, useRef } from "react";
 
@@ -73,18 +73,14 @@ export function useSpaceStartup({
     const root = meta.root;
     for (const cmd of cmds) {
       const tabId = newTerminalInSpace(activeSpaceId, root ?? undefined, cmd);
-      const trySubmit = (attempt: number) => {
-        // Resolve the tab by id lazily; it may not be in tabsRef yet on the
-        // first synchronous read after setTabs.
-        const tab = tabsRef.current.find((t) => t.id === tabId);
-        if (tab?.kind !== "terminal") {
-          if (attempt < 1) setTimeout(() => trySubmit(attempt + 1), 80);
-          return;
-        }
-        setActiveId(tabId);
-        submitToLeaf(tab.activeLeafId, cmd);
-      };
-      setTimeout(() => trySubmit(0), 80);
+      submitToNewTab(
+        cmd,
+        () => {
+          const tab = tabsRef.current.find((t) => t.id === tabId);
+          return tab?.kind === "terminal" ? tab.activeLeafId : null;
+        },
+        () => setActiveId(tabId),
+      );
     }
   }, [
     ready,

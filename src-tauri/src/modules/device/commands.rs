@@ -4,10 +4,11 @@ use tauri::ipc::{Channel, Response};
 use tauri::{Emitter, Manager, State};
 
 use super::adb::{
-    boot_completed, create_avd, emu_kill, ensure_safe_serial, free_emulator_port, host_has_display,
-    launch_avd, list_avd_names, list_devices, list_system_images, log_tail, resolve_adb_path,
-    resolve_avdmanager_path, resolve_emulator_path, running_avds, AvdEntry, DeviceEntry,
-    SystemImage, GPU_FALLBACK,
+    boot_completed, build_sdk_install_command, create_avd, emu_kill, ensure_safe_serial,
+    free_emulator_port, host_has_display, install_catalog, launch_avd, list_avd_names, list_devices,
+    list_system_images, log_tail, resolve_adb_path, resolve_avdmanager_path, resolve_emulator_path,
+    resolve_sdkmanager_path, running_avds, sdk_root_for, AvdEntry, DeviceEntry, SystemImage,
+    GPU_FALLBACK,
 };
 use super::control::{ControlMessage, KeyAction, TouchAction};
 use super::session::{DeviceExit, DeviceSession};
@@ -85,6 +86,88 @@ pub async fn device_list_system_images() -> Result<Vec<SystemImage>, String> {
     tauri::async_runtime::spawn_blocking(list_system_images)
         .await
         .map_err(|e| format!("device_list_system_images join: {e}"))
+}
+
+/// What Terra can offer when the SDK has no system image yet. `canInstall` is
+/// the whole gate: with no sdkmanager there is nothing to run, so the UI shows
+/// instructions rather than a button it cannot honour.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkSetup {
+    pub can_install: bool,
+    /// Why not, when `can_install` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    pub candidates: Vec<SystemImage>,
+    /// SDK packages the install will pull in alongside the image, because they
+    /// are missing too. The UI names them so the download size is not a
+    /// surprise.
+    pub extra_packages: Vec<String>,
+}
+
+/// Packages the install adds when the SDK lacks them. Resolution, not a stored
+/// flag: the user may have installed either one from Android Studio meanwhile.
+fn missing_sdk_tools() -> Vec<String> {
+    let mut packages = Vec::new();
+    if resolve_emulator_path().is_err() {
+        packages.push("emulator".to_string());
+    }
+    if resolve_adb_path().is_err() {
+        packages.push("platform-tools".to_string());
+    }
+    packages
+}
+
+#[tauri::command]
+pub async fn device_sdk_setup() -> Result<SdkSetup, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let candidates = install_catalog();
+        let setup = match resolve_sdkmanager_path() {
+            Err(reason) => SdkSetup {
+                can_install: false,
+                reason: Some(reason),
+                candidates: Vec::new(),
+                extra_packages: Vec::new(),
+            },
+            Ok(_) if candidates.is_empty() => SdkSetup {
+                can_install: false,
+                reason: Some(format!(
+                    "no Android system image for this architecture ({})",
+                    std::env::consts::ARCH
+                )),
+                candidates,
+                extra_packages: Vec::new(),
+            },
+            Ok(_) => SdkSetup {
+                can_install: true,
+                reason: None,
+                candidates,
+                extra_packages: missing_sdk_tools(),
+            },
+        };
+        setup
+    })
+    .await
+    .map_err(|e| format!("device_sdk_setup join: {e}"))
+}
+
+/// The `sdkmanager` line for one catalog image, for the caller to run in a
+/// terminal tab. Terra does not run it: the download is multi-gigabyte and
+/// prompts for Google's SDK licences, and both belong in front of the user
+/// (`docs/adr/0004-sdk-install-runs-in-a-terminal-tab.md`).
+#[tauri::command]
+pub async fn device_sdk_install_command(package: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let sdkmanager = resolve_sdkmanager_path()?;
+        let root = sdk_root_for(&sdkmanager).ok_or_else(|| {
+            "cannot locate the Android SDK root to install into".to_string()
+        })?;
+        let mut packages = missing_sdk_tools();
+        packages.push(package);
+        build_sdk_install_command(&sdkmanager, &root, &packages)
+    })
+    .await
+    .map_err(|e| format!("device_sdk_install_command join: {e}"))?
 }
 
 #[tauri::command]

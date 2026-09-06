@@ -168,6 +168,29 @@ export function submitToLeaf(leafId: number, text: string): void {
   else queuePendingInput(s, data);
 }
 
+/**
+ * Run a command in a tab that was just created. The new tab's id is known
+ * before the tab list has re-rendered with it, so the leaf to type into cannot
+ * be resolved synchronously; `resolveLeaf` is retried once and then dropped
+ * rather than looped, so a tab that never materialises cannot spin forever.
+ */
+export function submitToNewTab(
+  command: string,
+  resolveLeaf: () => number | null,
+  onSubmit?: () => void,
+): void {
+  const attempt = (n: number) => {
+    const leafId = resolveLeaf();
+    if (leafId === null) {
+      if (n < 1) setTimeout(() => attempt(n + 1), 80);
+      return;
+    }
+    onSubmit?.();
+    submitToLeaf(leafId, command);
+  };
+  setTimeout(() => attempt(0), 80);
+}
+
 export function leafCwd(leafId: number): string | null {
   return sessions.get(leafId)?.lastCwd ?? null;
 }

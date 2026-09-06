@@ -31,13 +31,17 @@ type FallbackStatus = Exclude<
 export function PaneFallback({
   status,
   onRetry,
+  runInTerminal,
 }: {
   status: FallbackStatus;
   onRetry: () => void;
+  runInTerminal?: (command: string) => void;
 }) {
   if (status.kind === "adb-missing") return <AdbMissing narrow />;
   if (status.kind === "no-devices")
-    return <NoDevices narrow onRefresh={onRetry} />;
+    return (
+      <NoDevices narrow onRefresh={onRetry} runInTerminal={runInTerminal} />
+    );
   if (status.kind === "unauthorized") {
     return (
       <UnauthorizedDevice narrow serial={status.serial} onRefresh={onRetry} />
@@ -106,12 +110,19 @@ export function DisconnectedOverlay({
 // effect cleanup closes its session first; the new instance's start() waits
 // out that close (deviceSession.ts) before opening the same serial again, so
 // a fast remount never races the backend's own close teardown.
-export function DevicePreviewPane({ device }: { device: DeviceEntry }) {
+export function DevicePreviewPane({
+  device,
+  runInTerminal,
+}: {
+  device: DeviceEntry;
+  runInTerminal?: (command: string) => void;
+}) {
   const [attempt, setAttempt] = useState(0);
   return (
     <SessionPane
       key={attempt}
       device={device}
+      runInTerminal={runInTerminal}
       onRetry={() => setAttempt((n) => n + 1)}
     />
   );
@@ -120,9 +131,11 @@ export function DevicePreviewPane({ device }: { device: DeviceEntry }) {
 function SessionPane({
   device,
   onRetry,
+  runInTerminal,
 }: {
   device: DeviceEntry;
   onRetry: () => void;
+  runInTerminal?: (command: string) => void;
 }) {
   const { serial } = device;
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -172,7 +185,13 @@ function SessionPane({
     status.kind !== "streaming" &&
     status.kind !== "disconnected"
   ) {
-    return <PaneFallback status={status} onRetry={onRetry} />;
+    return (
+      <PaneFallback
+        status={status}
+        onRetry={onRetry}
+        runInTerminal={runInTerminal}
+      />
+    );
   }
 
   const dead = status.kind === "disconnected";

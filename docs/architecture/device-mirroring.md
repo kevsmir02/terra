@@ -21,6 +21,35 @@ The module lives in `src-tauri/src/modules/device/` and mirrors an Android devic
 
 Resolves `adb` / `emulator` / `avdmanager` and parses their output into `DeviceEntry`. That type is exported once via `ts-rs` during `cargo test` into `src/modules/device/generated/DeviceEntry.ts`, so the frontend cannot restate it and drift; CI fails if the export is not committed. `DeviceEntry::is_ready` (readiness) replaces comparing the raw `state` string against the literal `"device"` everywhere it is checked.
 
+## SDK setup (`adb.rs`, `useSdkSetup.ts`)
+
+When the SDK has no system image the dock offers to install one rather than
+sending the user to Android Studio. Terra downloads nothing itself: it resolves
+one `sdkmanager` line and runs it in a terminal tab
+(`docs/adr/0004-sdk-install-runs-in-a-terminal-tab.md`).
+
+`device_sdk_setup` reports whether an install is possible at all, the curated
+catalog, and the packages the install will pull in alongside the image because
+they are missing too (`emulator`, `platform-tools`). With no `sdkmanager` the
+panel shows instructions and no button, the same rule the rest of the app
+follows: offer a feature only where its tool exists.
+
+`build_sdk_install_command` is the one place in the module that builds a shell
+*line* rather than an argv, because a PTY takes text. Package ids contain `;`
+and an SDK root can contain a space or a quote, so it refuses any package
+outside the catalog, refuses a path that is not UTF-8 or carries a control
+character, and single-quotes every element. The test runs the produced line
+back through `sh` and asserts the argv comes out unchanged.
+
+The catalog is hardcoded (the last three API levels, `google_apis`, the host
+ABI from `std::env::consts::ARCH`) rather than read from `sdkmanager --list`,
+which is slow and hits the network for a list that changes a few times a year.
+
+There is no exit code to watch, since the command runs in a tab the module does
+not own, so completion is the image appearing on disk: `useSdkSetup` re-walks
+`device_list_system_images` every ten seconds while an install is in flight and
+not otherwise, then creates an AVD from the installed image and stops.
+
 ## Server (`server.rs`)
 
 Pushes and starts the bundled `scrcpy-server-4.1.jar` (shipped via `bundle.resources`) in frame-metadata mode: `send_frame_meta=true`, device/stream meta and the dummy byte off, `video_bit_rate=4000000`, `clipboard_autosync=false`, `max_size=1920`, `max_fps=30`.
@@ -54,3 +83,9 @@ Every process is spawned argv-style, never through a shell. Two values arrive fr
 `playbackPolicy.ts` is a pure policy that evicts behind the playhead, seeks to live after a stall, and heals a stranded playhead, so memory stays constant no matter how long the dock stays open.
 
 The dock and dropdown load through `DeviceDockLazy.tsx` and `DeviceDropdownLazy.tsx`, keeping the module out of the eager startup graph.
+
+`runInTerminal` is a callback the module takes from `App.tsx` rather than a
+terminal import, so the device module keeps no dependency on tabs or terminals;
+it is optional all the way down, and a test locks App into passing it to both
+the dock and the picker so the install offer cannot silently degrade to the
+dead end it replaced.

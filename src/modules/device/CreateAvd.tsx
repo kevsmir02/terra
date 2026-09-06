@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import { InstallEmulator } from "./InstallEmulator";
 import { listSystemImages, type SystemImage } from "./useAvds";
 
 // Offered when no AVD exists at all, or via the device picker's Create action.
-// Creation is limited to system images already on disk - downloading one needs
-// sdkmanager, license acceptance and a progress UI, which belongs in Android
-// Studio rather than here.
+// With no image on disk there is nothing to create from, so the form gives way
+// to InstallEmulator, which fetches one through a terminal tab.
 export function CreateAvd({
+  runInTerminal,
   onCreate,
   onCreated,
 }: {
+  runInTerminal?: (command: string) => void;
   onCreate: (name: string, pkg: string) => Promise<boolean>;
   onCreated?: () => void;
 }) {
@@ -30,11 +32,11 @@ export function CreateAvd({
     return <p className="mt-2">Checking for installed system images…</p>;
   if (images.length === 0) {
     return (
-      <p className="mt-2">
-        No AVDs and no system images installed. Install one from Android
-        Studio&apos;s SDK Manager (or <code>sdkmanager</code>), then click
-        Refresh.
-      </p>
+      <InstallEmulator
+        runInTerminal={runInTerminal}
+        onCreate={onCreate}
+        onCreated={onCreated}
+      />
     );
   }
 

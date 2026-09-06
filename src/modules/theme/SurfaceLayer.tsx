@@ -6,12 +6,9 @@ import { BG_OPACITY_RENDER_FACTOR } from "@/modules/settings/store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Theme, ThemeMode } from "./types";
+import { WASH_Z } from "./layers";
 import { wallpaperAllowed } from "./wallpaper";
 
-// One below the max 32-bit z-index, so the wallpaper wash sits above all
-// normal UI. Surfaces that must stay pixel-accurate (e.g. the web preview
-// iframe) opt out by painting above OVERLAY_Z instead.
-export const OVERLAY_Z = 2147483646;
 const RESIZE_IDLE_MS = 280;
 const FADE_IN_MS = 200;
 
@@ -97,7 +94,7 @@ function BackgroundImage({ fastImageId }: { fastImageId: string | null }) {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: OVERLAY_Z,
+        zIndex: WASH_Z,
         pointerEvents: "none",
         backgroundImage: suspendAnimated ? "none" : `url(${url})`,
         backgroundSize: "cover",
