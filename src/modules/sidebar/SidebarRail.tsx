@@ -9,7 +9,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { SidebarViewId } from "./types";
 
-const RAIL_WIDTH = 44;
+const RAIL_WIDTH = 54;
 
 type RailItem = {
   id: SidebarViewId;
@@ -30,7 +30,7 @@ type Props = {
 };
 
 const ITEM =
-  "group relative flex w-[38px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-md outline-none transition-colors terra-motion focus-visible:ring-2 focus-visible:ring-primary/(--emph-soft)";
+  "group relative flex w-[48px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-md outline-none transition-colors terra-motion focus-visible:ring-2 focus-visible:ring-primary/(--emph-soft)";
 const ITEM_OFF =
   "text-muted-foreground hover:bg-foreground/[0.045] hover:text-foreground";
 
@@ -77,7 +77,7 @@ export function SidebarRail({
             onClick={() => onSelectView(item.id)}
             className={cn(
               ITEM,
-              "h-[42px] gap-1",
+              "h-[46px] gap-1.5",
               isActive
                 ? "bg-foreground/[0.07] text-foreground dark:bg-foreground/[0.09]"
                 : ITEM_OFF,
@@ -85,7 +85,7 @@ export function SidebarRail({
           >
             <HugeiconsIcon
               icon={item.icon}
-              size={16}
+              size={17}
               strokeWidth={isActive ? 2 : 1.75}
               className="shrink-0 transition-[stroke-width] terra-motion"
             />
@@ -102,7 +102,7 @@ export function SidebarRail({
       })}
 
       <span className="flex-1" />
-      <span className="my-1 w-5 shrink-0 border-t border-border/(--emph-strong)" />
+      <span className="my-1 w-6 shrink-0 border-t border-border/(--emph-strong)" />
 
       <button
         type="button"

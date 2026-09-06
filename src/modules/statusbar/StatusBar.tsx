@@ -37,7 +37,7 @@ export function StatusBar({
   agents,
 }: Props) {
   return (
-    <footer className="terra-chrome flex h-6.5 shrink-0 items-center gap-2 border-t border-border/(--emph-strong) bg-card/(--emph-strong) px-2 text-[11px]">
+    <footer className="terra-chrome flex h-7.5 shrink-0 items-center gap-2 border-t border-border/(--emph-strong) bg-card/(--emph-strong) px-2.5 text-[11px]">
       <div className="flex min-w-0 items-center gap-2">
         <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
         <GitStatusChip {...git} />
