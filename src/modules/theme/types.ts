@@ -29,14 +29,6 @@ export type ThemeColors = Partial<{
   border: string;
   input: string;
   ring: string;
-  sidebar: string;
-  sidebarForeground: string;
-  sidebarPrimary: string;
-  sidebarPrimaryForeground: string;
-  sidebarAccent: string;
-  sidebarAccentForeground: string;
-  sidebarBorder: string;
-  sidebarRing: string;
   radius: string;
   borderStyle: BorderStyle;
 }>;
@@ -64,20 +56,37 @@ export type ThemeShape = Partial<{
   chromeWidth: string;
   panelWidth: string;
   slotWidth: string;
-  controlWidth: string;
   bevelWidth: string;
   bevelOuter: string;
   bevelMid: string;
   bevelInner: string;
-  liftColor: string;
-  liftDepth: string;
   spacing: string;
+  pillRadius: string;
 }>;
 
 export type ThemeTypography = Partial<{
   chromeTracking: string;
   chromeTransform: TextTransform;
 }>;
+
+export const BLUR_MODES = ["on", "off"] as const;
+
+export type BlurMode = (typeof BLUR_MODES)[number];
+
+/**
+ * Ambient effects. `shadow` is the tint every shadow utility uses, so
+ * `transparent` flattens the app; `wallpaper: false` declines the user's
+ * background image while the theme is active.
+ */
+export type ThemeEffects = Partial<{
+  shadow: string;
+  blur: BlurMode;
+  wallpaper: boolean;
+}>;
+
+export const ICON_SETS = ["catppuccin", "nerd"] as const;
+
+export type IconSet = (typeof ICON_SETS)[number];
 
 export const SYNTAX_ROLES = [
   "comment", "keyword", "string", "number", "constant", "func",
@@ -119,6 +128,8 @@ export type ThemeVariant = {
   terminal?: TerminalPalette;
   shape?: ThemeShape;
   type?: ThemeTypography;
+  effects?: ThemeEffects;
+  icons?: IconSet;
   syntax?: Partial<Record<SyntaxRole, string>>;
   status?: Partial<Record<StatusRole, string>>;
   emphasis?: ThemeEmphasis;
@@ -133,10 +144,6 @@ export type Theme = {
   variants: {
     light?: ThemeVariant;
     dark?: ThemeVariant;
-  };
-  editorTheme?: {
-    light?: string;
-    dark?: string;
   };
 };
 

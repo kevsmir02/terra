@@ -15,9 +15,10 @@ import {
   type ThemePref,
 } from "@/modules/settings/store";
 import { applyTheme } from "./applyTheme";
+import { resolveVariant } from "./resolveVariant";
 import { SurfaceLayer } from "./SurfaceLayer";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
-import type { Theme } from "./types";
+import type { Theme, ThemeVariant } from "./types";
 
 export type { Theme };
 export type ThemeModePref = ThemePref;
@@ -32,6 +33,7 @@ type ThemeProviderState = {
   resolvedMode: "dark" | "light";
   themeId: string;
   activeTheme: Theme;
+  activeVariant: ThemeVariant;
   setMode: (mode: ThemePref) => void;
   setThemeId: (id: string) => void;
   /** Apply a theme transiently without persisting; null reverts to committed. */
@@ -118,6 +120,10 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
 
   const effectiveId = previewId ?? themeId;
   const activeTheme = useMemo(() => resolveTheme(effectiveId), [effectiveId]);
+  const activeVariant = useMemo<ThemeVariant>(
+    () => resolveVariant(activeTheme, resolvedMode)?.variant ?? {},
+    [activeTheme, resolvedMode],
+  );
   useEffect(() => {
     applyTheme(activeTheme, resolvedMode);
   }, [activeTheme, resolvedMode]);
@@ -145,6 +151,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId,
       activeTheme,
+      activeVariant,
       setMode,
       setThemeId,
       previewThemeId,
@@ -154,6 +161,7 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       resolvedMode,
       themeId,
       activeTheme,
+      activeVariant,
       setMode,
       setThemeId,
       previewThemeId,

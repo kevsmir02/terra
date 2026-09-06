@@ -21,10 +21,10 @@ describe("built-in themes", () => {
     for (const t of builtins) expect(getBuiltinTheme(t.id)).toBe(t);
   });
 
-  it("pairs editor themes only for variants that exist", () => {
+  it("declares a 16-slot ANSI palette in both variants, the editor derives from it", () => {
     for (const t of builtins) {
       for (const mode of ["light", "dark"] as const) {
-        if (t.editorTheme?.[mode]) expect(t.variants[mode]).toBeDefined();
+        expect(t.variants[mode]?.terminal?.ansi, `${t.id}/${mode}`).toHaveLength(16);
       }
     }
   });

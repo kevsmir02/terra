@@ -10,14 +10,12 @@ const ansi = Array.from({ length: 16 }, (_, i) =>
 const noAnsi: Theme = {
   id: "no-ansi",
   name: "No Ansi",
-  editorTheme: { dark: "dracula", light: "github-light" },
   variants: { dark: {}, light: {} },
 };
 
 const withAnsi: Theme = {
   id: "with-ansi",
   name: "With Ansi",
-  editorTheme: { dark: "dracula", light: "github-light" },
   variants: {
     dark: { colors: { background: "#000000", foreground: "#ffffff" }, terminal: { ansi } },
     light: { colors: { background: "#ffffff", foreground: "#000000" }, terminal: { ansi } },
@@ -32,16 +30,6 @@ const darkOnly: Theme = {
   },
 };
 
-// No ansi palette and only a dark pairing, so the cross-mode fallback inside the
-// editorTheme chain is the only thing that can resolve light mode. Without a
-// theme shaped like this, deleting that fallback passes every other test.
-const asymmetricPairing: Theme = {
-  id: "asymmetric-pairing",
-  name: "Asymmetric Pairing",
-  editorTheme: { dark: "dracula" },
-  variants: { dark: {}, light: {} },
-};
-
 describe("resolveEditorTheme", () => {
   it("returns an explicit pref as a preset, ignoring the app theme", () => {
     expect(resolveEditorTheme("nord", withAnsi, "dark")).toEqual({
@@ -50,7 +38,7 @@ describe("resolveEditorTheme", () => {
     });
   });
 
-  it("derives when the theme has an ansi palette, outranking editorTheme", () => {
+  it("derives when the theme has an ansi palette", () => {
     expect(resolveEditorTheme("auto", withAnsi, "dark")).toEqual({
       kind: "derived",
       mode: "dark",
@@ -70,18 +58,10 @@ describe("resolveEditorTheme", () => {
     });
   });
 
-  // Pins the cross-mode fallback inside the pairing chain. A mutant reducing it
-  // to `theme.editorTheme?.[mode]` passes every other test in this file.
-  it("falls back across modes within the editorTheme pairing", () => {
-    expect(
-      resolveEditorTheme("auto", asymmetricPairing, "light"),
-    ).toEqual({ kind: "preset", id: "dracula" });
-  });
-
-  it("falls through to the editorTheme pairing without an ansi palette", () => {
+  it("falls back to a neutral preset per mode without an ansi palette", () => {
     expect(resolveEditorTheme("auto", noAnsi, "dark")).toEqual({
       kind: "preset",
-      id: "dracula",
+      id: "atomone",
     });
     expect(resolveEditorTheme("auto", noAnsi, "light")).toEqual({
       kind: "preset",
@@ -89,10 +69,7 @@ describe("resolveEditorTheme", () => {
     });
   });
 
-  // terra-default authors its own ansi palette, so derivation outranks the
-  // atomone pairing it still declares as a fallback. Before it did, the default
-  // theme was the one case where the editor came from an unrelated preset.
-  it("derives terra-default from its own ansi palette", () => {
+  it("derives the default theme from its own ansi palette", () => {
     expect(resolveEditorTheme("auto", getDefaultTheme(), "dark")).toEqual({
       kind: "derived",
       mode: "dark",
@@ -100,23 +77,6 @@ describe("resolveEditorTheme", () => {
     expect(resolveEditorTheme("auto", getDefaultTheme(), "light")).toEqual({
       kind: "derived",
       mode: "light",
-    });
-  });
-
-  it("falls back to a neutral preset when the pairing is invalid", () => {
-    const bad: Theme = {
-      id: "bad",
-      name: "Bad",
-      editorTheme: { dark: "not-a-real-theme" },
-      variants: { dark: {} },
-    };
-    expect(resolveEditorTheme("auto", bad, "dark")).toEqual({
-      kind: "preset",
-      id: "atomone",
-    });
-    expect(resolveEditorTheme("auto", bad, "light")).toEqual({
-      kind: "preset",
-      id: "github-light",
     });
   });
 });

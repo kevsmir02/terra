@@ -29,10 +29,6 @@ export const nothing: Theme = {
   id: "nothing",
   name: "Nothing",
   description: "Monochrome void, dot-matrix type, one red signal.",
-  editorTheme: {
-    light: "github-light",
-    dark: "kanagawa",
-  },
   variants: {
     dark: {
       colors: {
@@ -57,14 +53,6 @@ export const nothing: Theme = {
         ring: "#d63b2e",
         radius: "0.25rem",
         borderStyle: "dotted",
-        sidebar: "#000000",
-        sidebarForeground: "#ededeb",
-        sidebarPrimary: "#d63b2e",
-        sidebarPrimaryForeground: "#ffffff",
-        sidebarAccent: "#1f1f1f",
-        sidebarAccentForeground: "#ededeb",
-        sidebarBorder: "#6e6e6a",
-        sidebarRing: "#d63b2e",
       },
       emphasis: {
         faint: "12%",
@@ -133,14 +121,6 @@ export const nothing: Theme = {
         ring: "#c8342a",
         radius: "0.25rem",
         borderStyle: "dotted",
-        sidebar: "#f0f0ee",
-        sidebarForeground: "#0a0a0a",
-        sidebarPrimary: "#c8342a",
-        sidebarPrimaryForeground: "#ffffff",
-        sidebarAccent: "#eaeae8",
-        sidebarAccentForeground: "#0a0a0a",
-        sidebarBorder: "#8a8a86",
-        sidebarRing: "#c8342a",
       },
       emphasis: {
         faint: "12%",

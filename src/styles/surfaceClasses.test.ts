@@ -19,7 +19,6 @@ describe("surface classes", () => {
     [".terra-chrome", "--chrome-border-width"],
     [".terra-panel", "--panel-border-width"],
     [".terra-slot", "--slot-border-width"],
-    [".terra-control", "--control-border-width"],
   ])("%s scopes --surface-border-width from %s", (selector, token) => {
     const b = block(selector);
     expect(b).toContain(`--surface-border-width: var(${token}, 1px)`);
@@ -46,8 +45,6 @@ describe("surface classes", () => {
       "--bevel-outer: transparent",
       "--bevel-mid: transparent",
       "--bevel-inner: transparent",
-      "--lift-color: transparent",
-      "--lift-depth: 0px",
     ]) {
       expect(CSS).toContain(decl);
     }

@@ -24,7 +24,6 @@ export const gruvbox: Theme = {
   id: "gruvbox",
   name: "Gruvbox",
   description: "Warm, earthy retro palette.",
-  editorTheme: { dark: "gruvbox-dark", light: "github-light" },
   variants: {
     dark: {
       colors: {
@@ -48,14 +47,6 @@ export const gruvbox: Theme = {
         ring: "#fabd2f",
         radius: "0.25rem",
         borderStyle: "solid",
-        sidebar: "#1d2021",
-        sidebarForeground: "#ebdbb2",
-        sidebarPrimary: "#fabd2f",
-        sidebarPrimaryForeground: "#282828",
-        sidebarAccent: "#3c3836",
-        sidebarAccentForeground: "#ebdbb2",
-        sidebarBorder: "#504945",
-        sidebarRing: "#fabd2f",
       },
       emphasis: {
         faint: "15%",
@@ -112,14 +103,6 @@ export const gruvbox: Theme = {
         ring: "#b57614",
         radius: "0.25rem",
         borderStyle: "solid",
-        sidebar: "#f2e5bc",
-        sidebarForeground: "#3c3836",
-        sidebarPrimary: "#b57614",
-        sidebarPrimaryForeground: "#fbf1c7",
-        sidebarAccent: "#ebdbb2",
-        sidebarAccentForeground: "#3c3836",
-        sidebarBorder: "#bdae93",
-        sidebarRing: "#b57614",
       },
       emphasis: {
         faint: "15%",

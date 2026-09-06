@@ -34,13 +34,15 @@ export type TokenDef = {
   /** Dotted path into the variant, e.g. "colors.background". */
   key: string;
   cssVar: string;
-  group: "colors" | "terminal" | "shape" | "type" | "syntax" | "status" | "emphasis";
+  group: "colors" | "terminal" | "shape" | "type" | "effects" | "syntax" | "status" | "emphasis";
   kind: TokenKind;
   /** Keys `derive` reads. Drives the topological order. */
   deps?: readonly string[];
   derive?: (d: DerivedValues) => string | undefined;
   fallback?: string;
   keywords?: readonly string[];
+  /** Rewrites an authored keyword into the CSS value the variable carries. */
+  map?: Readonly<Record<string, string>>;
   doc: string;
 };
 
@@ -63,14 +65,6 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "colors.border", cssVar: "--border", group: "colors", kind: "color", doc: "Default border color." },
   { key: "colors.input", cssVar: "--input", group: "colors", kind: "color", doc: "Input border color." },
   { key: "colors.ring", cssVar: "--ring", group: "colors", kind: "color", doc: "Focus ring color." },
-  { key: "colors.sidebar", cssVar: "--sidebar", group: "colors", kind: "color", doc: "Sidebar background." },
-  { key: "colors.sidebarForeground", cssVar: "--sidebar-foreground", group: "colors", kind: "textColor", doc: "Sidebar text." },
-  { key: "colors.sidebarPrimary", cssVar: "--sidebar-primary", group: "colors", kind: "color", doc: "Sidebar primary accent." },
-  { key: "colors.sidebarPrimaryForeground", cssVar: "--sidebar-primary-foreground", group: "colors", kind: "textColor", doc: "Text on sidebar primary." },
-  { key: "colors.sidebarAccent", cssVar: "--sidebar-accent", group: "colors", kind: "color", doc: "Sidebar accent." },
-  { key: "colors.sidebarAccentForeground", cssVar: "--sidebar-accent-foreground", group: "colors", kind: "textColor", doc: "Text on sidebar accent." },
-  { key: "colors.sidebarBorder", cssVar: "--sidebar-border", group: "colors", kind: "color", doc: "Sidebar border." },
-  { key: "colors.sidebarRing", cssVar: "--sidebar-ring", group: "colors", kind: "color", doc: "Sidebar focus ring." },
   { key: "colors.radius", cssVar: "--radius", group: "colors", kind: "length", doc: "Border radius." },
   { key: "colors.borderStyle", cssVar: "--border-style", group: "colors", kind: "keyword", doc: "Border style." },
 
@@ -80,14 +74,15 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "shape.chromeWidth", cssVar: "--chrome-border-width", group: "shape", kind: "length", fallback: "1px", doc: "Chrome border width." },
   { key: "shape.panelWidth", cssVar: "--panel-border-width", group: "shape", kind: "length", fallback: "1px", doc: "Panel border width." },
   { key: "shape.slotWidth", cssVar: "--slot-border-width", group: "shape", kind: "length", fallback: "1px", doc: "Slot border width." },
-  { key: "shape.controlWidth", cssVar: "--control-border-width", group: "shape", kind: "length", fallback: "1px", doc: "Control border width." },
   { key: "shape.bevelWidth", cssVar: "--bevel-width", group: "shape", kind: "length", fallback: "0px", doc: "Bevel width." },
   { key: "shape.bevelOuter", cssVar: "--bevel-outer", group: "shape", kind: "color", fallback: "transparent", doc: "Bevel outer color." },
   { key: "shape.bevelMid", cssVar: "--bevel-mid", group: "shape", kind: "color", fallback: "transparent", doc: "Bevel mid color." },
   { key: "shape.bevelInner", cssVar: "--bevel-inner", group: "shape", kind: "color", fallback: "transparent", doc: "Bevel inner color." },
-  { key: "shape.liftColor", cssVar: "--lift-color", group: "shape", kind: "color", fallback: "transparent", doc: "Lift shadow color." },
-  { key: "shape.liftDepth", cssVar: "--lift-depth", group: "shape", kind: "length", fallback: "0px", doc: "Lift depth." },
   { key: "shape.spacing", cssVar: "--ui-spacing", group: "shape", kind: "length", fallback: "0.25rem", doc: "UI spacing." },
+  { key: "shape.pillRadius", cssVar: "--radius-pill", group: "shape", kind: "length", fallback: "9999px", doc: "Radius of pills, chips, toggles, and badges (rounded-pill)." },
+
+  { key: "effects.shadow", cssVar: "--fx-shadow-color", group: "effects", kind: "color", doc: "Tint every shadow utility uses; transparent flattens the app." },
+  { key: "effects.blur", cssVar: "--fx-blur-factor", group: "effects", kind: "keyword", keywords: ["on", "off"], map: { on: "1", off: "0" }, fallback: "1", doc: "Backdrop blur: on keeps the scale, off zeroes it." },
 
   { key: "type.chromeTracking", cssVar: "--chrome-tracking", group: "type", kind: "length", doc: "Chrome letter spacing." },
   { key: "type.chromeTransform", cssVar: "--chrome-transform", group: "type", kind: "keyword", doc: "Chrome text transform." },

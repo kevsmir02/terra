@@ -1,20 +1,68 @@
 import { describe, expect, it } from "vitest";
+import { contrast } from "./oklab";
 import { resolveTheme } from "./resolveTheme";
 import { listBuiltinThemes } from "./themes";
-import type { Theme, ThemeMode } from "./types";
+import { TOKENS } from "./tokens";
+import { STATUS_ROLES, SYNTAX_ROLES, type Theme, type ThemeMode } from "./types";
 
 const MODES: ThemeMode[] = ["light", "dark"];
 const get = (vars: readonly (readonly [string, string])[], name: string) =>
   vars.find(([n]) => n === name)?.[1];
+const DIM_ROLES = new Set(["comment", "gutterFg", "tagBracket"]);
+const cssVar = (key: string) => TOKENS.find((t) => t.key === key)?.cssVar ?? key;
 
 describe("resolveTheme", () => {
-  it("resolves every builtin in both modes to a stable variable set", () => {
+  // Replaces a 7000-line snapshot nobody could review. Every derived colour
+  // must clear the floor its derive() promised, on every builtin, both modes.
+  it("lifts every derived syntax and status colour to its contrast floor", () => {
     for (const theme of listBuiltinThemes()) {
       for (const mode of MODES) {
-        expect({ id: theme.id, mode, vars: resolveTheme(theme, mode) })
-          .toMatchSnapshot(`${theme.id}-${mode}`);
+        const variant = theme.variants[mode];
+        const bg = variant?.colors?.background;
+        if (!variant || !bg) continue;
+        const vars = resolveTheme(theme, mode) ?? [];
+        for (const role of SYNTAX_ROLES) {
+          if (variant.syntax?.[role]) continue;
+          const v = get(vars, cssVar(`syntax.${role}`));
+          expect(v, `${theme.id}/${mode} syntax.${role}`).toBeDefined();
+          const floor = DIM_ROLES.has(role) ? 3 : 4.5;
+          expect(contrast(v as string, bg), `${theme.id}/${mode} syntax.${role}`)
+            .toBeGreaterThanOrEqual(floor - 0.01);
+        }
+        for (const role of STATUS_ROLES) {
+          if (variant.status?.[role]) continue;
+          const v = get(vars, cssVar(`status.${role}`));
+          expect(v, `${theme.id}/${mode} status.${role}`).toBeDefined();
+          expect(contrast(v as string, bg), `${theme.id}/${mode} status.${role}`)
+            .toBeGreaterThanOrEqual(4.49);
+        }
       }
     }
+  });
+
+  it("maps keyword tokens onto their CSS values", () => {
+    const theme: Theme = {
+      id: "flat", name: "Flat",
+      variants: { dark: {
+        colors: { background: "#101010", foreground: "#f0f0f0" },
+        effects: { blur: "off", shadow: "transparent" },
+        shape: { pillRadius: "2px" },
+      } },
+    };
+    const vars = resolveTheme(theme, "dark") ?? [];
+    expect(get(vars, "--fx-blur-factor")).toBe("0");
+    expect(get(vars, "--fx-shadow-color")).toBe("transparent");
+    expect(get(vars, "--radius-pill")).toBe("2px");
+  });
+
+  it("defaults to blur on, no shadow tint, and a round pill", () => {
+    const vars = resolveTheme(
+      { id: "bare", name: "Bare", variants: { dark: { colors: { background: "#101010" } } } },
+      "dark",
+    ) ?? [];
+    expect(get(vars, "--fx-blur-factor")).toBe("1");
+    expect(get(vars, "--fx-shadow-color")).toBeUndefined();
+    expect(get(vars, "--radius-pill")).toBe("9999px");
   });
 
   // Audit bug: a missing foreground used to null all 18 syntax vars.

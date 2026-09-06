@@ -42,7 +42,8 @@ export function resolveTheme(theme: Theme, mode: ThemeMode): ThemeVar[] | null {
     const def = byKey.get(key);
     if (!def) return;
     for (const d of def.deps ?? []) resolveOne(d);
-    const authored = readAuthored(variant, key);
+    const raw = readAuthored(variant, key);
+    const authored = raw !== undefined && def.map ? (def.map[raw] ?? raw) : raw;
     const derivedValues: DerivedValues = Object.assign({}, values, { ansi });
     values[key] = authored ?? def.derive?.(derivedValues) ?? def.fallback;
   };

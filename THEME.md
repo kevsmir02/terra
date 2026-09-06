@@ -225,14 +225,6 @@ unset and keeps JetBrains Mono.
 | `colors.border` | `--border` |  | Default border color. |
 | `colors.input` | `--input` |  | Input border color. |
 | `colors.ring` | `--ring` |  | Focus ring color. |
-| `colors.sidebar` | `--sidebar` |  | Sidebar background. |
-| `colors.sidebarForeground` | `--sidebar-foreground` |  | Sidebar text. |
-| `colors.sidebarPrimary` | `--sidebar-primary` |  | Sidebar primary accent. |
-| `colors.sidebarPrimaryForeground` | `--sidebar-primary-foreground` |  | Text on sidebar primary. |
-| `colors.sidebarAccent` | `--sidebar-accent` |  | Sidebar accent. |
-| `colors.sidebarAccentForeground` | `--sidebar-accent-foreground` |  | Text on sidebar accent. |
-| `colors.sidebarBorder` | `--sidebar-border` |  | Sidebar border. |
-| `colors.sidebarRing` | `--sidebar-ring` |  | Sidebar focus ring. |
 | `colors.radius` | `--radius` |  | Border radius. |
 | `colors.borderStyle` | `--border-style` |  | Border style. |
 
@@ -246,14 +238,12 @@ unset and keeps JetBrains Mono.
 | `shape.chromeWidth` | `--chrome-border-width` | `1px` | Chrome border width. |
 | `shape.panelWidth` | `--panel-border-width` | `1px` | Panel border width. |
 | `shape.slotWidth` | `--slot-border-width` | `1px` | Slot border width. |
-| `shape.controlWidth` | `--control-border-width` | `1px` | Control border width. |
 | `shape.bevelWidth` | `--bevel-width` | `0px` | Bevel width. |
 | `shape.bevelOuter` | `--bevel-outer` | `transparent` | Bevel outer color. |
 | `shape.bevelMid` | `--bevel-mid` | `transparent` | Bevel mid color. |
 | `shape.bevelInner` | `--bevel-inner` | `transparent` | Bevel inner color. |
-| `shape.liftColor` | `--lift-color` | `transparent` | Lift shadow color. |
-| `shape.liftDepth` | `--lift-depth` | `0px` | Lift depth. |
 | `shape.spacing` | `--ui-spacing` | `0.25rem` | UI spacing. |
+| `shape.pillRadius` | `--radius-pill` | `9999px` | Radius of pills, chips, toggles, and badges (rounded-pill). |
 
 ### `type`
 
@@ -261,6 +251,13 @@ unset and keeps JetBrains Mono.
 |---|---|---|---|
 | `type.chromeTracking` | `--chrome-tracking` |  | Chrome letter spacing. |
 | `type.chromeTransform` | `--chrome-transform` |  | Chrome text transform. |
+
+### `effects`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `effects.shadow` | `--fx-shadow-color` |  | Tint every shadow utility uses; transparent flattens the app. |
+| `effects.blur` | `--fx-blur-factor` | `1` | Backdrop blur: on keeps the scale, off zeroes it. |
 
 ### `terminal`
 

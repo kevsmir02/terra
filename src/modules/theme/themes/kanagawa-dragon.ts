@@ -18,7 +18,6 @@ export const kanagawaDragon: Theme = {
   id: "kanagawa-dragon",
   name: "Kanagawa Dragon",
   description: "The muted, near-black Dragon variant of Kanagawa.",
-  editorTheme: { dark: "kanagawa-dragon", light: "kanagawa-lotus" },
   variants: {
     dark: {
       colors: {
@@ -42,14 +41,6 @@ export const kanagawaDragon: Theme = {
         ring: "#8ba4b0",
         radius: "0.5rem",
         borderStyle: "solid",
-        sidebar: "#0d0c0c",
-        sidebarForeground: "#c5c9c5",
-        sidebarPrimary: "#8ba4b0",
-        sidebarPrimaryForeground: "#181616",
-        sidebarAccent: "#282727",
-        sidebarAccentForeground: "#c5c9c5",
-        sidebarBorder: "#3a3937",
-        sidebarRing: "#8ba4b0",
       },
       emphasis: {
         faint: "12%",
@@ -106,14 +97,6 @@ export const kanagawaDragon: Theme = {
         ring: "#4a6570",
         radius: "0.5rem",
         borderStyle: "solid",
-        sidebar: "#ddd8ce",
-        sidebarForeground: "#383630",
-        sidebarPrimary: "#4a6570",
-        sidebarPrimaryForeground: "#efece5",
-        sidebarAccent: "#d2ccc0",
-        sidebarAccentForeground: "#383630",
-        sidebarBorder: "#b4ada0",
-        sidebarRing: "#4a6570",
       },
       emphasis: {
         faint: "12%",
