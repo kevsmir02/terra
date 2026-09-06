@@ -37,9 +37,8 @@ describe("main window preference hydration", () => {
     // first-run branch, either it moved above the branch, or App.tsx covers it.
     const hydratesInsideBranch = /\.init\(\)/.test(insideBranch);
     const hydratesBeforeBranch = /\.init\(\)/.test(beforeBranch);
-    const appHydrates = /usePreferencesStore\s*\.getState\(\)\s*\.init\(\)/.test(
-      appSrc,
-    );
+    const appHydrates =
+      /usePreferencesStore\s*\.getState\(\)\s*\.init\(\)/.test(appSrc);
 
     expect(hydratesBeforeBranch || appHydrates).toBe(true);
     // The branch-local call may remain, init() is idempotent via initPromise.

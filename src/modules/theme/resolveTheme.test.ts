@@ -3,13 +3,19 @@ import { contrast } from "./oklab";
 import { resolveTheme } from "./resolveTheme";
 import { listBuiltinThemes } from "./themes";
 import { TOKENS } from "./tokens";
-import { STATUS_ROLES, SYNTAX_ROLES, type Theme, type ThemeMode } from "./types";
+import {
+  STATUS_ROLES,
+  SYNTAX_ROLES,
+  type Theme,
+  type ThemeMode,
+} from "./types";
 
 const MODES: ThemeMode[] = ["light", "dark"];
 const get = (vars: readonly (readonly [string, string])[], name: string) =>
   vars.find(([n]) => n === name)?.[1];
 const DIM_ROLES = new Set(["comment", "gutterFg", "tagBracket"]);
-const cssVar = (key: string) => TOKENS.find((t) => t.key === key)?.cssVar ?? key;
+const cssVar = (key: string) =>
+  TOKENS.find((t) => t.key === key)?.cssVar ?? key;
 
 describe("resolveTheme", () => {
   // Replaces a 7000-line snapshot nobody could review. Every derived colour
@@ -26,15 +32,19 @@ describe("resolveTheme", () => {
           const v = get(vars, cssVar(`syntax.${role}`));
           expect(v, `${theme.id}/${mode} syntax.${role}`).toBeDefined();
           const floor = DIM_ROLES.has(role) ? 3 : 4.5;
-          expect(contrast(v as string, bg), `${theme.id}/${mode} syntax.${role}`)
-            .toBeGreaterThanOrEqual(floor - 0.01);
+          expect(
+            contrast(v as string, bg),
+            `${theme.id}/${mode} syntax.${role}`,
+          ).toBeGreaterThanOrEqual(floor - 0.01);
         }
         for (const role of STATUS_ROLES) {
           if (variant.status?.[role]) continue;
           const v = get(vars, cssVar(`status.${role}`));
           expect(v, `${theme.id}/${mode} status.${role}`).toBeDefined();
-          expect(contrast(v as string, bg), `${theme.id}/${mode} status.${role}`)
-            .toBeGreaterThanOrEqual(4.49);
+          expect(
+            contrast(v as string, bg),
+            `${theme.id}/${mode} status.${role}`,
+          ).toBeGreaterThanOrEqual(4.49);
         }
       }
     }
@@ -42,12 +52,15 @@ describe("resolveTheme", () => {
 
   it("maps keyword tokens onto their CSS values", () => {
     const theme: Theme = {
-      id: "flat", name: "Flat",
-      variants: { dark: {
-        colors: { background: "#101010", foreground: "#f0f0f0" },
-        effects: { blur: "off", shadow: "transparent" },
-        shape: { pillRadius: "2px" },
-      } },
+      id: "flat",
+      name: "Flat",
+      variants: {
+        dark: {
+          colors: { background: "#101010", foreground: "#f0f0f0" },
+          effects: { blur: "off", shadow: "transparent" },
+          shape: { pillRadius: "2px" },
+        },
+      },
     };
     const vars = resolveTheme(theme, "dark") ?? [];
     expect(get(vars, "--fx-blur-factor")).toBe("0");
@@ -56,10 +69,15 @@ describe("resolveTheme", () => {
   });
 
   it("defaults to blur on, no shadow tint, and a round pill", () => {
-    const vars = resolveTheme(
-      { id: "bare", name: "Bare", variants: { dark: { colors: { background: "#101010" } } } },
-      "dark",
-    ) ?? [];
+    const vars =
+      resolveTheme(
+        {
+          id: "bare",
+          name: "Bare",
+          variants: { dark: { colors: { background: "#101010" } } },
+        },
+        "dark",
+      ) ?? [];
     expect(get(vars, "--fx-blur-factor")).toBe("1");
     expect(get(vars, "--fx-shadow-color")).toBeUndefined();
     expect(get(vars, "--radius-pill")).toBe("9999px");
@@ -68,9 +86,14 @@ describe("resolveTheme", () => {
   // Audit bug: a missing foreground used to null all 18 syntax vars.
   it("degrades one token, not the whole syntax palette, when foreground is absent", () => {
     const theme: Theme = {
-      id: "no-fg", name: "No Foreground",
-      variants: { dark: { colors: { background: "#101010" },
-        terminal: { ansi: Array(16).fill("#8899aa") as never } } },
+      id: "no-fg",
+      name: "No Foreground",
+      variants: {
+        dark: {
+          colors: { background: "#101010" },
+          terminal: { ansi: Array(16).fill("#8899aa") as never },
+        },
+      },
     };
     const vars = resolveTheme(theme, "dark");
     expect(vars).not.toBeNull();
@@ -81,11 +104,17 @@ describe("resolveTheme", () => {
   // Audit bug: contrast used to be enforced only when both colours were hex.
   it("enforces contrast for rgb() themes, not only hex ones", () => {
     const theme: Theme = {
-      id: "rgb-theme", name: "RGB",
-      variants: { dark: {
-        colors: { background: "rgb(16,16,16)", foreground: "rgb(240,240,240)" },
-        terminal: { ansi: Array(16).fill("rgb(20,20,20)") as never },
-      } },
+      id: "rgb-theme",
+      name: "RGB",
+      variants: {
+        dark: {
+          colors: {
+            background: "rgb(16,16,16)",
+            foreground: "rgb(240,240,240)",
+          },
+          terminal: { ansi: Array(16).fill("rgb(20,20,20)") as never },
+        },
+      },
     };
     const vars = resolveTheme(theme, "dark");
     const keyword = get(vars ?? [], "--syntax-keyword");
@@ -114,8 +143,9 @@ describe("resolveTheme", () => {
   });
 
   it("returns null when the theme has no usable variant", () => {
-    expect(resolveTheme({ id: "empty", name: "Empty", variants: {} }, "dark"))
-      .toBeNull();
+    expect(
+      resolveTheme({ id: "empty", name: "Empty", variants: {} }, "dark"),
+    ).toBeNull();
   });
 
   // The one snapshot kept: Nothing dark is the acceptance case for the

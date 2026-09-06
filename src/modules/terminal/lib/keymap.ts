@@ -1,7 +1,4 @@
-import {
-  activeBindings,
-  type UserShortcuts,
-} from "@/modules/shortcuts";
+import { activeBindings, type UserShortcuts } from "@/modules/shortcuts";
 import {
   type KeyBinding,
   type KeyEventLike,
@@ -12,7 +9,9 @@ import {
 // Was a narrower Pick that omitted shiftKey; the rebindable chords need it.
 export type TerminalKeyEvent = KeyEventLike;
 
-export function terminalWordNavigationSequence(event: TerminalKeyEvent): string | null {
+export function terminalWordNavigationSequence(
+  event: TerminalKeyEvent,
+): string | null {
   if (!event.altKey || event.ctrlKey || event.metaKey) return null;
   if (event.key === "ArrowLeft" || event.code === "ArrowLeft") return "\x1bb";
   if (event.key === "ArrowRight" || event.code === "ArrowRight") return "\x1bf";
@@ -31,9 +30,7 @@ export function terminalReadlineSequence(
   opts: { isAlternateScreen: boolean },
 ): string | null {
   if (opts.isAlternateScreen) return null;
-  return (
-    terminalWordNavigationSequence(event) ?? terminalDeleteSequence(event)
-  );
+  return terminalWordNavigationSequence(event) ?? terminalDeleteSequence(event);
 }
 
 export type TerminalKeyAction = "copy" | "paste" | "newline";

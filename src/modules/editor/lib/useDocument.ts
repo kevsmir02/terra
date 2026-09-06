@@ -3,11 +3,7 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  type DiskEvent,
-  type DiskState,
-  nextDiskState,
-} from "./diskState";
+import { type DiskEvent, type DiskState, nextDiskState } from "./diskState";
 import { detectEol, type Eol, normalizeToLf, restoreEol } from "./eol";
 
 // A file vanishing mid atomic-rename is normal; a file the user deleted stays

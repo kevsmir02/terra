@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(
-  path.resolve(__dirname, "globals.css"),
-  "utf8",
-);
+const CSS = readFileSync(path.resolve(__dirname, "globals.css"), "utf8");
 
 function block(selector: string): string {
   const i = CSS.indexOf(`${selector} {`);
@@ -36,7 +33,9 @@ describe("surface classes", () => {
   // Inset from the window frame, so chrome never butts against a thick border.
   // Must default to 0 or every non-opting theme gains a stray gutter.
   it("insets the frame only when a theme asks for it", () => {
-    expect(block(".terra-frame")).toContain("padding: var(--frame-padding, 0px)");
+    expect(block(".terra-frame")).toContain(
+      "padding: var(--frame-padding, 0px)",
+    );
   });
 
   it("defaults every bevel input to a no-op", () => {

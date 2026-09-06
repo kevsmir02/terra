@@ -52,7 +52,11 @@ function readFastMode(fallback: ThemePref): ThemePref {
 }
 
 function writeFastMode(t: ThemePref): void {
-  try { window.localStorage.setItem(FAST_PATH_KEY, t); } catch { /* ignore */ }
+  try {
+    window.localStorage.setItem(FAST_PATH_KEY, t);
+  } catch {
+    /* ignore */
+  }
 }
 
 function readFastThemeId(): string {
@@ -61,15 +65,24 @@ function readFastThemeId(): string {
 }
 
 function writeFastThemeId(id: string): void {
-  try { window.localStorage.setItem(FAST_PATH_THEME_ID, id); } catch { /* ignore */ }
+  try {
+    window.localStorage.setItem(FAST_PATH_THEME_ID, id);
+  } catch {
+    /* ignore */
+  }
 }
 
 function resolveTheme(id: string): Theme {
   return getBuiltinTheme(id) ?? getDefaultTheme();
 }
 
-export function ThemeProvider({ children, defaultMode = "system" }: ThemeProviderProps) {
-  const [mode, setModeState] = useState<ThemePref>(() => readFastMode(defaultMode));
+export function ThemeProvider({
+  children,
+  defaultMode = "system",
+}: ThemeProviderProps) {
+  const [mode, setModeState] = useState<ThemePref>(() =>
+    readFastMode(defaultMode),
+  );
   const [themeId, setThemeIdState] = useState<string>(() => readFastThemeId());
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [systemDark, setSystemDark] = useState<boolean>(() =>
@@ -88,7 +101,10 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
       writeFastThemeId(p.themeId);
     });
     const unlistenP = onPreferencesChange((key, value) => {
-      if (key === "theme" && (value === "system" || value === "light" || value === "dark")) {
+      if (
+        key === "theme" &&
+        (value === "system" || value === "light" || value === "dark")
+      ) {
         setModeState(value);
         writeFastMode(value);
       } else if (key === "themeId" && typeof value === "string") {

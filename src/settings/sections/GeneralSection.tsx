@@ -284,7 +284,10 @@ export function GeneralSection() {
             value={terminalFont}
             onValueChange={(v) => void setTerminalFont(v as TerminalFontId)}
           >
-            <SelectTrigger value={terminalFont} className="h-8 w-56 text-[12px]">
+            <SelectTrigger
+              value={terminalFont}
+              className="h-8 w-56 text-[12px]"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

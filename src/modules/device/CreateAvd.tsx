@@ -26,12 +26,14 @@ export function CreateAvd({
     });
   }, []);
 
-  if (!images) return <p className="mt-2">Checking for installed system images…</p>;
+  if (!images)
+    return <p className="mt-2">Checking for installed system images…</p>;
   if (images.length === 0) {
     return (
       <p className="mt-2">
-        No AVDs and no system images installed. Install one from Android Studio&apos;s SDK Manager
-        (or <code>sdkmanager</code>), then click Refresh.
+        No AVDs and no system images installed. Install one from Android
+        Studio&apos;s SDK Manager (or <code>sdkmanager</code>), then click
+        Refresh.
       </p>
     );
   }

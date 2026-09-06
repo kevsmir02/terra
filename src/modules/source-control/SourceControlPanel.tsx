@@ -41,7 +41,10 @@ import {
   copyToClipboard,
   revealInFinder,
 } from "@/modules/explorer/lib/contextActions";
-import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
+import {
+  FileIconView,
+  useIconProvider,
+} from "@/modules/explorer/lib/iconProvider";
 import {
   COMPACT_CONTENT,
   COMPACT_ITEM,
@@ -1034,7 +1037,10 @@ function CleanTreeHint({ repoLabel }: { repoLabel: string }) {
         Working tree clean
       </div>
       <div className="text-[10.5px] leading-snug text-muted-foreground">
-        on <span className="font-mono text-foreground/(--emph-bold)">{repoLabel}</span>
+        on{" "}
+        <span className="font-mono text-foreground/(--emph-bold)">
+          {repoLabel}
+        </span>
       </div>
     </div>
   );

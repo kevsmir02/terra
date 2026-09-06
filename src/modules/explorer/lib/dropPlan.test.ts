@@ -12,9 +12,9 @@ const hit = (partial: Partial<DragHit>): DragHit => ({
 
 describe("planDrop", () => {
   it("pastes into the terminal leaf under the cursor", () => {
-    expect(planDrop(hit({ paneLeafId: 7 }), "/ws/src/a.ts", root, isDir)).toEqual(
-      { kind: "terminal", leafId: 7 },
-    );
+    expect(
+      planDrop(hit({ paneLeafId: 7 }), "/ws/src/a.ts", root, isDir),
+    ).toEqual({ kind: "terminal", leafId: 7 });
   });
 
   it("does nothing when released outside the explorer and off any terminal", () => {

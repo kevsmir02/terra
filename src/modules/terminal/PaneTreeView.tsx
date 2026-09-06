@@ -10,7 +10,6 @@ import { useTerminalDropStore } from "./lib/dropStore";
 import { firstLeafSlotId, type PaneNode } from "./lib/panes";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
-
 type LeafBundle = {
   setRef: (h: TerminalPaneHandle | null) => void;
   onSearchReady: (leafId: number, addon: SearchAddon) => void;

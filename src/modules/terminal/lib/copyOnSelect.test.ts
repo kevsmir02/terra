@@ -66,6 +66,8 @@ describe("selectionToCopy", () => {
   });
 
   it("preserves multi-line content verbatim", () => {
-    expect(selectionToCopy("line one\nline two\n")).toBe("line one\nline two\n");
+    expect(selectionToCopy("line one\nline two\n")).toBe(
+      "line one\nline two\n",
+    );
   });
 });

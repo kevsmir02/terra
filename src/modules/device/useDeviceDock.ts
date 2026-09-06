@@ -1,4 +1,10 @@
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 
@@ -16,7 +22,9 @@ export function readDockWidth(): number {
   try {
     const stored = window.localStorage.getItem(DOCK_WIDTH_STORAGE_KEY);
     const parsed = stored ? Number.parseInt(stored, 10) : Number.NaN;
-    return Number.isFinite(parsed) ? clampDockWidth(parsed) : DOCK_DEFAULT_WIDTH;
+    return Number.isFinite(parsed)
+      ? clampDockWidth(parsed)
+      : DOCK_DEFAULT_WIDTH;
   } catch {
     return DOCK_DEFAULT_WIDTH;
   }
@@ -36,7 +44,8 @@ export function useDeviceDock() {
   const persistDockWidth = useCallback((next: number) => {
     const clamped = clampDockWidth(next);
     dockWidthRef.current = clamped;
-    if (widthWriteTimerRef.current) window.clearTimeout(widthWriteTimerRef.current);
+    if (widthWriteTimerRef.current)
+      window.clearTimeout(widthWriteTimerRef.current);
     widthWriteTimerRef.current = window.setTimeout(() => {
       widthWriteTimerRef.current = 0;
       try {
@@ -49,7 +58,8 @@ export function useDeviceDock() {
 
   useEffect(() => {
     return () => {
-      if (widthWriteTimerRef.current) window.clearTimeout(widthWriteTimerRef.current);
+      if (widthWriteTimerRef.current)
+        window.clearTimeout(widthWriteTimerRef.current);
     };
   }, []);
 

@@ -101,10 +101,15 @@ describe("the dock is the only device surface", () => {
   // surface drags the MSE player and control bridge into the eager chunk and
   // they get parsed at first paint even when no device is ever docked.
   it("exports both surfaces through their Lazy wrappers", () => {
-    const barrel = readFileSync(path.join(repoRoot, "src/modules/device/index.ts"), "utf8");
+    const barrel = readFileSync(
+      path.join(repoRoot, "src/modules/device/index.ts"),
+      "utf8",
+    );
     expect(barrel).toContain('from "./DeviceDockLazy"');
     expect(barrel).toContain('from "./DeviceDropdownLazy"');
-    expect(barrel).not.toMatch(/from "\.\/(DeviceDock|DeviceDropdown|controlBridge|MsePlayer)"/);
+    expect(barrel).not.toMatch(
+      /from "\.\/(DeviceDock|DeviceDropdown|controlBridge|MsePlayer)"/,
+    );
   });
 
   it("has no device-preview tab kind left in the codebase", () => {

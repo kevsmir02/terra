@@ -17,13 +17,7 @@ type Props = {
   privateActive: boolean;
 };
 
-export function StatusBar({
-  cwd,
-  filePath,
-  home,
-  onCd,
-  privateActive,
-}: Props) {
+export function StatusBar({ cwd, filePath, home, onCd, privateActive }: Props) {
   return (
     <footer className="terra-chrome flex h-9 shrink-0 items-center justify-between gap-3 border-t border-border/(--emph-strong) bg-card/(--emph-strong) pl-3 pr-4 text-[11px]">
       <div className="flex min-w-0 flex-1 items-center gap-2">

@@ -90,8 +90,7 @@ export function registerPromptTracker(
   const lineOf = (m: IMarker | null) => (m && !m.isDisposed ? m.line : null);
   return {
     getMarker: () => (marker && !marker.isDisposed ? marker : null),
-    commandLines: () =>
-      prompts.filter((m) => !m.isDisposed).map((m) => m.line),
+    commandLines: () => prompts.filter((m) => !m.isDisposed).map((m) => m.line),
     lastOutput: () => ({ start: lineOf(outputStart), end: lineOf(outputEnd) }),
     dispose: () => {
       d.dispose();

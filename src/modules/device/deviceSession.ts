@@ -29,7 +29,9 @@ const EXIT_MESSAGE: Record<string, string> = {
 // token falls back to the generic line rather than leaking an internal name.
 export function exitMessage(reason: string): string {
   if (reason.startsWith(STREAM_ERROR_PREFIX)) {
-    return reason.slice(STREAM_ERROR_PREFIX.length).trim() || GENERIC_EXIT_MESSAGE;
+    return (
+      reason.slice(STREAM_ERROR_PREFIX.length).trim() || GENERIC_EXIT_MESSAGE
+    );
   }
   return EXIT_MESSAGE[reason] ?? GENERIC_EXIT_MESSAGE;
 }
@@ -39,7 +41,9 @@ export function exitMessage(reason: string): string {
 const FRAME_INIT = 0;
 const FRAME_MEDIA = 1;
 
-export function splitFrame(buf: ArrayBuffer): { kind: number; payload: Uint8Array<ArrayBuffer> } | null {
+export function splitFrame(
+  buf: ArrayBuffer,
+): { kind: number; payload: Uint8Array<ArrayBuffer> } | null {
   if (buf.byteLength === 0) return null;
   const kind = new Uint8Array(buf, 0, 1)[0];
   if (kind !== FRAME_INIT && kind !== FRAME_MEDIA) return null;
@@ -143,7 +147,8 @@ export function openDeviceSession(opts: {
       handle = null;
       trackClose(serial, h);
     }
-    for (const type of FRAME_EVENTS) video?.removeEventListener(type, onFrameEvent);
+    for (const type of FRAME_EVENTS)
+      video?.removeEventListener(type, onFrameEvent);
     player?.dispose();
     player = null;
   };
@@ -153,7 +158,11 @@ export function openDeviceSession(opts: {
   const announceStreaming = () => {
     if (!alive || !opened || !painted || announcedStreaming || !video) return;
     announcedStreaming = true;
-    onStatus({ kind: "streaming", devW: video.videoWidth, devH: video.videoHeight });
+    onStatus({
+      kind: "streaming",
+      devW: video.videoWidth,
+      devH: video.videoHeight,
+    });
   };
 
   function onFrameEvent() {
@@ -223,13 +232,21 @@ export function openDeviceSession(opts: {
       // touch against its current video size and silently drops the event on
       // any mismatch. videoWidth/videoHeight is that encoded size, and it is
       // authoritative across rotation, so it is the only correct source here.
-      bridge = new DeviceControlBridge(h, video?.videoWidth || 1080, video?.videoHeight || 1920);
+      bridge = new DeviceControlBridge(
+        h,
+        video?.videoWidth || 1080,
+        video?.videoHeight || 1920,
+      );
       opened = true;
       announceStreaming();
     } catch (e) {
       if (!alive) return;
       const msg = String(e);
-      onStatus(msg.includes("adb not found") ? { kind: "adb-missing" } : { kind: "error", message: msg });
+      onStatus(
+        msg.includes("adb not found")
+          ? { kind: "adb-missing" }
+          : { kind: "error", message: msg },
+      );
     }
   };
   void start();

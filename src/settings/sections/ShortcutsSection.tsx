@@ -400,7 +400,9 @@ function Recorder({
           Already used by {shortcutLabels(conflicts).join(", ")}
         </span>
       )}
-      <span className="text-muted-foreground">Enter to apply · Esc to cancel</span>
+      <span className="text-muted-foreground">
+        Enter to apply · Esc to cancel
+      </span>
     </div>
   );
 }

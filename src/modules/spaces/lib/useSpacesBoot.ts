@@ -102,7 +102,9 @@ export function useSpacesBoot({
             panelSizesBySpace[id] = st.panelSizes;
           }
         }
-        useSpaces.getState().hydrate(spaces, active, initialActiveIndex, panelSizesBySpace);
+        useSpaces
+          .getState()
+          .hydrate(spaces, active, initialActiveIndex, panelSizesBySpace);
 
         const inActive = restored.filter((t) => t.spaceId === active);
         const idx = states.get(active)?.activeTabIndex ?? 0;

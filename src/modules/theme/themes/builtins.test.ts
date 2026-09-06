@@ -24,7 +24,10 @@ describe("built-in themes", () => {
   it("declares a 16-slot ANSI palette in both variants, the editor derives from it", () => {
     for (const t of builtins) {
       for (const mode of ["light", "dark"] as const) {
-        expect(t.variants[mode]?.terminal?.ansi, `${t.id}/${mode}`).toHaveLength(16);
+        expect(
+          t.variants[mode]?.terminal?.ansi,
+          `${t.id}/${mode}`,
+        ).toHaveLength(16);
       }
     }
   });

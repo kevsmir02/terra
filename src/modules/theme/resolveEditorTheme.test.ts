@@ -3,8 +3,9 @@ import { resolveEditorTheme } from "./resolveEditorTheme";
 import { getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
 
-const ansi = Array.from({ length: 16 }, (_, i) =>
-  `#${(i * 16).toString(16).padStart(2, "0").repeat(3)}`,
+const ansi = Array.from(
+  { length: 16 },
+  (_, i) => `#${(i * 16).toString(16).padStart(2, "0").repeat(3)}`,
 ) as unknown as never;
 
 const noAnsi: Theme = {
@@ -17,8 +18,14 @@ const withAnsi: Theme = {
   id: "with-ansi",
   name: "With Ansi",
   variants: {
-    dark: { colors: { background: "#000000", foreground: "#ffffff" }, terminal: { ansi } },
-    light: { colors: { background: "#ffffff", foreground: "#000000" }, terminal: { ansi } },
+    dark: {
+      colors: { background: "#000000", foreground: "#ffffff" },
+      terminal: { ansi },
+    },
+    light: {
+      colors: { background: "#ffffff", foreground: "#000000" },
+      terminal: { ansi },
+    },
   },
 };
 
@@ -26,7 +33,10 @@ const darkOnly: Theme = {
   id: "dark-only",
   name: "Dark Only",
   variants: {
-    dark: { colors: { background: "#000000", foreground: "#ffffff" }, terminal: { ansi } },
+    dark: {
+      colors: { background: "#000000", foreground: "#ffffff" },
+      terminal: { ansi },
+    },
   },
 };
 

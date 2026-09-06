@@ -1,8 +1,11 @@
 import { globSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const TOKEN = "(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|sidebar)";
-const LITERAL_ALPHA = new RegExp(`\\b(?:bg|text|border|ring|fill|stroke|divide|outline)-${TOKEN}[a-z-]*\\/[0-9]{1,3}\\b`);
+const TOKEN =
+  "(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|sidebar)";
+const LITERAL_ALPHA = new RegExp(
+  `\\b(?:bg|text|border|ring|fill|stroke|divide|outline)-${TOKEN}[a-z-]*\\/[0-9]{1,3}\\b`,
+);
 
 describe("emphasis ladder", () => {
   it("has no literal alpha modifiers left on theme tokens", () => {

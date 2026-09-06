@@ -1,4 +1,3 @@
-
 /**
  * Single source of truth for keyboard shortcuts.
  */
@@ -410,7 +409,7 @@ export type KeyEventLike = Pick<
 export function matchBinding(
   e: KeyEventLike,
   binding: KeyBinding,
-  id?: ShortcutId
+  id?: ShortcutId,
 ): boolean {
   const eventKey = e.key.toLowerCase();
   const bindingKey = binding.key.toLowerCase();

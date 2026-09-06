@@ -8,7 +8,11 @@ import { cn } from "@/lib/utils";
 import { SPACE_COLORS } from "../lib/spaceColor";
 import type { SpaceMeta } from "../lib/store";
 import { useSpaces } from "../lib/useSpaces";
-import { Cancel01Icon, PlusSignIcon, Settings01Icon } from "@hugeicons/core-free-icons";
+import {
+  Cancel01Icon,
+  PlusSignIcon,
+  Settings01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useState } from "react";
 
@@ -183,7 +187,11 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                     onClick={() => removeCommand(i)}
                     className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
-                    <HugeiconsIcon icon={Cancel01Icon} size={11} strokeWidth={2} />
+                    <HugeiconsIcon
+                      icon={Cancel01Icon}
+                      size={11}
+                      strokeWidth={2}
+                    />
                   </button>
                 </div>
               ))}
@@ -214,7 +222,11 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                 disabled={!draft.trim()}
                 className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
               >
-                <HugeiconsIcon icon={PlusSignIcon} size={14} strokeWidth={1.75} />
+                <HugeiconsIcon
+                  icon={PlusSignIcon}
+                  size={14}
+                  strokeWidth={1.75}
+                />
               </button>
             </div>
           </div>

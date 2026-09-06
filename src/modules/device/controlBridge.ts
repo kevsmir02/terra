@@ -104,7 +104,10 @@ export class DeviceControlBridge {
   // Keyed by pointerId so several fingers can be in flight at once: scrcpy
   // distinguishes pointers purely by the id on the wire, so a distinct id per
   // contact is all Android needs to see a real multi-touch gesture.
-  private pendingMoves = new Map<number, { clientX: number; clientY: number; rect: DOMRect }>();
+  private pendingMoves = new Map<
+    number,
+    { clientX: number; clientY: number; rect: DOMRect }
+  >();
   private activePointers = new Map<number, { x: number; y: number }>();
 
   constructor(handle: number, deviceWidth = 1080, deviceHeight = 1920) {
@@ -126,7 +129,13 @@ export class DeviceControlBridge {
     }
   }
 
-  private sendTouch(action: 0 | 1 | 2, pointerId: number, clientX: number, clientY: number, rect: DOMRect) {
+  private sendTouch(
+    action: 0 | 1 | 2,
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+    rect: DOMRect,
+  ) {
     const { x, y, width, height } = scaleCoordinates(
       clientX,
       clientY,
@@ -182,21 +191,37 @@ export class DeviceControlBridge {
     if (!this.activePointers.has(e.pointerId)) return;
     this.discardPendingMove(e.pointerId);
     const target = e.currentTarget;
-    this.sendTouch(1, e.pointerId, e.clientX, e.clientY, target.getBoundingClientRect());
+    this.sendTouch(
+      1,
+      e.pointerId,
+      e.clientX,
+      e.clientY,
+      target.getBoundingClientRect(),
+    );
     releasePointer(target, e.pointerId);
   }
 
   public handlePointerDown(e: React.PointerEvent<HTMLVideoElement>) {
     this.discardPendingMove(e.pointerId);
     capturePointer(e.currentTarget, e.pointerId);
-    this.sendTouch(0, e.pointerId, e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
+    this.sendTouch(
+      0,
+      e.pointerId,
+      e.clientX,
+      e.clientY,
+      e.currentTarget.getBoundingClientRect(),
+    );
   }
 
   public handlePointerMove(e: React.PointerEvent<HTMLVideoElement>) {
     if (!this.activePointers.has(e.pointerId)) return;
     if (e.buttons === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    this.pendingMoves.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY, rect });
+    this.pendingMoves.set(e.pointerId, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      rect,
+    });
     this.scheduleFlush();
   }
 
@@ -224,7 +249,9 @@ export class DeviceControlBridge {
         y: last.y,
         width: this.deviceWidth,
         height: this.deviceHeight,
-      }).catch((err) => console.error("[controlBridge] release_all failed:", err));
+      }).catch((err) =>
+        console.error("[controlBridge] release_all failed:", err),
+      );
     }
   }
 
@@ -257,7 +284,9 @@ export class DeviceControlBridge {
       height,
       h,
       v,
-    }).catch((err) => console.error("[controlBridge] send_scroll failed:", err));
+    }).catch((err) =>
+      console.error("[controlBridge] send_scroll failed:", err),
+    );
   }
 
   // `metastate` is non-optional on the Rust side; omitting it fails argument

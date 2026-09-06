@@ -40,8 +40,17 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   const hp = (((h % 360) + 360) % 360) / 60;
   const x = c * (1 - Math.abs((hp % 2) - 1));
   const [r, g, b] =
-    hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x]
-    : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x];
+    hp < 1
+      ? [c, x, 0]
+      : hp < 2
+        ? [x, c, 0]
+        : hp < 3
+          ? [0, c, x]
+          : hp < 4
+            ? [0, x, c]
+            : hp < 5
+              ? [x, 0, c]
+              : [c, 0, x];
   const m = lig - c / 2;
   return [
     Math.round((r + m) * 255),
@@ -58,14 +67,21 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
  * oklch and oklab convert straight through the engine's own colour space.
  * Hex is the expensive one, needing sRGB to linear to oklab.
  */
-export function parseColor(v: string | undefined): [number, number, number] | null {
+export function parseColor(
+  v: string | undefined,
+): [number, number, number] | null {
   if (!v) return null;
   const s = v.trim();
 
   if (s.startsWith("#")) {
     const h = s.slice(1);
     const full =
-      h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6);
+      h.length === 3
+        ? h
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : h.slice(0, 6);
     if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
     return [
       Number.parseInt(full.slice(0, 2), 16),

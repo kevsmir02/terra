@@ -25,7 +25,8 @@ export function planDrop(
   rootPath: string,
   isDir: (path: string) => boolean | undefined,
 ): DropPlan {
-  if (hit.paneLeafId !== null) return { kind: "terminal", leafId: hit.paneLeafId };
+  if (hit.paneLeafId !== null)
+    return { kind: "terminal", leafId: hit.paneLeafId };
   if (!hit.fsPath && !hit.insideExplorer) return { kind: "none" };
   const target = hit.fsPath
     ? isDir(hit.fsPath)
@@ -42,6 +43,7 @@ export function planDrop(
 export function samePlan(a: DropPlan, b: DropPlan): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "move" && b.kind === "move") return a.toDir === b.toDir;
-  if (a.kind === "terminal" && b.kind === "terminal") return a.leafId === b.leafId;
+  if (a.kind === "terminal" && b.kind === "terminal")
+    return a.leafId === b.leafId;
   return true;
 }

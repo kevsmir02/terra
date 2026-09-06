@@ -6,7 +6,12 @@ import { useSpaces } from "./useSpaces";
 
 const DEBOUNCE_MS = 3000;
 
-type Snapshot = { tabs: Tab[]; activeId: number; activeSpaceId: string; activeSidebarPct?: number };
+type Snapshot = {
+  tabs: Tab[];
+  activeId: number;
+  activeSpaceId: string;
+  activeSidebarPct?: number;
+};
 
 type Params = Snapshot & {
   /** Gate writes until boot hydration finished, so restore never round-trips. */
@@ -16,7 +21,11 @@ type Params = Snapshot & {
   activeSidebarPct?: number;
 };
 
-type LastWrite = { json: string; activeTabIndex: number; panelSizes?: number[] };
+type LastWrite = {
+  json: string;
+  activeTabIndex: number;
+  panelSizes?: number[];
+};
 
 export function useSpacePersistence({
   tabs,
@@ -112,7 +121,8 @@ export function useSpacePersistence({
       if (document.visibilityState === "hidden")
         flush(latest.current, latest.current.activeSidebarPct);
     };
-    const onLeave = () => flush(latest.current, latest.current.activeSidebarPct);
+    const onLeave = () =>
+      flush(latest.current, latest.current.activeSidebarPct);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("blur", onLeave);
     window.addEventListener("beforeunload", onLeave);

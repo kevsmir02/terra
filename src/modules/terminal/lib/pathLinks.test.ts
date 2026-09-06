@@ -11,7 +11,11 @@ describe("findPathLinks", () => {
   it("finds a relative path with line and column", () => {
     const text = "error at src/app/App.tsx:42:7 in foo";
     const link = only(text);
-    expect(link).toMatchObject({ path: "src/app/App.tsx", line: 42, column: 7 });
+    expect(link).toMatchObject({
+      path: "src/app/App.tsx",
+      line: 42,
+      column: 7,
+    });
     expect(text.slice(link.start, link.end)).toBe("src/app/App.tsx:42:7");
   });
 
@@ -61,7 +65,11 @@ describe("findPathLinks", () => {
 
   it("finds several links on one line", () => {
     const links = findPathLinks("src/a.ts -> src/b.ts and lib/c.rs:3");
-    expect(links.map((l) => l.path)).toEqual(["src/a.ts", "src/b.ts", "lib/c.rs"]);
+    expect(links.map((l) => l.path)).toEqual([
+      "src/a.ts",
+      "src/b.ts",
+      "lib/c.rs",
+    ]);
   });
 });
 
@@ -71,13 +79,19 @@ describe("resolveLinkPath", () => {
   });
 
   it("expands a tilde against home", () => {
-    expect(resolveLinkPath("~/n/a.md", "/ws", "/home/u")).toBe("/home/u/n/a.md");
+    expect(resolveLinkPath("~/n/a.md", "/ws", "/home/u")).toBe(
+      "/home/u/n/a.md",
+    );
   });
 
   it("joins a relative path to the cwd and collapses dot segments", () => {
     expect(resolveLinkPath("src/a.ts", "/ws", "/home/u")).toBe("/ws/src/a.ts");
-    expect(resolveLinkPath("./src/a.ts", "/ws", "/home/u")).toBe("/ws/src/a.ts");
-    expect(resolveLinkPath("../x/a.ts", "/ws/src", "/home/u")).toBe("/ws/x/a.ts");
+    expect(resolveLinkPath("./src/a.ts", "/ws", "/home/u")).toBe(
+      "/ws/src/a.ts",
+    );
+    expect(resolveLinkPath("../x/a.ts", "/ws/src", "/home/u")).toBe(
+      "/ws/x/a.ts",
+    );
   });
 
   it("returns null for a relative path without a cwd", () => {

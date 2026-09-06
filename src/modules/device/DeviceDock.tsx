@@ -30,7 +30,9 @@ export function DeviceDock({ device, onStop }: Props) {
             {deviceDisplayName(device)}
           </span>
           {device.model && (
-            <span className="truncate text-[10px] text-muted-foreground">{device.serial}</span>
+            <span className="truncate text-[10px] text-muted-foreground">
+              {device.serial}
+            </span>
           )}
         </div>
         <button

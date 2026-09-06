@@ -45,7 +45,7 @@ Raising a budget is its own reviewed decision, recorded in the commit message wi
 Production-grade or it does not ship. A change is done when all of these hold:
 
 - **Checks green.** CI (`.github/workflows/ci.yml`) is the authority; run its steps locally before claiming done.
-  - Frontend: `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm build && pnpm size:eager`, `pnpm knip`, `pnpm audit --prod` and `pnpm audit`.
+  - Frontend: `pnpm lint`, `pnpm format:check`, `pnpm check-types`, `pnpm test`, `pnpm build && pnpm size:eager`, `pnpm knip`, `pnpm audit --prod` and `pnpm audit`.
   - Rust: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cargo nextest run --locked` (local fallback: `cargo test --locked`), `cargo audit`, then `git diff --exit-code src/modules/device/generated` (the `ts-rs` export must be committed).
   - `pnpm lint` runs with `--error-on-warnings`: a deliberate exception carries `// biome-ignore <rule>: <reason>`. Accepted Rust advisories live in `src-tauri/.cargo/audit.toml` with their rationale; anything unlisted fails.
 - **Invariant locked.** A change to a core subsystem (terminal/shell spawn, workspace authorization, git, fs, IPC, the dormant state of a feature, and pure logic with wide reach such as cwd inheritance, tab-tree transforms, and OSC parsing) ships with a test that fails when the invariant breaks. Test the deny path and the edge, not the happy path; `fs::authorization_tests`, `workspace::auth_tests`, and `src/app/eager-budget.test.ts` are the models. UI rendering, themes, and anything the type-checker already guarantees need no test.

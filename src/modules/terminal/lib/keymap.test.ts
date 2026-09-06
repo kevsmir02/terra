@@ -140,7 +140,9 @@ describe("terminalKeyAction", () => {
   });
 
   it("ignores an unbound key so it reaches the shell", () => {
-    expect(terminalKeyAction(evt({ key: "a", code: "KeyA" }), BOUND)).toBeNull();
+    expect(
+      terminalKeyAction(evt({ key: "a", code: "KeyA" }), BOUND),
+    ).toBeNull();
   });
 
   it("requires every modifier to match", () => {

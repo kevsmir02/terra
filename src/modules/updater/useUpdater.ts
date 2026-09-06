@@ -32,7 +32,12 @@ export type UpdaterStatus =
       downloaded: number;
       contentLength: number | null;
     }
-  | { kind: "staged"; info: AvailableUpdate; fileName: string; message?: string }
+  | {
+      kind: "staged";
+      info: AvailableUpdate;
+      fileName: string;
+      message?: string;
+    }
   | { kind: "installing"; info: AvailableUpdate }
   | { kind: "error"; message: string };
 
@@ -102,8 +107,16 @@ export function useUpdater() {
     const pair = info.pair;
     if (!pair) return;
 
-    setStatus({ kind: "downloading", info, downloaded: 0, contentLength: null });
-    const onProgress = new Channel<{ downloaded: number; total: number | null }>();
+    setStatus({
+      kind: "downloading",
+      info,
+      downloaded: 0,
+      contentLength: null,
+    });
+    const onProgress = new Channel<{
+      downloaded: number;
+      total: number | null;
+    }>();
     onProgress.onmessage = (p) => {
       setStatus({
         kind: "downloading",

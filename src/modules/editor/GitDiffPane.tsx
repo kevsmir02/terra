@@ -237,9 +237,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
     let cancelled = false;
     resolveLanguage(path).then((res) => {
       if (cancelled || !res) return;
-      setState((s) =>
-        s.kind === "loaded" ? { ...s, langExt: res.ext } : s,
-      );
+      setState((s) => (s.kind === "loaded" ? { ...s, langExt: res.ext } : s));
     });
     return () => {
       cancelled = true;
@@ -256,10 +254,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
     <div className="flex h-full min-h-0 flex-col rounded-md border border-border/(--emph-strong) bg-background">
       <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border/(--emph-strong) px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Badge
-            variant="outline"
-            className="text-[10px] terra-label"
-          >
+          <Badge variant="outline" className="text-[10px] terra-label">
             {chipLabel ?? mode}
           </Badge>
           {isBinary ? (
@@ -282,12 +277,8 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
           <span className="truncate max-w-80 font-mono">{repoRoot}</span>
           {useFallback ? (
             <>
-              <span className="text-status-added">
-                +{stats.added}
-              </span>
-              <span className="text-status-deleted">
-                −{stats.removed}
-              </span>
+              <span className="text-status-added">+{stats.added}</span>
+              <span className="text-status-deleted">−{stats.removed}</span>
             </>
           ) : null}
         </div>

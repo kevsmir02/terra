@@ -24,7 +24,9 @@ function makeFakeTerm() {
         return { dispose: () => handlers.delete(code) };
       },
     },
-    registerMarker: vi.fn().mockReturnValue({ isDisposed: false, dispose: vi.fn() }),
+    registerMarker: vi
+      .fn()
+      .mockReturnValue({ isDisposed: false, dispose: vi.fn() }),
   } as unknown as Terminal;
   return { term, handlers };
 }

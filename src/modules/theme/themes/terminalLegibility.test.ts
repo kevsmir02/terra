@@ -20,7 +20,14 @@ function palette(v: ThemeVariant | undefined): Palette | null {
 }
 
 const NAMES = [
-  "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
 ] as const;
 
 const cases: [string, ThemeMode, Palette][] = [];

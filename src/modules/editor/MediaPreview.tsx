@@ -41,7 +41,9 @@ type Props = {
  */
 export function MediaPreview({ path, kind }: Props) {
   const [state, setState] = useState<
-    { status: "loading" } | { status: "ready"; url: string } | { status: "error"; message: string }
+    | { status: "loading" }
+    | { status: "ready"; url: string }
+    | { status: "error"; message: string }
   >({ status: "loading" });
 
   useEffect(() => {
@@ -97,11 +99,21 @@ export function MediaPreview({ path, kind }: Props) {
       )}
       {kind === "video" && (
         // biome-ignore lint/a11y/useMediaCaption: local media preview opens arbitrary files with no caption track
-        <video controls preload="metadata" className="max-h-full max-w-full" src={state.url} />
+        <video
+          controls
+          preload="metadata"
+          className="max-h-full max-w-full"
+          src={state.url}
+        />
       )}
       {kind === "audio" && (
         // biome-ignore lint/a11y/useMediaCaption: local media preview opens arbitrary files with no caption track
-        <audio controls preload="metadata" className="w-full max-w-md" src={state.url} />
+        <audio
+          controls
+          preload="metadata"
+          className="w-full max-w-md"
+          src={state.url}
+        />
       )}
       {kind === "pdf" && (
         <iframe

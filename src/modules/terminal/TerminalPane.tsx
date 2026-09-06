@@ -10,11 +10,7 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import {
-  isDragGesture,
-  type Point,
-  selectionToCopy,
-} from "./lib/copyOnSelect";
+import { isDragGesture, type Point, selectionToCopy } from "./lib/copyOnSelect";
 import { writeTerminalClipboard } from "./lib/terminalClipboard";
 import { useTerminalSession } from "./lib/useTerminalSession";
 
@@ -78,7 +74,8 @@ export const TerminalPane = memo(
       // Only a left-button press starts a selection drag. Clearing on other
       // buttons stops a right- or middle-button release from being measured
       // against a stale origin and copying.
-      downPtRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+      downPtRef.current =
+        e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
     }, []);
 
     // Copies the selection when the gesture was a drag and the preference is

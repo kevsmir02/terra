@@ -55,7 +55,9 @@ export class MsePlayer {
 
   private onVideoError = () => {
     const code = this.video.error?.code;
-    this.fail(`Video element error${code === undefined ? "" : ` (code ${code})`}`);
+    this.fail(
+      `Video element error${code === undefined ? "" : ` (code ${code})`}`,
+    );
   };
 
   private initSourceBuffer() {
@@ -85,10 +87,16 @@ export class MsePlayer {
       // We extract the codec string here for SourceBuffer construction and feed
       // the remainder to SourceBuffer.
       if (payload.byteLength < 4) {
-        this.fail("Init segment is too short to carry a codec length; stream is unusable");
+        this.fail(
+          "Init segment is too short to carry a codec length; stream is unusable",
+        );
         return;
       }
-      const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+      const view = new DataView(
+        payload.buffer,
+        payload.byteOffset,
+        payload.byteLength,
+      );
       const len = view.getUint32(0, /* littleEndian */ false);
       this.codecString = new TextDecoder().decode(payload.subarray(4, 4 + len));
       this.pending.push(payload.subarray(4 + len));
@@ -126,11 +134,19 @@ export class MsePlayer {
       // evict re-enters flushPending and retries it exactly once.
       if (!this.quotaRetryArmed) {
         this.quotaRetryArmed = true;
-        if (this.applyPolicy(sb, { ...PLAYBACK_POLICY, keepBehindSeconds: 0, evictThresholdSeconds: 0 })) {
+        if (
+          this.applyPolicy(sb, {
+            ...PLAYBACK_POLICY,
+            keepBehindSeconds: 0,
+            evictThresholdSeconds: 0,
+          })
+        ) {
           return;
         }
       }
-      this.fail("Video buffer is full and nothing behind the playhead could be reclaimed");
+      this.fail(
+        "Video buffer is full and nothing behind the playhead could be reclaimed",
+      );
     }
   }
 
@@ -162,7 +178,10 @@ export class MsePlayer {
       // so this never re-derives it from the buffered ranges itself.
       if (intent.seekReason === "heal" && !this.warnedPlayheadDrift) {
         this.warnedPlayheadDrift = true;
-        console.warn("[device] MSE: playhead fell outside the buffered ranges, seeking to", intent.seekTo);
+        console.warn(
+          "[device] MSE: playhead fell outside the buffered ranges, seeking to",
+          intent.seekTo,
+        );
       }
     }
 
@@ -196,7 +215,9 @@ export class MsePlayer {
     this.video.removeEventListener("error", this.onVideoError);
     this.sourceBuffer?.removeEventListener("updateend", this.onUpdateEnd);
     if (this.mediaSource.readyState === "open") {
-      try { this.mediaSource.endOfStream(); } catch {}
+      try {
+        this.mediaSource.endOfStream();
+      } catch {}
     }
     URL.revokeObjectURL(this.video.src);
     this.sourceBuffer = null;

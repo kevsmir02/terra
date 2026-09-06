@@ -151,10 +151,8 @@ export const native = {
     invoke<string>("fs_canonicalize", {
       path,
     }),
-  createFile: (path: string) =>
-    invoke<void>("fs_create_file", { path }),
-  createDir: (path: string) =>
-    invoke<void>("fs_create_dir", { path }),
+  createFile: (path: string) => invoke<void>("fs_create_file", { path }),
+  createDir: (path: string) => invoke<void>("fs_create_dir", { path }),
   readDir: (path: string) =>
     invoke<DirEntry[]>("fs_read_dir", {
       path,
@@ -242,7 +240,10 @@ export const native = {
     invoke<GitPushResult>("git_push", {
       repoRoot,
     }),
-  gitLog: (repoRoot: string, options?: { limit?: number; beforeSha?: string }) =>
+  gitLog: (
+    repoRoot: string,
+    options?: { limit?: number; beforeSha?: string },
+  ) =>
     invoke<GitLogEntry[]>("git_log", {
       repoRoot,
       limit: options?.limit ?? null,

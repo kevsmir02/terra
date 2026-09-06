@@ -15,24 +15,30 @@ const ALLOWLIST: Record<string, string> = {
     "the web preview iframe paints white behind the page, like a browser",
   "src/modules/device/DevicePreviewPane.tsx":
     "the device video surface is black letterboxing around the stream",
-  "src/components/ui/dialog.tsx": "the modal scrim is a neutral dark wash by design",
-  "src/components/ui/alert-dialog.tsx": "the modal scrim is a neutral dark wash by design",
+  "src/components/ui/dialog.tsx":
+    "the modal scrim is a neutral dark wash by design",
+  "src/components/ui/alert-dialog.tsx":
+    "the modal scrim is a neutral dark wash by design",
 };
 
 const RULES: Rule[] = [
   {
     id: "divider-fill",
-    pattern: /\b(h-px|w-px)\b[^"'`]*\bbg-border\b|\bbg-border\b[^"'`]*\b(h-px|w-px)\b/,
-    message: "a divider is a border, not a bg-border fill; it must take --border-style",
+    pattern:
+      /\b(h-px|w-px)\b[^"'`]*\bbg-border\b|\bbg-border\b[^"'`]*\b(h-px|w-px)\b/,
+    message:
+      "a divider is a border, not a bg-border fill; it must take --border-style",
   },
   {
     id: "rounded-full",
     pattern: /\brounded-full\b/,
-    message: "use rounded-pill (theme radius) or rounded-circle (geometric circle)",
+    message:
+      "use rounded-pill (theme radius) or rounded-circle (geometric circle)",
   },
   {
     id: "arbitrary-shape",
-    pattern: /\b(rounded(-[trblse]{1,2})?|shadow|blur|backdrop-blur)-\[(?!inherit\])/,
+    pattern:
+      /\b(rounded(-[trblse]{1,2})?|shadow|blur|backdrop-blur)-\[(?!inherit\])/,
     message: "arbitrary shape value; use a scale step the theme owns",
   },
   {
@@ -44,23 +50,27 @@ const RULES: Rule[] = [
     id: "palette-colour",
     pattern:
       /\b(bg|text|border|ring|fill|stroke|from|to|via|outline|shadow|decoration)-(white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(-\d{2,3})?(\/|\b)/,
-    message: "Tailwind palette colour; use a semantic token (bg-card, text-muted-foreground, ...)",
+    message:
+      "Tailwind palette colour; use a semantic token (bg-card, text-muted-foreground, ...)",
   },
   {
     id: "raw-colour",
-    pattern: /(className|class|style)=[^\n]*(#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\()/,
+    pattern:
+      /(className|class|style)=[^\n]*(#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\()/,
     message: "raw colour in markup; use a theme token",
   },
   {
     id: "text-transform-literal",
     pattern: /["'`][^"'`\n]*\b(uppercase|lowercase)\b[^"'`\n]*["'`]/,
     skip: /^src\/modules\/theme\//,
-    message: "casing belongs to the theme; put terra-label on the chrome element",
+    message:
+      "casing belongs to the theme; put terra-label on the chrome element",
   },
   {
     id: "arbitrary-tracking",
     pattern: /\btracking-\[/,
-    message: "arbitrary tracking; chrome uses terra-label, content uses a named step",
+    message:
+      "arbitrary tracking; chrome uses terra-label, content uses a named step",
   },
 ];
 
@@ -103,7 +113,9 @@ describe("theme consumption contract", () => {
       "src/modules/statusbar/DiagnosticsBadge.tsx",
       "src/modules/lsp/components/LspStatusPill.tsx",
     ]) {
-      expect(readFileSync(path.resolve(ROOT, rel), "utf8"), rel).toContain("terra-label");
+      expect(readFileSync(path.resolve(ROOT, rel), "utf8"), rel).toContain(
+        "terra-label",
+      );
     }
   });
 

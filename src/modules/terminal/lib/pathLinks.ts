@@ -124,7 +124,8 @@ export function createPathLinkProvider(
               end: { x: candidate.end, y },
             },
             text: text.slice(candidate.start, candidate.end),
-            activate: () => current.open(full, candidate.line, candidate.column),
+            activate: () =>
+              current.open(full, candidate.line, candidate.column),
           };
         }),
       ).then((links) => {

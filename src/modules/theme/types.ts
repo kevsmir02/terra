@@ -40,8 +40,22 @@ export type TerminalPalette = Partial<{
   cursorAccent: string;
   selection: string;
   ansi: readonly [
-    string, string, string, string, string, string, string, string,
-    string, string, string, string, string, string, string, string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
   ];
 }>;
 
@@ -89,15 +103,36 @@ export const ICON_SETS = ["catppuccin", "nerd"] as const;
 export type IconSet = (typeof ICON_SETS)[number];
 
 export const SYNTAX_ROLES = [
-  "comment", "keyword", "string", "number", "constant", "func",
-  "variable", "property", "gutterFg", "type", "operator", "tag",
-  "tagBracket", "attr", "attrValue", "heading", "link", "invalid",
+  "comment",
+  "keyword",
+  "string",
+  "number",
+  "constant",
+  "func",
+  "variable",
+  "property",
+  "gutterFg",
+  "type",
+  "operator",
+  "tag",
+  "tagBracket",
+  "attr",
+  "attrValue",
+  "heading",
+  "link",
+  "invalid",
 ] as const;
 
 export type SyntaxRole = (typeof SYNTAX_ROLES)[number];
 
 export const STATUS_ROLES = [
-  "added", "modified", "deleted", "renamed", "warning", "conflict", "ok",
+  "added",
+  "modified",
+  "deleted",
+  "renamed",
+  "warning",
+  "conflict",
+  "ok",
 ] as const;
 
 export type StatusRole = (typeof STATUS_ROLES)[number];
@@ -134,7 +169,6 @@ export type ThemeVariant = {
   status?: Partial<Record<StatusRole, string>>;
   emphasis?: ThemeEmphasis;
 };
-
 
 export type Theme = {
   id: string;

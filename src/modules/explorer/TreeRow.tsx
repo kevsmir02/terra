@@ -100,7 +100,8 @@ function EntryRowImpl(props: EntryRowProps) {
           : gitignored
             ? "text-muted-foreground/(--emph-strong)"
             : "text-foreground/(--emph-bold)",
-        isDropTarget && "bg-primary/(--emph-faint) ring-1 ring-inset ring-primary/(--emph-strong)",
+        isDropTarget &&
+          "bg-primary/(--emph-faint) ring-1 ring-inset ring-primary/(--emph-strong)",
       )}
       style={{ paddingLeft }}
     >

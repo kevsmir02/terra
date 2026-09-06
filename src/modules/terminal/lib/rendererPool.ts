@@ -181,7 +181,10 @@ function bgActive(
 function termOptions() {
   const prefs = usePreferencesStore.getState();
   const font = configuredFont ?? {
-    fontFamily: resolveTerminalFont(prefs.terminalFont, prefs.terminalFontFamily),
+    fontFamily: resolveTerminalFont(
+      prefs.terminalFont,
+      prefs.terminalFontFamily,
+    ),
     fontWeight: prefs.terminalFontWeight,
     fontSize: Math.max(4, Math.round(prefs.terminalFontSize * prefs.zoomLevel)),
   };
@@ -308,7 +311,8 @@ function createSlot(): Slot {
       if (event.type === "keydown") {
         const targetLeafId = slot.currentLeafId;
         void readTerminalClipboard().then((text) => {
-          if (text && slot.currentLeafId === targetLeafId) slot.term.paste(text);
+          if (text && slot.currentLeafId === targetLeafId)
+            slot.term.paste(text);
         });
       }
       event.preventDefault();
@@ -913,7 +917,9 @@ export function applyWebglPreference(enabled: boolean): void {
 function cellSize(term: Terminal): CellSize | null {
   const core = (
     term as unknown as {
-      _core?: { _renderService?: { dimensions?: { css?: { cell?: CellSize } } } };
+      _core?: {
+        _renderService?: { dimensions?: { css?: { cell?: CellSize } } };
+      };
     }
   )._core;
   const cell = core?._renderService?.dimensions?.css?.cell;
@@ -1097,4 +1103,3 @@ export function getLiveSlotForLeaf(leafId: number): Slot | null {
     ) ?? null
   );
 }
-

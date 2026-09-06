@@ -1,8 +1,4 @@
-import {
-  native,
-  type GitRepoInfo,
-  type GitStatusSnapshot,
-} from "@/lib/native";
+import { native, type GitRepoInfo, type GitStatusSnapshot } from "@/lib/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const AUTO_FETCH_THROTTLE_MS = 5 * 60_000;
@@ -40,9 +36,7 @@ export type SourceControlSummary = {
   applyStatus: (
     updater: (status: GitStatusSnapshot) => GitStatusSnapshot,
   ) => void;
-  refresh: (options?: {
-    remote?: SourceControlRefreshMode;
-  }) => Promise<void>;
+  refresh: (options?: { remote?: SourceControlRefreshMode }) => Promise<void>;
   runRemoteAction: (
     mode?: SourceControlRemoteActionMode,
   ) => Promise<SourceControlRemoteActionResult>;
@@ -92,7 +86,13 @@ export function getSourceControlRemoteIndicator(
   >,
 ): SourceControlRemoteIndicator {
   if (!summary.hasRepo || !summary.upstream) {
-    return { visible: false, label: "", title: "", disabled: true, action: null };
+    return {
+      visible: false,
+      label: "",
+      title: "",
+      disabled: true,
+      action: null,
+    };
   }
   if (summary.ahead > 0 && summary.behind > 0) {
     return {
@@ -227,7 +227,11 @@ export function useSourceControl(
           ? activeRoot
           : undefined;
 
-      setState((current) => ({ ...current, isLoading: true, localError: null }));
+      setState((current) => ({
+        ...current,
+        isLoading: true,
+        localError: null,
+      }));
 
       try {
         let repo: GitRepoInfo | null;
@@ -298,8 +302,7 @@ export function useSourceControl(
           repo.upstream &&
           remoteMode !== "never" &&
           (remoteMode === "always" ||
-            Date.now() -
-              (autoFetchByRepoRef.current.get(repo.repoRoot) ?? 0) >=
+            Date.now() - (autoFetchByRepoRef.current.get(repo.repoRoot) ?? 0) >=
               AUTO_FETCH_THROTTLE_MS);
 
         if (shouldAutoFetch) {

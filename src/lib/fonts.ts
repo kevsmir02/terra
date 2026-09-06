@@ -34,9 +34,7 @@ export const BUNDLED_FONTS: ReadonlyArray<{
 export const DEFAULT_TERMINAL_FONT: TerminalFontId = "jetbrains-mono";
 
 function isTerminalFontId(value: unknown): value is TerminalFontId {
-  return (
-    value === "system" || BUNDLED_FONTS.some((font) => font.id === value)
-  );
+  return value === "system" || BUNDLED_FONTS.some((font) => font.id === value);
 }
 
 // A family typed before the picker existed keeps working as the system choice.
@@ -49,7 +47,10 @@ export function migrateTerminalFont(
 }
 
 export function primaryFamily(stack: string): string {
-  return stack.split(",")[0].trim().replace(/^["']|["']$/g, "");
+  return stack
+    .split(",")[0]
+    .trim()
+    .replace(/^["']|["']$/g, "");
 }
 
 const loadedFamilies = new Map<string, Promise<void>>();
@@ -79,7 +80,10 @@ export function resolveFontFamily(userInput: string): string {
   return `${head}, ${TERMINAL_FONT_FAMILY}`;
 }
 
-export function resolveTerminalFont(font: string, customFamily: string): string {
+export function resolveTerminalFont(
+  font: string,
+  customFamily: string,
+): string {
   const bundled = BUNDLED_FONTS.find((candidate) => candidate.id === font);
   if (!bundled) return resolveFontFamily(font === "system" ? customFamily : "");
   if (bundled.id === DEFAULT_TERMINAL_FONT) return TERMINAL_FONT_FAMILY;

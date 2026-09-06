@@ -1069,7 +1069,6 @@ export default function App() {
     return () => setLspNavigator(null);
   }, [openContentHit]);
 
-
   const shell = (
     <ThemeProvider>
       <TooltipProvider>

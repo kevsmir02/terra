@@ -19,8 +19,9 @@ function hitAt(x: number, y: number): DragHit {
   const leafId = leaf ? Number(leaf.dataset.paneLeaf) : Number.NaN;
   return {
     fsPath:
-      el?.closest<HTMLElement>("[data-fs-path]")?.getAttribute("data-fs-path") ??
-      null,
+      el
+        ?.closest<HTMLElement>("[data-fs-path]")
+        ?.getAttribute("data-fs-path") ?? null,
     insideExplorer: !!el?.closest("[data-explorer-drop]"),
     paneLeafId: Number.isFinite(leafId) ? leafId : null,
   };
@@ -52,7 +53,13 @@ export function useExplorerDnd({
     onDropToTerminal,
     onTerminalHover,
   });
-  optsRef.current = { rootPath, isDir, onMove, onDropToTerminal, onTerminalHover };
+  optsRef.current = {
+    rootPath,
+    isDir,
+    onMove,
+    onDropToTerminal,
+    onTerminalHover,
+  };
 
   const placeGhost = useCallback((x: number, y: number) => {
     lastPosRef.current = { x, y };

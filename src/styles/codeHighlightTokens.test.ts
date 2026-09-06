@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(
-  path.resolve(__dirname, "code-highlight.css"),
-  "utf8",
-);
+const CSS = readFileSync(path.resolve(__dirname, "code-highlight.css"), "utf8");
 
 const DECLS = CSS.split("\n").filter((l) => /^\s+--tok-/.test(l));
 

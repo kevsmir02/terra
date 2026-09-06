@@ -148,8 +148,7 @@ function hydrateTab(
     case "terminal": {
       const { tree, activeLeafId, firstLeafCwd } = hydrateTree(s.tree, allocId);
       const title =
-        s.customTitle ??
-        (firstLeafCwd ? basename(firstLeafCwd) : "shell");
+        s.customTitle ?? (firstLeafCwd ? basename(firstLeafCwd) : "shell");
       return {
         id: allocId(),
         kind: "terminal",

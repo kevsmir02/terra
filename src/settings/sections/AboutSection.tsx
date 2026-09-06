@@ -58,7 +58,10 @@ export function AboutSection() {
 
   const progress =
     status.kind === "downloading" && status.contentLength
-      ? Math.min(100, Math.round((status.downloaded / status.contentLength) * 100))
+      ? Math.min(
+          100,
+          Math.round((status.downloaded / status.contentLength) * 100),
+        )
       : null;
 
   useEffect(() => {

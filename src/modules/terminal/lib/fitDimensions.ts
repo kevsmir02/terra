@@ -18,10 +18,7 @@ export type Dimensions = { cols: number; rows: number };
  * strip down the right edge of every terminal, wide enough for one to two
  * columns of a full-width TUI.
  */
-export function proposeDimensions(
-  box: Box,
-  cell: CellSize,
-): Dimensions | null {
+export function proposeDimensions(box: Box, cell: CellSize): Dimensions | null {
   if (!(cell.width > 0) || !(cell.height > 0)) return null;
   if (!Number.isFinite(box.width) || !Number.isFinite(box.height)) return null;
   if (box.width <= 0 || box.height <= 0) return null;

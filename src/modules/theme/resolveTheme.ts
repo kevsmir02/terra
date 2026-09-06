@@ -5,11 +5,22 @@ import type { DerivedValues } from "./tokens";
 import type { Theme, ThemeMode, ThemeVariant } from "./types";
 
 const ANSI_KEYS = [
-  "terminal.ansiBlack", "terminal.ansiRed", "terminal.ansiGreen", "terminal.ansiYellow",
-  "terminal.ansiBlue", "terminal.ansiMagenta", "terminal.ansiCyan", "terminal.ansiWhite",
-  "terminal.ansiBrightBlack", "terminal.ansiBrightRed", "terminal.ansiBrightGreen",
-  "terminal.ansiBrightYellow", "terminal.ansiBrightBlue", "terminal.ansiBrightMagenta",
-  "terminal.ansiBrightCyan", "terminal.ansiBrightWhite",
+  "terminal.ansiBlack",
+  "terminal.ansiRed",
+  "terminal.ansiGreen",
+  "terminal.ansiYellow",
+  "terminal.ansiBlue",
+  "terminal.ansiMagenta",
+  "terminal.ansiCyan",
+  "terminal.ansiWhite",
+  "terminal.ansiBrightBlack",
+  "terminal.ansiBrightRed",
+  "terminal.ansiBrightGreen",
+  "terminal.ansiBrightYellow",
+  "terminal.ansiBrightBlue",
+  "terminal.ansiBrightMagenta",
+  "terminal.ansiBrightCyan",
+  "terminal.ansiBrightWhite",
 ];
 
 function readAuthored(variant: ThemeVariant, key: string): string | undefined {
