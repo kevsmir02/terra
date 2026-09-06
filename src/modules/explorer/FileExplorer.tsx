@@ -58,6 +58,9 @@ type Props = {
   onPathRenamed?: (from: string, to: string) => void;
   onPathDeleted?: (path: string) => void;
   onRevealInTerminal?: (path: string) => void;
+  onPastePath?: (path: string) => void;
+  onDropToTerminal?: (leafId: number, path: string) => void;
+  onTerminalHover?: (leafId: number | null) => void;
   gitStatus?: GitStatusSnapshot | null;
 };
 
@@ -188,6 +191,9 @@ export const FileExplorer = memo(
       onPathRenamed,
       onPathDeleted,
       onRevealInTerminal,
+      onPastePath,
+      onDropToTerminal,
+      onTerminalHover,
       gitStatus,
     },
     ref,
@@ -266,6 +272,8 @@ export const FileExplorer = memo(
       rootPath: rootPath ?? "",
       isDir: isDirAt,
       onMove: tree.movePath,
+      onDropToTerminal,
+      onTerminalHover,
     });
 
     const fileDrop = useExplorerFileDrop({
@@ -682,11 +690,19 @@ export const FileExplorer = memo(
                       Open in Terminal
                     </ContextMenuItem>
                   )}
+                  {onPastePath && (
+                    <ContextMenuItem
+                      className={COMPACT_ITEM}
+                      onSelect={() => onPastePath(menuTarget.path)}
+                    >
+                      Paste path into terminal
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem
                     className={COMPACT_ITEM}
                     onSelect={() => void revealInFinder(menuTarget.path)}
                   >
-                    Reveal in Finder
+                    Reveal in file manager
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem
@@ -762,7 +778,7 @@ export const FileExplorer = memo(
                     className={COMPACT_ITEM}
                     onSelect={() => void revealInFinder(rootPath)}
                   >
-                    Reveal in Finder
+                    Reveal in file manager
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem

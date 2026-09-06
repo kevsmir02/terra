@@ -15,6 +15,9 @@ export {
   useAgentActivityStore,
 } from "./lib/agentActivity";
 export { useTerminalFileDrop } from "./lib/useTerminalFileDrop";
+export { useTerminalDropStore } from "./lib/dropStore";
+export { pasteIntoLeaf } from "./lib/rendererPool";
+export { formatDroppedPaths } from "./lib/quoteShellPath";
 export {
   findLeafCwd,
   hasLeaf,

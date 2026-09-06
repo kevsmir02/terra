@@ -287,7 +287,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                         className={COMPACT_ITEM}
                         onSelect={() => void revealInFinder(hit.path)}
                       >
-                        Reveal in Finder
+                        Reveal in file manager
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem

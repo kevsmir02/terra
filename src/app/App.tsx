@@ -75,10 +75,13 @@ import {
   clearFocusedTerminal,
   disposeSession,
   findLeafCwd,
+  formatDroppedPaths,
   hasLeaf,
   leafIds,
   type PaneBounds,
+  pasteIntoLeaf,
   type TerminalPaneHandle,
+  useTerminalDropStore,
   useTerminalFileDrop,
 } from "@/modules/terminal";
 import { ThemeProvider } from "@/modules/theme";
@@ -438,6 +441,21 @@ export default function App() {
     },
     [newTab],
   );
+
+  const pastePathIntoLeaf = useCallback((leafId: number, path: string) => {
+    pasteIntoLeaf(leafId, formatDroppedPaths([path]));
+  }, []);
+
+  const pastePathIntoActiveTerminal = useCallback(
+    (path: string) => {
+      const t = tabsRef.current.find((x) => x.id === activeId);
+      if (t?.kind !== "terminal") return;
+      pastePathIntoLeaf(t.activeLeafId, path);
+    },
+    [activeId, pastePathIntoLeaf],
+  );
+
+  const setTerminalDropTarget = useTerminalDropStore((s) => s.setTarget);
 
   const handleOpenFile = useCallback(
     (path: string, pin?: boolean) => {
@@ -1069,6 +1087,13 @@ export default function App() {
                         onPathRenamed={handlePathRenamed}
                         onPathDeleted={handlePathDeleted}
                         onRevealInTerminal={cdInNewTab}
+                        onPastePath={
+                          activeTerminalTab
+                            ? pastePathIntoActiveTerminal
+                            : undefined
+                        }
+                        onDropToTerminal={pastePathIntoLeaf}
+                        onTerminalHover={setTerminalDropTarget}
                       />
                     ) : sidebarView === "source-control" ? (
                       <SourceControlPanel
