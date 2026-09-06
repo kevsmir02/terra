@@ -1,3 +1,8 @@
+import {
+  DEFAULT_TERMINAL_FONT,
+  migrateTerminalFont,
+  type TerminalFontId,
+} from "@/lib/fonts";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
@@ -114,6 +119,7 @@ export type Preferences = {
   terminalCursorBlink: boolean;
   terminalCopyOnSelect: boolean;
   terminalFontFamily: string;
+  terminalFont: TerminalFontId;
   terminalFontWeight: string;
   terminalShell: string;
   terminalLetterSpacing: number;
@@ -162,6 +168,7 @@ const KEY_TERMINAL_WEBGL_ENABLED = "terminalWebglEnabled";
 const KEY_TERMINAL_CURSOR_BLINK = "terminalCursorBlink";
 const KEY_TERMINAL_COPY_ON_SELECT = "terminalCopyOnSelect";
 const KEY_TERMINAL_FONT_FAMILY = "terminalFontFamily";
+const KEY_TERMINAL_FONT = "terminalFont";
 const KEY_TERMINAL_FONT_WEIGHT = "terminalFontWeight";
 const KEY_TERMINAL_SHELL = "terminalShell";
 const KEY_TERMINAL_LETTER_SPACING = "terminalLetterSpacing";
@@ -217,6 +224,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalCursorBlink: false,
   terminalCopyOnSelect: false,
   terminalFontFamily: "",
+  terminalFont: DEFAULT_TERMINAL_FONT,
   terminalFontWeight: "normal",
   terminalShell: "",
   terminalLetterSpacing: 0,
@@ -303,6 +311,10 @@ export async function loadPreferences(): Promise<Preferences> {
     terminalFontFamily:
       get<string>(KEY_TERMINAL_FONT_FAMILY) ??
       DEFAULT_PREFERENCES.terminalFontFamily,
+    terminalFont: migrateTerminalFont(
+      get<string>(KEY_TERMINAL_FONT),
+      get<string>(KEY_TERMINAL_FONT_FAMILY) ?? "",
+    ),
     terminalFontWeight: coerceFontWeight(
       get<string>(KEY_TERMINAL_FONT_WEIGHT) ??
         DEFAULT_PREFERENCES.terminalFontWeight,
@@ -461,6 +473,10 @@ export async function setTerminalFontFamily(value: string): Promise<void> {
   await writePref(KEY_TERMINAL_FONT_FAMILY, value.trim());
 }
 
+export async function setTerminalFont(value: TerminalFontId): Promise<void> {
+  await writePref(KEY_TERMINAL_FONT, value);
+}
+
 const TERMINAL_FONT_WEIGHT_VALUES = new Set(["normal", "500", "600", "bold"]);
 
 export function coerceFontWeight(value: string): string {
@@ -571,6 +587,7 @@ export async function onPreferencesChange(
     [KEY_TERMINAL_CURSOR_BLINK]: "terminalCursorBlink",
     [KEY_TERMINAL_COPY_ON_SELECT]: "terminalCopyOnSelect",
     [KEY_TERMINAL_FONT_FAMILY]: "terminalFontFamily",
+    [KEY_TERMINAL_FONT]: "terminalFont",
     [KEY_TERMINAL_FONT_WEIGHT]: "terminalFontWeight",
     [KEY_TERMINAL_SHELL]: "terminalShell",
     [KEY_TERMINAL_LETTER_SPACING]: "terminalLetterSpacing",

@@ -1,4 +1,4 @@
-import { resolveFontFamily } from "@/lib/fonts";
+import { ensureTerminalFontLoaded, resolveTerminalFont } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -180,7 +180,7 @@ function bgActive(
 function termOptions() {
   const prefs = usePreferencesStore.getState();
   const font = configuredFont ?? {
-    fontFamily: resolveFontFamily(prefs.terminalFontFamily),
+    fontFamily: resolveTerminalFont(prefs.terminalFont, prefs.terminalFontFamily),
     fontWeight: prefs.terminalFontWeight,
     fontSize: Math.max(4, Math.round(prefs.terminalFontSize * prefs.zoomLevel)),
   };
@@ -953,27 +953,26 @@ export function applyLetterSpacing(spacing: number): void {
 }
 
 export function applyTerminalFont(font: RendererFont): void {
-  const next = {
-    fontFamily: resolveFontFamily(font.fontFamily),
-    fontWeight: font.fontWeight,
-    fontSize: font.fontSize,
-  };
+  const next = { ...font };
   configuredFont = next;
   for (const slot of slots) {
-    let refit = false;
-    if (slot.term.options.fontFamily !== next.fontFamily) {
-      slot.term.options.fontFamily = next.fontFamily;
-      refit = true;
-    }
-    if (slot.term.options.fontSize !== next.fontSize) {
-      slot.term.options.fontSize = next.fontSize;
-      refit = true;
-    }
     if (slot.term.options.fontWeight !== next.fontWeight) {
       slot.term.options.fontWeight = next.fontWeight as FontWeight;
     }
-    if (refit) refitSlot(slot);
+    if (slot.term.options.fontSize === next.fontSize) continue;
+    slot.term.options.fontSize = next.fontSize;
+    refitSlot(slot);
   }
+  // The family waits for its faces so xterm measures the real glyphs rather
+  // than a fallback's; a newer call in the meantime wins.
+  void ensureTerminalFontLoaded(next.fontFamily).then(() => {
+    if (configuredFont !== next) return;
+    for (const slot of slots) {
+      if (slot.term.options.fontFamily === next.fontFamily) continue;
+      slot.term.options.fontFamily = next.fontFamily;
+      refitSlot(slot);
+    }
+  });
 }
 
 export function applyScrollback(value: number): void {

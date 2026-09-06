@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { BUNDLED_FONTS, type TerminalFontId } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { ThemePref } from "@/modules/settings/store";
@@ -25,6 +26,7 @@ import {
   setShowHidden,
   setTerminalCopyOnSelect,
   setTerminalCursorBlink,
+  setTerminalFont,
   setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalFontWeight,
@@ -92,6 +94,7 @@ export function GeneralSection() {
   const terminalCopyOnSelect = usePreferencesStore(
     (s) => s.terminalCopyOnSelect,
   );
+  const terminalFont = usePreferencesStore((s) => s.terminalFont);
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
@@ -273,10 +276,39 @@ export function GeneralSection() {
             onCheckedChange={(v) => void setTerminalCopyOnSelect(v)}
           />
         </SettingRow>
-        <FontFamilyInput
-          value={terminalFontFamily}
-          onCommit={(v) => void setTerminalFontFamily(v)}
-        />
+        <SettingRow
+          title="Font"
+          description="Bundled Nerd Fonts render every terminal icon as designed. Pick System font to type any family installed on this machine."
+        >
+          <Select
+            value={terminalFont}
+            onValueChange={(v) => void setTerminalFont(v as TerminalFontId)}
+          >
+            <SelectTrigger value={terminalFont} className="h-8 w-56 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {BUNDLED_FONTS.map((font) => (
+                <SelectItem
+                  key={font.id}
+                  value={font.id}
+                  className="text-[12px]"
+                >
+                  {font.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="system" className="text-[12px]">
+                System font
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+        {terminalFont === "system" ? (
+          <FontFamilyInput
+            value={terminalFontFamily}
+            onCommit={(v) => void setTerminalFontFamily(v)}
+          />
+        ) : null}
         <SettingRow
           title="Font weight"
           description="Thickness of terminal characters"

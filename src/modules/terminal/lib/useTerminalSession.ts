@@ -1,4 +1,4 @@
-import { ensureMonoFontsLoaded } from "@/lib/fonts";
+import { ensureTerminalFontLoaded, resolveTerminalFont } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -339,7 +339,10 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
   sessions.set(leafId, session);
 
   session.ready = (async () => {
-    await ensureMonoFontsLoaded();
+    const prefs = usePreferencesStore.getState();
+    await ensureTerminalFontLoaded(
+      resolveTerminalFont(prefs.terminalFont, prefs.terminalFontFamily),
+    );
     await document.fonts.ready;
   })();
 
