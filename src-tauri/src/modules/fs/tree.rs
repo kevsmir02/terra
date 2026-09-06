@@ -5,9 +5,10 @@ use std::time::UNIX_EPOCH;
 use ignore::WalkBuilder;
 use serde::Serialize;
 
-use tauri::State;
+use tauri::AppHandle;
 
 use super::authorized_read;
+use crate::modules::blocking::on_registry as blocking;
 use crate::modules::workspace::WorkspaceRegistry;
 
 #[derive(Serialize)]
@@ -66,13 +67,16 @@ fn git_non_ignored_names(dir: &Path, show_hidden: bool) -> HashSet<String> {
 /// `show_hidden` is set. `git_decorations` opts into the per-entry `gitignored`
 /// flag; off by default so non-explorer callers pay nothing.
 #[tauri::command]
-pub fn fs_read_dir(
+pub async fn fs_read_dir(
     path: String,
     show_hidden: bool,
     git_decorations: Option<bool>,
-    registry: State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<Vec<DirEntry>, String> {
-    read_dir(&registry, &path, show_hidden, git_decorations)
+    blocking(app, move |r| {
+        read_dir(r, &path, show_hidden, git_decorations)
+    })
+    .await
 }
 
 pub fn read_dir(
@@ -161,12 +165,12 @@ pub fn read_dir(
 /// Symlinks to directories are included (matches shell `cd` semantics).
 /// Hidden entries are filtered by dot-prefix only.
 #[tauri::command]
-pub fn list_subdirs(
+pub async fn list_subdirs(
     path: String,
     show_hidden: bool,
-    registry: State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<Vec<String>, String> {
-    subdirs(&registry, &path, show_hidden)
+    blocking(app, move |r| subdirs(r, &path, show_hidden)).await
 }
 
 pub fn subdirs(

@@ -5,8 +5,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager};
 
+use crate::modules::blocking::on_app;
 use crate::modules::fs::to_canon;
 use crate::modules::workspace::WorkspaceRegistry;
 use crate::modules::sync::MutexExt;
@@ -227,17 +228,29 @@ fn prepare_add(
 }
 
 #[tauri::command]
-pub fn fs_watch_add(
+pub async fn fs_watch_add(paths: Vec<String>, app: AppHandle) -> Result<(), String> {
+    on_app(app, move |app| {
+        watch_add(
+            &app.state::<FsWatchState>(),
+            &app.state::<WorkspaceRegistry>(),
+            app,
+            paths,
+        )
+    })
+    .await
+}
+
+pub fn watch_add(
+    state: &FsWatchState,
+    registry: &WorkspaceRegistry,
+    app: &AppHandle,
     paths: Vec<String>,
-    app: AppHandle,
-    state: State<'_, FsWatchState>,
-    registry: State<'_, WorkspaceRegistry>,
 ) -> Result<(), String> {
-    let prepared = prepare_add(&registry, paths);
+    let prepared = prepare_add(registry, paths);
     if prepared.is_empty() {
         return Ok(());
     }
-    ensure_started(&state, &app)?;
+    ensure_started(state, app)?;
     let mut guard = state.inner.lock_or_recover();
     if let Some(inner) = guard.as_mut() {
         add_paths(inner, prepared);
@@ -246,10 +259,14 @@ pub fn fs_watch_add(
 }
 
 #[tauri::command]
-pub fn fs_watch_remove(
-    paths: Vec<String>,
-    state: State<'_, FsWatchState>,
-) -> Result<(), String> {
+pub async fn fs_watch_remove(paths: Vec<String>, app: AppHandle) -> Result<(), String> {
+    on_app(app, move |app| {
+        watch_remove(&app.state::<FsWatchState>(), paths)
+    })
+    .await
+}
+
+pub fn watch_remove(state: &FsWatchState, paths: Vec<String>) -> Result<(), String> {
     // A removed/renamed dir no longer canonicalizes; fall back so the refcount
     // entry is still released.
     let prepared: Vec<PathBuf> = paths

@@ -4,9 +4,10 @@ use nucleo_matcher::{Config, Matcher, Utf32Str};
 use serde::Serialize;
 
 use super::to_canon;
-use tauri::State;
+use tauri::AppHandle;
 
 use super::authorized_read;
+use crate::modules::blocking::on_registry as blocking;
 use crate::modules::workspace::WorkspaceRegistry;
 
 #[derive(Serialize, Clone)]
@@ -48,14 +49,14 @@ const PRUNE_DIRS: &[&str] = &[
 ];
 
 #[tauri::command]
-pub fn fs_search(
+pub async fn fs_search(
     root: String,
     query: String,
     limit: Option<usize>,
     show_hidden: Option<bool>,
-    registry: State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<SearchResult, String> {
-    search(&registry, &root, &query, limit, show_hidden)
+    blocking(app, move |r| search(r, &root, &query, limit, show_hidden)).await
 }
 
 pub fn search(

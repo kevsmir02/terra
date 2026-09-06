@@ -1,15 +1,13 @@
-use tauri::State;
+use tauri::AppHandle;
 
 use super::{authorized_entry, authorized_new, authorized_read, authorized_write};
+use crate::modules::blocking::on_registry as blocking;
 use crate::modules::workspace::WorkspaceRegistry;
 
 /// Creates a new empty file. Fails if the file already exists.
 #[tauri::command]
-pub fn fs_create_file(
-    path: String,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<(), String> {
-    create_file(&registry, &path)
+pub async fn fs_create_file(path: String, app: AppHandle) -> Result<(), String> {
+    blocking(app, move |r| create_file(r, &path)).await
 }
 
 pub fn create_file(
@@ -30,11 +28,8 @@ pub fn create_file(
 /// Parents are created as needed, matches the common "new folder" UX
 /// where typing "a/b/c" creates the full chain.
 #[tauri::command]
-pub fn fs_create_dir(
-    path: String,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<(), String> {
-    create_dir(&registry, &path)
+pub async fn fs_create_dir(path: String, app: AppHandle) -> Result<(), String> {
+    blocking(app, move |r| create_dir(r, &path)).await
 }
 
 pub fn create_dir(
@@ -53,12 +48,8 @@ pub fn create_dir(
 
 /// Renames (or moves) a path. Refuses to overwrite an existing target.
 #[tauri::command]
-pub fn fs_rename(
-    from: String,
-    to: String,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<(), String> {
-    rename(&registry, &from, &to)
+pub async fn fs_rename(from: String, to: String, app: AppHandle) -> Result<(), String> {
+    blocking(app, move |r| rename(r, &from, &to)).await
 }
 
 pub fn rename(
@@ -87,11 +78,8 @@ pub fn rename(
 /// Deletes a file or directory (recursively for dirs). Callers are
 /// responsible for confirming destructive operations with the user.
 #[tauri::command]
-pub fn fs_delete(
-    path: String,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<(), String> {
-    delete(&registry, &path)
+pub async fn fs_delete(path: String, app: AppHandle) -> Result<(), String> {
+    blocking(app, move |r| delete(r, &path)).await
 }
 
 pub fn delete(
@@ -133,12 +121,12 @@ fn copy_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Resu
 /// dirs. Sources are absolute OS paths (from a drag-drop); only the destination
 /// is workspace-resolved. Refuses to overwrite existing entries.
 #[tauri::command]
-pub fn fs_copy(
+pub async fn fs_copy(
     sources: Vec<String>,
     dest_dir: String,
-    registry: State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    copy_into(&registry, &sources, &dest_dir)
+    blocking(app, move |r| copy_into(r, &sources, &dest_dir)).await
 }
 
 pub fn copy_into(

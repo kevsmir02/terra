@@ -226,7 +226,14 @@ pub fn spawn(
                 }
                 // Coalesce a short window so a burst flushes as one chunk.
                 thread::sleep(FLUSH_COALESCE);
-                let chunk = std::mem::take(&mut *lock.lock_or_recover());
+                // Swap in a pre-sized buffer rather than `take`ing a zero
+                // capacity one: the pending vec is refilled to ~READ_BUF within
+                // milliseconds, and `take` makes every flush pay the doublings
+                // back from empty.
+                let chunk = std::mem::replace(
+                    &mut *lock.lock_or_recover(),
+                    Vec::with_capacity(READ_BUF),
+                );
                 if chunk.is_empty() {
                     continue;
                 }

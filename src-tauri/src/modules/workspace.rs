@@ -26,7 +26,15 @@ impl WorkspaceRegistry {
     pub fn authorize<P: AsRef<Path>>(&self, path: P) -> std::io::Result<PathBuf> {
         let canonical = std::fs::canonicalize(path.as_ref())?;
         let mut set = self.roots.lock_or_recover();
-        set.insert(canonical.clone());
+        // Every fs, git, PTY and LSP gate scans this set linearly, and OSC 7
+        // re-authorizes on each `cd`, so walking a tree in the terminal would
+        // grow it without bound while granting nothing new. A path already
+        // covered is a no-op; a path that covers existing roots replaces them.
+        // Coverage is identical either way, which is what keeps this safe.
+        if !set.iter().any(|root| canonical.starts_with(root)) {
+            set.retain(|root| !root.starts_with(&canonical));
+            set.insert(canonical.clone());
+        }
         Ok(canonical)
     }
 
@@ -295,6 +303,52 @@ mod auth_tests {
     use super::*;
     use std::env;
     use std::fs;
+
+    #[test]
+    fn authorizing_a_child_of_a_root_does_not_grow_the_set() {
+        let dir = tempdir("registry-child");
+        let nested = dir.join("a").join("b");
+        fs::create_dir_all(&nested).unwrap();
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(&dir).unwrap();
+        reg.authorize(dir.join("a")).unwrap();
+        reg.authorize(&nested).unwrap();
+        assert_eq!(reg.roots.lock_or_recover().len(), 1);
+        assert!(reg.is_authorized(&nested));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn authorizing_a_parent_supersedes_the_children_it_covers() {
+        let dir = tempdir("registry-parent");
+        let a = dir.join("a");
+        let b = dir.join("b");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(&a).unwrap();
+        reg.authorize(&b).unwrap();
+        assert_eq!(reg.roots.lock_or_recover().len(), 2);
+        reg.authorize(&dir).unwrap();
+        assert_eq!(reg.roots.lock_or_recover().len(), 1);
+        assert!(reg.is_authorized(&a));
+        assert!(reg.is_authorized(&b));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_sibling_root_is_still_refused_after_collapsing() {
+        let dir = tempdir("registry-sibling");
+        let inside = dir.join("inside");
+        let outside = dir.join("outside");
+        fs::create_dir_all(&inside).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(&inside).unwrap();
+        reg.authorize(inside.join(".")).unwrap();
+        assert!(!reg.is_authorized(&outside));
+        fs::remove_dir_all(&dir).ok();
+    }
 
     fn tempdir(label: &str) -> PathBuf {
         let mut p = env::temp_dir();

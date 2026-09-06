@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod blocking;
 pub mod device;
 pub mod env;
 pub mod fs;

@@ -8,6 +8,9 @@ const BACKSLASH: u8 = 0x5c;
 // discarded rather than grown without bound.
 const CAND_MAX: usize = 2048;
 
+const HTTP: &[u8] = b"http://";
+const HTTPS: &[u8] = b"https://";
+
 /// Payload for the `terra:dev-server` event. `id` is the pty id, matching how
 /// `AgentSignal` identifies its session.
 #[derive(Clone, serde::Serialize)]
@@ -70,6 +73,19 @@ impl UrlDetector {
                         }
                         if !self.poisoned {
                             self.cand.push(b);
+                            // `normalize` only ever accepts an http(s) URL, so a
+                            // candidate that has diverged from both schemes is
+                            // dropped here instead of being buffered to its
+                            // terminator. This runs on every byte of every PTY
+                            // chunk; ordinary words die within two bytes, and
+                            // once the full scheme is confirmed at eight the
+                            // check stops running for that candidate.
+                            if self.cand.len() <= HTTPS.len()
+                                && !scheme_viable(&self.cand)
+                            {
+                                self.poisoned = true;
+                                self.cand.clear();
+                            }
                         }
                     } else {
                         self.flush(&mut emit);
@@ -103,6 +119,9 @@ impl UrlDetector {
     /// Evaluate and clear the pending candidate. A candidate still open when a
     /// chunk ends stays pending, so a URL split across reads still matches.
     fn flush<F: FnMut(&str)>(&mut self, emit: &mut F) {
+        if self.cand.is_empty() && !self.poisoned {
+            return;
+        }
         let poisoned = std::mem::replace(&mut self.poisoned, false);
         let cand = std::mem::take(&mut self.cand);
         if poisoned || cand.is_empty() {
@@ -116,6 +135,19 @@ impl UrlDetector {
         }
         emit(&url);
         self.last = Some(url);
+    }
+}
+
+/// True while `cand` could still grow into an http(s) scheme, or already has.
+fn scheme_viable(cand: &[u8]) -> bool {
+    prefix_compatible(cand, HTTP) || prefix_compatible(cand, HTTPS)
+}
+
+fn prefix_compatible(cand: &[u8], scheme: &[u8]) -> bool {
+    if cand.len() < scheme.len() {
+        scheme.starts_with(cand)
+    } else {
+        cand.starts_with(scheme)
     }
 }
 
@@ -200,6 +232,25 @@ mod tests {
         let mut d = UrlDetector::new();
         let input = b"  \x1b[32m\xe2\x9e\x9c\x1b[39m  Local:   \x1b[36mhttp://localhost:5173/\x1b[39m\r\n";
         assert_eq!(run(&mut d, input), vec!["http://localhost:5173/"]);
+    }
+
+    #[test]
+    fn url_split_one_byte_per_chunk_still_matches() {
+        // The scheme prune drops a candidate the moment it diverges, so this
+        // locks that a URL arriving a byte at a time is never pruned midway.
+        let mut d = UrlDetector::new();
+        let mut got = Vec::new();
+        for b in b"http://localhost:5173/ " {
+            d.process(&[*b], |u| got.push(u.to_string()));
+        }
+        assert_eq!(got, vec!["http://localhost:5173/"]);
+    }
+
+    #[test]
+    fn diverged_candidate_is_dropped_before_it_accumulates() {
+        let mut d = UrlDetector::new();
+        d.process(b"hello-world-a-very-long-token", |_| {});
+        assert!(d.cand.is_empty(), "a non-scheme word must not be buffered");
     }
 
     #[test]

@@ -9,8 +9,11 @@ use grep_searcher::{BinaryDetection, SearcherBuilder};
 use ignore::{WalkBuilder, WalkState};
 use serde::Serialize;
 
+use tauri::{AppHandle, Manager};
+
 use super::to_canon;
 use super::authorized_read;
+use crate::modules::blocking::{on_app, on_registry as blocking};
 use crate::modules::workspace::WorkspaceRegistry;
 use crate::modules::sync::MutexExt;
 
@@ -167,15 +170,18 @@ fn search_tree(
 }
 
 #[tauri::command]
-pub fn fs_grep(
+pub async fn fs_grep(
     pattern: String,
     root: String,
     glob: Option<Vec<String>>,
     case_insensitive: Option<bool>,
     max_results: Option<usize>,
-    registry: tauri::State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<GrepResponse, String> {
-    grep(&registry, &pattern, &root, glob, case_insensitive, max_results)
+    blocking(app, move |r| {
+        grep(r, &pattern, &root, glob, case_insensitive, max_results)
+    })
+    .await
 }
 
 pub fn grep(
@@ -215,19 +221,37 @@ pub fn grep(
 /// Interactive content search for the command palette. Treats the query as a
 /// literal (smart-case), and self-cancels when a newer query arrives.
 #[tauri::command]
-pub fn fs_grep_interactive(
-    state: tauri::State<'_, ContentSearchState>,
+pub async fn fs_grep_interactive(
     pattern: String,
     root: String,
     max_results: Option<usize>,
-    registry: tauri::State<'_, WorkspaceRegistry>,
+    app: AppHandle,
+) -> Result<GrepResponse, String> {
+    on_app(app, move |app| {
+        grep_interactive(
+            &app.state::<ContentSearchState>(),
+            &app.state::<WorkspaceRegistry>(),
+            &pattern,
+            &root,
+            max_results,
+        )
+    })
+    .await
+}
+
+pub fn grep_interactive(
+    state: &ContentSearchState,
+    registry: &WorkspaceRegistry,
+    pattern: &str,
+    root: &str,
+    max_results: Option<usize>,
 ) -> Result<GrepResponse, String> {
     if pattern.trim().is_empty() {
         return Err("empty pattern".into());
     }
     let my_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
 
-    let root_path = authorized_read(&registry, &root)?;
+    let root_path = authorized_read(registry, root)?;
     if !root_path.is_dir() {
         return Err(format!("not a directory: {root}"));
     }
@@ -238,7 +262,7 @@ pub fn fs_grep_interactive(
     let matcher = RegexMatcherBuilder::new()
         .case_smart(true)
         .line_terminator(Some(b'\n'))
-        .build(&escape_literal(&pattern))
+        .build(&escape_literal(pattern))
         .map_err(|e| format!("bad pattern: {e}"))?;
 
     let cancel = || state.generation.load(Ordering::SeqCst) != my_gen;
@@ -262,13 +286,13 @@ pub struct GlobResponse {
 }
 
 #[tauri::command]
-pub fn fs_glob(
+pub async fn fs_glob(
     pattern: String,
     root: String,
     max_results: Option<usize>,
-    registry: tauri::State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<GlobResponse, String> {
-    glob_files(&registry, &pattern, &root, max_results)
+    blocking(app, move |r| glob_files(r, &pattern, &root, max_results)).await
 }
 
 pub fn glob_files(

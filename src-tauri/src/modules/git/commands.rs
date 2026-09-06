@@ -1,5 +1,6 @@
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
+use crate::modules::blocking::on_registry as blocking;
 use crate::modules::git::operations;
 use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
@@ -7,20 +8,6 @@ use crate::modules::git::types::{
     GitRepoInfo, GitStatusSnapshot,
     GitStashEntry,
 };
-use crate::modules::workspace::WorkspaceRegistry;
-
-async fn blocking<F, T>(app: AppHandle, f: F) -> Result<T, String>
-where
-    F: FnOnce(&WorkspaceRegistry) -> Result<T, String> + Send + 'static,
-    T: Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(move || {
-        let registry = app.state::<WorkspaceRegistry>();
-        f(&registry)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
 
 #[tauri::command]
 pub async fn git_resolve_repo(
