@@ -98,7 +98,7 @@ type Props = {
 };
 
 const SOURCE_CONTROL_TOOLTIP_CLASS =
-  "border border-border/(--emph-strong) bg-popover text-popover-foreground shadow-lg shadow-black/30 dark:border-border/(--emph-strong)";
+  "border border-border/(--emph-strong) bg-popover text-popover-foreground shadow-lg dark:border-border/(--emph-strong)";
 
 const ROW_HEIGHTS = {
   banner: 32,
@@ -835,7 +835,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               <div className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-muted-foreground">
                 <span
                   className={cn(
-                    "size-1.5 shrink-0 rounded-full transition-colors",
+                    "size-1.5 shrink-0 rounded-circle transition-colors",
                     canCommit
                       ? "bg-foreground/(--emph-bold)"
                       : stagedCount > 0
@@ -1023,7 +1023,7 @@ function PanelCenter({
 function CleanTreeHint({ repoLabel }: { repoLabel: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-4 text-center">
-      <div className="flex size-8 items-center justify-center rounded-full border border-border/(--emph-medium) text-muted-foreground">
+      <div className="flex size-8 items-center justify-center rounded-circle border border-border/(--emph-medium) text-muted-foreground">
         <HugeiconsIcon
           icon={CheckmarkCircle01Icon}
           size={16}
@@ -1099,7 +1099,7 @@ function ListHeader({
       <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/(--emph-bold)">
         Changes
       </span>
-      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/(--emph-strong) px-1 text-[9.5px] font-semibold tabular-nums text-muted-foreground">
+      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-pill border border-border/(--emph-strong) px-1 text-[9.5px] font-semibold tabular-nums text-muted-foreground">
         {row.count}
       </span>
       <label
@@ -1174,7 +1174,7 @@ const EntryRow = memo(function EntryRow({
         >
           <span
             className={cn(
-              "pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-full transition-opacity",
+              "pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-pill transition-opacity",
               statusAccent(entry.statusCode),
               isSelected || focused
                 ? "opacity-100"
@@ -1400,7 +1400,7 @@ function CommitFeedback({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-3 top-[calc(100%-0.25rem)] z-20 flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug shadow-lg shadow-black/15 backdrop-blur transition-all duration-200",
+        "pointer-events-none absolute inset-x-3 top-[calc(100%-0.25rem)] z-20 flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug shadow-lg backdrop-blur transition-all duration-200",
         isVisible ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
         isError
           ? "border-destructive/(--emph-subtle) bg-card/(--emph-bold) text-destructive"
@@ -1409,7 +1409,7 @@ function CommitFeedback({
     >
       <span
         className={cn(
-          "size-1.5 shrink-0 rounded-full",
+          "size-1.5 shrink-0 rounded-circle",
           isError ? "bg-destructive" : "bg-foreground/(--emph-strong)",
         )}
       />

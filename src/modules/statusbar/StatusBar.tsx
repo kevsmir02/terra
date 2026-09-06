@@ -33,7 +33,7 @@ export function StatusBar({
         {privateActive ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="flex shrink-0 cursor-default items-center gap-1 rounded-full bg-status-warning/15 px-2 py-0.5 text-[10.5px] font-medium text-status-warning">
+              <span className="flex shrink-0 cursor-default items-center gap-1 rounded-pill bg-status-warning/15 px-2 py-0.5 text-[10.5px] font-medium text-status-warning">
                 <HugeiconsIcon icon={IncognitoIcon} size={11} strokeWidth={2} />
                 <span>Private: hidden from AI</span>
               </span>

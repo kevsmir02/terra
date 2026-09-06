@@ -65,7 +65,7 @@ function StatusRow({
           waiting ? "font-medium text-primary" : "text-muted-foreground",
         )}
       >
-        {waiting ? <span className="size-1.5 rounded-full bg-primary" /> : null}
+        {waiting ? <span className="size-1.5 rounded-circle bg-primary" /> : null}
         {waiting ? "waiting" : "working"}
       </span>
     </button>
@@ -154,7 +154,7 @@ function NotificationRow({
         ) : (
           <span
             className={cn(
-              "size-1.5 rounded-full",
+              "size-1.5 rounded-circle",
               n.kind === "error" ? "bg-destructive" : "bg-primary",
             )}
           />
@@ -246,7 +246,7 @@ export function NotificationBell({ onActivate }: Props) {
             strokeWidth={1.75}
           />
           {badge > 0 ? (
-            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">
+            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-pill bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">
               {badge > 9 ? "9+" : badge}
             </span>
           ) : null}
@@ -263,7 +263,7 @@ export function NotificationBell({ onActivate }: Props) {
           </span>
           <div className="ml-auto flex items-center gap-2">
             {activeCount > 0 ? (
-              <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              <span className="rounded-pill bg-accent px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
                 {activeCount} active
               </span>
             ) : null}

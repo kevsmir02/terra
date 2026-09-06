@@ -19,7 +19,7 @@ export function DevServerChip({ leafId }: { leafId: number }) {
     <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2">
       <div
         className={cn(
-          "flex items-center gap-1.5 rounded-full border border-border/(--emph-strong)",
+          "flex items-center gap-1.5 rounded-pill border border-border/(--emph-strong)",
           "bg-background/(--emph-bold) py-1 pr-1 pl-2.5 text-xs shadow-lg backdrop-blur-sm",
         )}
       >
@@ -40,7 +40,7 @@ export function DevServerChip({ leafId }: { leafId: number }) {
           type="button"
           onClick={() => dismiss(leafId)}
           aria-label="Dismiss dev server preview"
-          className="grid size-5 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="grid size-5 place-items-center rounded-pill text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <HugeiconsIcon icon={Cancel01Icon} size={12} strokeWidth={1.75} />
         </button>

@@ -750,7 +750,7 @@ const CommitRow = memo(function CommitRow({
         title={commit.authorEmail || commit.author}
       >
         <span
-          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-[3px] font-mono text-[8.5px] font-bold uppercase tabular-nums text-background"
+          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-xs font-mono text-[8.5px] font-bold uppercase tabular-nums text-background"
           style={{
             backgroundColor: authorTint(commit.authorEmail || commit.author),
           }}
@@ -782,7 +782,7 @@ const CommitRow = memo(function CommitRow({
         {commit.filesChanged > 0 && totalStat > 0 ? (
           <span
             aria-hidden
-            className="size-[3px] shrink-0 rounded-full bg-muted-foreground/(--emph-subtle)"
+            className="size-[3px] shrink-0 rounded-circle bg-muted-foreground/(--emph-subtle)"
           />
         ) : null}
         {totalStat > 0 ? (

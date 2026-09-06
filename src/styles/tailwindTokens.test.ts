@@ -118,3 +118,46 @@ describe("status tokens", () => {
     }
   });
 });
+
+describe("theme-owned scales", () => {
+  const inline = () =>
+    GLOBALS.slice(
+      GLOBALS.indexOf("@theme inline"),
+      GLOBALS.indexOf("@utility border"),
+    );
+  const utilities = () =>
+    GLOBALS.split("\n").filter((l) => l.trimStart().startsWith("@utility rounded-"));
+
+  it("routes every shadow utility through the theme's shadow tint", async () => {
+    const css = await build(`@import "tailwindcss";\n${inline()}`, [
+      "shadow-2xs", "shadow-xs", "shadow-sm", "shadow-md", "shadow-lg",
+      "shadow-xl", "shadow-2xl", "shadow", "shadow-inner",
+    ]);
+    const blocks = css.match(/\.shadow[^{]*\{[^}]*\}/g) ?? [];
+    expect(blocks).toHaveLength(9);
+    for (const b of blocks) expect(b).toContain("var(--fx-shadow-color, rgb(0 0 0 /");
+  });
+
+  it("multiplies every blur step by the theme's blur factor", async () => {
+    const css = await build(`@import "tailwindcss";\n${inline()}`, [
+      "backdrop-blur", "backdrop-blur-xs", "backdrop-blur-sm", "backdrop-blur-md",
+      "backdrop-blur-lg", "backdrop-blur-xl", "backdrop-blur-2xl", "backdrop-blur-3xl",
+    ]);
+    const blocks = css.match(/\.backdrop-blur[^{]*\{[^}]*\}/g) ?? [];
+    expect(blocks).toHaveLength(8);
+    for (const b of blocks) expect(b).toContain("blur(calc(var(--fx-blur-factor, 1) *");
+  });
+
+  it("scales rounded-xs with the theme radius like the other steps", () => {
+    expect(inline()).toContain("--radius-xs: calc(var(--radius) * 0.4)");
+  });
+
+  it("gives pills a theme radius and circles a fixed one", async () => {
+    const css = await build(
+      `@import "tailwindcss";\n${utilities().join("\n")}`,
+      ["rounded-pill", "rounded-circle"],
+    );
+    expect(css).toContain(".rounded-pill {\n    border-radius: var(--radius-pill, 9999px);");
+    expect(css).toContain(".rounded-circle {\n    border-radius: 50%;");
+  });
+});

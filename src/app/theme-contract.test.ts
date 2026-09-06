@@ -10,13 +10,46 @@ const ROOT = path.resolve(__dirname, "../..");
 
 type Rule = { id: string; pattern: RegExp; message: string };
 
-const ALLOWLIST: Record<string, string> = {};
+const ALLOWLIST: Record<string, string> = {
+  "src/modules/preview/PreviewPane.tsx":
+    "the web preview iframe paints white behind the page, like a browser",
+  "src/modules/device/DevicePreviewPane.tsx":
+    "the device video surface is black letterboxing around the stream",
+  "src/components/ui/dialog.tsx": "the modal scrim is a neutral dark wash by design",
+  "src/components/ui/alert-dialog.tsx": "the modal scrim is a neutral dark wash by design",
+};
 
 const RULES: Rule[] = [
   {
     id: "divider-fill",
     pattern: /\b(h-px|w-px)\b[^"'`]*\bbg-border\b|\bbg-border\b[^"'`]*\b(h-px|w-px)\b/,
     message: "a divider is a border, not a bg-border fill; it must take --border-style",
+  },
+  {
+    id: "rounded-full",
+    pattern: /\brounded-full\b/,
+    message: "use rounded-pill (theme radius) or rounded-circle (geometric circle)",
+  },
+  {
+    id: "arbitrary-shape",
+    pattern: /\b(rounded(-[trblse]{1,2})?|shadow|blur|backdrop-blur)-\[(?!inherit\])/,
+    message: "arbitrary shape value; use a scale step the theme owns",
+  },
+  {
+    id: "border-style-literal",
+    pattern: /\bborder-(solid|dashed|dotted|double)\b/,
+    message: "border style belongs to the theme (--border-style)",
+  },
+  {
+    id: "palette-colour",
+    pattern:
+      /\b(bg|text|border|ring|fill|stroke|from|to|via|outline|shadow|decoration)-(white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(-\d{2,3})?(\/|\b)/,
+    message: "Tailwind palette colour; use a semantic token (bg-card, text-muted-foreground, ...)",
+  },
+  {
+    id: "raw-colour",
+    pattern: /(className|class|style)=[^\n]*(#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\()/,
+    message: "raw colour in markup; use a theme token",
   },
 ];
 

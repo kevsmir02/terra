@@ -25,7 +25,7 @@ type Props = {
 };
 
 const PILL_CLASS =
-  "terra-pill-in ml-1.5 flex h-6 shrink-0 cursor-pointer [&_button]:cursor-pointer items-center gap-1 rounded-full border border-border/(--emph-medium) bg-accent/(--emph-medium) px-2 text-[10.5px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground";
+  "terra-pill-in ml-1.5 flex h-6 shrink-0 cursor-pointer [&_button]:cursor-pointer items-center gap-1 rounded-pill border border-border/(--emph-medium) bg-accent/(--emph-medium) px-2 text-[10.5px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground";
 
 export function LspStatusPill({ filePath }: Props) {
   const hint = useLspHint(filePath);
@@ -82,7 +82,7 @@ function ErrorPill({ preset, reason }: { preset: LspPreset; reason: string }) {
           className={PILL_CLASS}
           title="Language server stopped"
         >
-          <span className="size-1.5 rounded-full bg-destructive" />
+          <span className="size-1.5 rounded-circle bg-destructive" />
           <span>{preset.name} LSP</span>
         </button>
       </PopoverTrigger>
@@ -121,7 +121,7 @@ function DismissButton({ preset }: { preset: LspPreset }) {
   return (
     <button
       type="button"
-      className="rounded-full p-0.5 hover:bg-foreground/(--emph-faint)"
+      className="rounded-pill p-0.5 hover:bg-foreground/(--emph-faint)"
       onClick={() => void setLspActivation(preset.id, "dismissed")}
       title="Dismiss (you can re-enable from Settings)"
     >
@@ -242,7 +242,7 @@ function ActivePill({
               className="animate-spin"
             />
           ) : (
-            <span className="size-1.5 rounded-full bg-status-ok" />
+            <span className="size-1.5 rounded-circle bg-status-ok" />
           )}
           <span>{preset.name} LSP</span>
         </button>

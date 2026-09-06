@@ -211,7 +211,7 @@ export function ThemesSection() {
               "rounded-md border px-2.5 py-1.5 text-[11.5px]",
               importMessage.type === "error"
                 ? "border-destructive/(--emph-soft) bg-destructive/(--emph-faint) text-destructive"
-                : "border-orange-500/40 bg-orange-500/10 text-orange-500",
+                : "border-status-warning/(--emph-soft) bg-status-warning/(--emph-faint) text-status-warning",
             )}
           >
             {importMessage.text}

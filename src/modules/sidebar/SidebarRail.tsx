@@ -71,7 +71,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
             />
             <span className="truncate">{item.label}</span>
             {badge !== null ? (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-border/(--emph-strong) bg-card px-1 text-[9px] font-semibold leading-none tabular-nums text-muted-foreground/(--emph-bold)">
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-pill border border-border/(--emph-strong) bg-card px-1 text-[9px] font-semibold leading-none tabular-nums text-muted-foreground/(--emph-bold)">
                 {badge > 99 ? "99+" : badge}
               </span>
             ) : null}

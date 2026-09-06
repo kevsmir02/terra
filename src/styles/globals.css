@@ -58,6 +58,24 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    --radius-xs: calc(var(--radius) * 0.4);
+    --shadow-2xs: 0 1px var(--fx-shadow-color, rgb(0 0 0 / 0.05));
+    --shadow-xs: 0 1px 2px 0 var(--fx-shadow-color, rgb(0 0 0 / 0.05));
+    --shadow-sm: 0 1px 3px 0 var(--fx-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--fx-shadow-color, rgb(0 0 0 / 0.1));
+    --shadow-md: 0 4px 6px -1px var(--fx-shadow-color, rgb(0 0 0 / 0.1)), 0 2px 4px -2px var(--fx-shadow-color, rgb(0 0 0 / 0.1));
+    --shadow-lg: 0 10px 15px -3px var(--fx-shadow-color, rgb(0 0 0 / 0.1)), 0 4px 6px -4px var(--fx-shadow-color, rgb(0 0 0 / 0.1));
+    --shadow-xl: 0 20px 25px -5px var(--fx-shadow-color, rgb(0 0 0 / 0.1)), 0 8px 10px -6px var(--fx-shadow-color, rgb(0 0 0 / 0.1));
+    --shadow-2xl: 0 25px 50px -12px var(--fx-shadow-color, rgb(0 0 0 / 0.25));
+    --shadow: 0 1px 3px 0 var(--fx-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--fx-shadow-color, rgb(0 0 0 / 0.1));
+    --shadow-inner: inset 0 2px 4px 0 var(--fx-shadow-color, rgb(0 0 0 / 0.05));
+    --blur-xs: calc(var(--fx-blur-factor, 1) * 4px);
+    --blur-sm: calc(var(--fx-blur-factor, 1) * 8px);
+    --blur-md: calc(var(--fx-blur-factor, 1) * 12px);
+    --blur-lg: calc(var(--fx-blur-factor, 1) * 16px);
+    --blur-xl: calc(var(--fx-blur-factor, 1) * 24px);
+    --blur-2xl: calc(var(--fx-blur-factor, 1) * 40px);
+    --blur-3xl: calc(var(--fx-blur-factor, 1) * 64px);
+    --blur: calc(var(--fx-blur-factor, 1) * 8px);
     --emph-faint: 10%;
     --emph-subtle: 30%;
     --emph-soft: 40%;
@@ -74,6 +92,12 @@
 @utility border-b { border-bottom-width: var(--surface-border-width, 1px); }
 @utility border-l { border-left-width: var(--surface-border-width, 1px); }
 @utility border-r { border-right-width: var(--surface-border-width, 1px); }
+
+/* A pill follows the theme (a brutalist theme squares its chips); a circle is
+ * geometry and never does. Tailwind merges a same-named @utility with its own
+ * and wins, so rounded-full is retired rather than re-emitted. */
+@utility rounded-pill { border-radius: var(--radius-pill, 9999px); }
+@utility rounded-circle { border-radius: 50%; }
 
 :root {
     --background: oklch(0.978 0.002 228.8);

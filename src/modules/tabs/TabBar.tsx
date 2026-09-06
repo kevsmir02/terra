@@ -366,7 +366,7 @@ export function TabBar({
                             role="button"
                             tabIndex={-1}
                             data-no-drag
-                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-[0_0_4px_var(--color-popover-foreground)]"
+                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-sm"
                           >
                             <TabIcon tab={t} />
                           </span>
@@ -460,7 +460,7 @@ export function TabBar({
                       <span
                         role="img"
                         aria-label="Unsaved changes"
-                        className="size-1.5 shrink-0 rounded-full bg-foreground/(--emph-strong)"
+                        className="size-1.5 shrink-0 rounded-circle bg-foreground/(--emph-strong)"
                       />
                     ) : null}
                   </span>
@@ -616,7 +616,7 @@ function DropIndicator() {
   return (
     <span
       aria-hidden
-      className="my-0.5 w-0.5 shrink-0 self-stretch rounded-full bg-primary"
+      className="my-0.5 w-0.5 shrink-0 self-stretch rounded-pill bg-primary"
     />
   );
 }

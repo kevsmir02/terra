@@ -138,7 +138,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                 aria-label="Theme primary"
                 onClick={() => setColor(space.id, undefined)}
                 className={cn(
-                  "size-5 rounded-full ring-1 ring-inset transition",
+                  "size-5 rounded-circle ring-1 ring-inset transition",
                   space.color == null
                     ? "ring-foreground/(--emph-bold)"
                     : "ring-border hover:ring-foreground/(--emph-soft)",
@@ -152,7 +152,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
                   aria-label={`Accent ${i + 1}`}
                   onClick={() => setColor(space.id, i)}
                   className={cn(
-                    "size-5 rounded-full ring-1 ring-inset transition",
+                    "size-5 rounded-circle ring-1 ring-inset transition",
                     space.color === i
                       ? "ring-foreground/(--emph-bold)"
                       : "ring-transparent hover:ring-foreground/(--emph-soft)",
