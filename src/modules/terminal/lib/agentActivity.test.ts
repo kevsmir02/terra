@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   phaseForSignal,
+  selectTabAgentStatus,
   tabAgentStatus,
   useAgentActivityStore,
 } from "./agentActivity";
@@ -84,5 +85,36 @@ describe("useAgentActivityStore", () => {
     const state = useAgentActivityStore.getState();
     expect(1 in state.phases).toBe(false);
     expect(1 in state.agents).toBe(false);
+  });
+});
+
+describe("selectTabAgentStatus", () => {
+  beforeEach(() => useAgentActivityStore.setState({ phases: {}, agents: {} }));
+
+  it("holds a tab's status steady when another tab's pty signals", () => {
+    const { setPhase, setAgent } = useAgentActivityStore.getState();
+    setPhase(1, "working");
+    setAgent(1, "claude");
+    const select = selectTabAgentStatus([1]);
+    const before = select(useAgentActivityStore.getState());
+
+    setPhase(2, "attention");
+    setAgent(2, "codex");
+    const after = select(useAgentActivityStore.getState());
+
+    // A fresh object every call by design; `useShallow` compares the two
+    // fields, and equal fields are what keeps every other tab's icon from
+    // re-rendering on a signal that is not its own.
+    expect(after).not.toBe(before);
+    expect(after).toEqual(before);
+  });
+
+  it("moves when the tab's own pty signals", () => {
+    const { setPhase } = useAgentActivityStore.getState();
+    setPhase(1, "working");
+    const select = selectTabAgentStatus([1]);
+    const before = select(useAgentActivityStore.getState());
+    setPhase(1, "attention");
+    expect(select(useAgentActivityStore.getState())).not.toEqual(before);
   });
 });

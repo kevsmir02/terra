@@ -49,7 +49,7 @@ function StatusRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent"
+      className="terra-row-in terra-motion flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent"
     >
       <AgentIcon
         agent={agent}
@@ -252,7 +252,7 @@ export function NotificationBell({ onActivate }: Props) {
             strokeWidth={1.75}
           />
           {badge > 0 ? (
-            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-pill bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">
+            <span className="terra-pop-in absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-pill bg-primary px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">
               {badge > 9 ? "9+" : badge}
             </span>
           ) : null}

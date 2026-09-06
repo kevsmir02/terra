@@ -91,6 +91,17 @@
 @utility rounded-pill { border-radius: var(--radius-pill, 9999px); }
 @utility rounded-circle { border-radius: 50%; }
 
+/* Chrome motion: the duration and curve every transition and overlay
+ * animation runs on, both theme-owned. A utility rather than the pair repeated
+ * at each site, because class strings ship in the JS bundle. tw-animate-css
+ * reads the same two variables, so this drives `animate-in`/`animate-out` too. */
+@utility terra-motion {
+  --tw-duration: var(--dur-fast);
+  --tw-ease: var(--ease-out);
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
 /* Chrome text (tab titles, rail labels, statusbar chips, panel and menu
  * headings) wears this; content (file names, commits, terminal) never does.
  * A utility rather than a component class so variants can target it. */
@@ -395,17 +406,16 @@ textarea,
   display: none !important;
 }
 
-/* Kill native scrollbars everywhere by default, Linux/Windows ship chunky
- * Chromium bars that break the chrome, and macOS WKWebView flashes its overlay
- * scrollbar briefly during layout transitions (AI panel open, pane split,
- * window resize) which looks like a glitch. Visible scroll affordances are
- * provided per-region via shadcn <ScrollArea>. */
+/* Kill native scrollbars everywhere by default: GTK ships chunky bars that
+ * break the chrome. Visible scroll affordances are provided per-region via
+ * shadcn <ScrollArea>.
+ *
+ * Elements only. A pseudo-element cannot own a scrollbar, so matching
+ * `*::before`/`*::after` here doubled the selector's work against every node in
+ * the tree (the explorer and the git log are the big ones) and styled nothing. */
 html,
-html *,
-html *::before,
-html *::after {
+html * {
   scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 html *::-webkit-scrollbar {
   width: 0;
@@ -413,150 +423,132 @@ html *::-webkit-scrollbar {
   display: none;
 }
 
-/* Motion tokens. Reduced-motion zeroes the durations as a global snap. */
+/* Motion. The duration scale and the shared curve are theme-owned
+ * (`motion.speed`, `motion.easing`), so a brutalist theme can snap where the
+ * default eases. Every keyframe below moves transform and opacity only: they
+ * are the two properties WebKitGTK hands to the compositor without a relayout
+ * or a repaint, and the terminal is streaming underneath all of them.
+ * `src/styles/motion.test.ts` keeps that true. */
 :root {
-  --dur-fast: 160ms;
-  --dur-base: 240ms;
-  --dur-slow: 320ms;
-  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes terra-collapsible-down {
-  from {
-    height: 0;
-    opacity: 0;
-  }
-  to {
-    height: var(--radix-collapsible-content-height);
-    opacity: 1;
-  }
-}
-
-@keyframes terra-collapsible-up {
-  from {
-    height: var(--radix-collapsible-content-height);
-    opacity: 1;
-  }
-  to {
-    height: 0;
-    opacity: 0;
-  }
-}
-
-.terra-collapsible-content {
-  overflow: hidden;
-}
-.terra-collapsible-content[data-state="open"] {
-  animation: terra-collapsible-down var(--dur-base) var(--ease-soft);
-}
-.terra-collapsible-content[data-state="closed"] {
-  animation: terra-collapsible-up var(--dur-base) var(--ease-soft);
-}
-
-/* Height auto<->0 reveal without JS measuring: animate the grid track from 0fr
- * to 1fr. The inner child must be the sole grid row with min-height:0. Used by
- * the docked AI input bar and the composer voice-status row. */
-.terra-reveal {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition:
-    grid-template-rows var(--dur-base) var(--ease-premium),
-    opacity var(--dur-base) var(--ease-premium);
-  opacity: 0;
-}
-.terra-reveal[data-state="open"] {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-.terra-reveal > * {
-  min-height: 0;
-  overflow: hidden;
+  --dur-fast: calc(110ms * var(--motion-scale, 1) * var(--motion-reduce, 1));
+  --dur-base: calc(170ms * var(--motion-scale, 1) * var(--motion-reduce, 1));
+  --dur-slow: calc(240ms * var(--motion-scale, 1) * var(--motion-reduce, 1));
+  /* Entrances decelerate into place; the theme's curve drives both. */
+  --ease-out: var(--motion-ease, cubic-bezier(0.16, 1, 0.3, 1));
+  --ease-standard: var(--motion-ease, cubic-bezier(0.32, 0.72, 0, 1));
 }
 
 @keyframes terra-panel-in {
   from {
     opacity: 0;
-    transform: translateX(-40px);
+    transform: translate3d(-8px, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 .terra-panel-in {
-  animation: terra-panel-in var(--dur-slow) var(--ease-premium);
+  animation: terra-panel-in var(--dur-base) var(--ease-out) both;
 }
 
 @keyframes terra-tab-in {
   from {
     opacity: 0;
-    transform: scale(0.86);
+    transform: translate3d(0, 3px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.terra-tab-in {
+  animation: terra-tab-in var(--dur-fast) var(--ease-out) both;
+}
+
+@keyframes terra-pill-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 2px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.terra-pill-in {
+  animation: terra-pill-in var(--dur-fast) var(--ease-out) both;
+}
+
+/* Rows landing in a list that is already on screen. No stagger: a delay per
+ * row means N animations running at once, and no delay means the whole list
+ * settles together. */
+@keyframes terra-row-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -2px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.terra-row-in {
+  animation: terra-row-in var(--dur-fast) var(--ease-out) both;
+}
+
+/* Content swapped into a slot that keeps its box, and overlays that would
+ * read as a glitch if they snapped. */
+@keyframes terra-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.terra-fade-in {
+  animation: terra-fade-in var(--dur-fast) var(--ease-out) both;
+}
+
+/* The one animation allowed to overshoot: something the user did, or something
+ * that just happened to them, confirming itself. */
+@keyframes terra-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02);
   }
   to {
     opacity: 1;
     transform: scale(1);
   }
 }
-.terra-tab-in {
-  animation: terra-tab-in var(--dur-base) var(--ease-premium);
+.terra-pop-in {
+  animation: terra-pop-in var(--dur-base) var(--ease-out) both;
 }
 
-@keyframes terra-pill-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-.terra-pill-in {
-  animation: terra-pill-in var(--dur-base) var(--ease-premium);
+/* A theme that declines blur must decline the pass, not shrink it:
+ * `backdrop-filter: blur(0px)` still promotes a layer and re-reads the
+ * backdrop every frame the content beneath it changes, and on this stack the
+ * content beneath is a live terminal. Two-token specificity beats the
+ * utility's single class without !important. */
+html[data-fx-blur="off"] [class*="backdrop-blur"] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-/* Text shimmer loop (replaces motion background-position animation). Driven by
- * --shimmer-duration / --shimmer-spread set inline per instance. */
-@keyframes terra-shimmer {
-  from {
-    background-position: 100% center;
-  }
-  to {
-    background-position: 0% center;
-  }
-}
-.terra-shimmer {
-  background-repeat: no-repeat, padding-box;
-  background-size:
-    250% 100%,
-    auto;
-  background-image:
-    linear-gradient(
-      90deg,
-      transparent calc(50% - var(--shimmer-spread)),
-      var(--color-background),
-      transparent calc(50% + var(--shimmer-spread))
-    ),
-    linear-gradient(
-      var(--color-muted-foreground),
-      var(--color-muted-foreground)
-    );
-  animation: terra-shimmer var(--shimmer-duration, 2s) linear infinite;
-}
-
+/* Reduced motion collapses the whole scale rather than each rule. It rides its
+ * own multiplier because `--motion-scale` is written to the root as an inline
+ * style by applyTheme, and an inline custom property outranks any stylesheet
+ * rule that would try to override it here. Durations stay nonzero so an
+ * animation's `both` fill state and its animationend still resolve. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --dur-fast: 0.01ms;
-    --dur-base: 0.01ms;
-    --dur-slow: 0.01ms;
-  }
-  .terra-reveal {
-    transition: none;
-  }
-  .terra-shimmer {
-    animation: none;
-    background-position: 0% center;
+    --motion-reduce: 0.01;
   }
 }
 

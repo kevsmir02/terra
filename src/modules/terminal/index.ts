@@ -12,6 +12,7 @@ export {
 } from "./lib/useTerminalSession";
 export {
   type AgentTabStatus,
+  selectTabAgentStatus,
   tabAgentStatus,
   useAgentActivityStore,
 } from "./lib/agentActivity";

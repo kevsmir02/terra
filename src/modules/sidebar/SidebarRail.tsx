@@ -60,7 +60,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
             aria-pressed={isActive}
             onClick={() => onSelectView(item.id)}
             className={cn(
-              "group relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[11px] font-medium outline-none transition-colors duration-[var(--dur-base)]",
+              "group relative flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[11px] font-medium outline-none transition-colors terra-motion",
               "focus-visible:ring-2 focus-visible:ring-primary/(--emph-soft)",
               isActive
                 ? "bg-foreground/[0.07] text-foreground dark:bg-foreground/[0.09]"
@@ -71,7 +71,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
               icon={item.icon}
               size={14}
               strokeWidth={isActive ? 2 : 1.75}
-              className="shrink-0 transition-[stroke-width] duration-[var(--dur-base)]"
+              className="shrink-0 transition-[stroke-width] terra-motion"
             />
             <span className="terra-label truncate">{item.label}</span>
             {badge !== null ? (

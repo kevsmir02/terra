@@ -72,6 +72,7 @@ export const terraDefault: Theme = {
         panelWidth: "1px",
         bevelWidth: "0px",
       },
+      motion: { speed: "smooth", easing: "expressive" },
       terminal: {
         background: "#f6f8f9",
         foreground: "#090b0c",
@@ -137,6 +138,7 @@ export const terraDefault: Theme = {
         panelWidth: "1px",
         bevelWidth: "0px",
       },
+      motion: { speed: "smooth", easing: "expressive" },
       terminal: {
         background: "#090b0c",
         foreground: "#f9fbfb",

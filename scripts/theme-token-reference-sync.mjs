@@ -2,9 +2,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "vite";
 import { renderTokenReference } from "./theme-token-reference.mjs";
 
-// TOKENS is TypeScript, so it is loaded through Vite's SSR loader rather than
-// a second toolchain. Everything between the first start marker and the last
-// end marker in THEME.md is replaced by the generated block.
+// TOKENS and its docs are TypeScript, so they load through Vite's SSR loader
+// rather than a second toolchain. Everything between the first start marker
+// and the last end marker in THEME.md is replaced by the generated block.
 const START = "<!-- token-reference:start -->";
 const END = "<!-- token-reference:end -->";
 
@@ -15,7 +15,10 @@ const server = await createServer({
 });
 try {
   const { TOKENS } = await server.ssrLoadModule("/src/modules/theme/tokens.ts");
-  const block = renderTokenReference(TOKENS);
+  const { TOKEN_DOCS } = await server.ssrLoadModule(
+    "/src/modules/theme/tokenDocs.ts",
+  );
+  const block = renderTokenReference(TOKENS, TOKEN_DOCS);
   const doc = readFileSync("THEME.md", "utf8");
   const start = doc.indexOf(START);
   const end = doc.lastIndexOf(END);

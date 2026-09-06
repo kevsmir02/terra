@@ -16,11 +16,11 @@ if (import.meta.env.DEV && import.meta.env.VITE_REACT_SCAN === "true") {
   scan({ enabled: true });
 }
 
-// Reap PTY sessions orphaned by a prior webview load before any tab spawns.
-await invoke("pty_close_all").catch(() => {});
-
-// Seed before first paint so default tab mounts at target cwd (no flicker).
-await initLaunchDir();
+// Both must land before first paint: reap PTY sessions orphaned by a prior
+// webview load before any tab spawns, and seed the launch cwd so the default
+// tab mounts at its target without a flicker. They are independent, so the
+// startup path pays one IPC round-trip rather than two.
+await Promise.all([invoke("pty_close_all").catch(() => {}), initLaunchDir()]);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <App />,

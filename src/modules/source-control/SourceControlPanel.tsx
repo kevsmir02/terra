@@ -1306,7 +1306,7 @@ const EntryRow = memo(function EntryRow({
           tabIndex={-1}
           onMouseDown={() => onFocusRow(row.key)}
           className={cn(
-            "group relative flex h-[30px] items-center gap-2 rounded-md pl-2 pr-2 transition-all duration-100",
+            "group relative flex h-[30px] items-center gap-2 rounded-md pl-2 pr-2 transition-colors terra-motion",
             focused
               ? "bg-accent/(--emph-strong)"
               : isSelected
@@ -1538,7 +1538,7 @@ function CommitFeedback({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-3 top-[calc(100%-0.25rem)] z-20 flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug shadow-lg backdrop-blur transition-all duration-200",
+        "pointer-events-none absolute inset-x-3 top-[calc(100%-0.25rem)] z-20 flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] leading-snug shadow-lg backdrop-blur transition terra-motion",
         isVisible ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0",
         isError
           ? "border-destructive/(--emph-subtle) bg-card/(--emph-bold) text-destructive"

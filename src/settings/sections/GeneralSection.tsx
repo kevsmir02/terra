@@ -154,7 +154,7 @@ export function GeneralSection() {
               type="button"
               onClick={() => setMode(o.id)}
               className={cn(
-                "group flex h-20 flex-col items-center justify-center gap-1.5 rounded-lg border bg-card transition-all",
+                "group flex h-20 flex-col items-center justify-center gap-1.5 rounded-lg border bg-card transition terra-motion",
                 mode === o.id
                   ? "border-foreground/(--emph-strong) ring-1 ring-foreground/(--emph-subtle)"
                   : "border-border/(--emph-strong) hover:border-border",

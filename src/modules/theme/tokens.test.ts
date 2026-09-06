@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { TOKEN_DOCS } from "./tokenDocs";
 import { TOKENS } from "./tokens";
 import { STATUS_ROLES, SYNTAX_ROLES } from "./types";
 // @ts-expect-error script is mjs
@@ -49,8 +50,14 @@ describe("token registry", () => {
     }).not.toThrow();
   });
 
-  it("documents every token", () => {
-    for (const t of TOKENS) expect(t.doc.length).toBeGreaterThan(0);
+  it("documents every token, and documents nothing else", () => {
+    const keys = new Set(TOKENS.map((t) => t.key));
+    for (const t of TOKENS) {
+      expect(TOKEN_DOCS[t.key], `${t.key} doc`).toBeTruthy();
+    }
+    for (const key of Object.keys(TOKEN_DOCS)) {
+      expect(keys.has(key), `${key} documents no token`).toBe(true);
+    }
   });
 
   it("declares the emphasis ladder with its modal defaults", () => {
@@ -78,6 +85,6 @@ describe("token registry", () => {
 
   it("keeps the THEME.md token reference in sync with the registry", () => {
     const doc = readFileSync("THEME.md", "utf8");
-    expect(doc).toContain(renderTokenReference(TOKENS));
+    expect(doc).toContain(renderTokenReference(TOKENS, TOKEN_DOCS));
   });
 });

@@ -1,5 +1,5 @@
-export function renderTokenReference(tokens) {
-  const groups = ["colors", "shape", "type", "effects", "terminal", "syntax", "status", "emphasis"];
+export function renderTokenReference(tokens, docs) {
+  const groups = ["colors", "shape", "type", "effects", "motion", "terminal", "syntax", "status", "emphasis"];
   let out = "<!-- token-reference:start -->\n";
   
   for (const group of groups) {
@@ -12,7 +12,7 @@ export function renderTokenReference(tokens) {
     
     for (const t of groupTokens) {
       const def = t.fallback ? `\`${t.fallback}\`` : "";
-      out += `| \`${t.key}\` | \`${t.cssVar}\` | ${def} | ${t.doc} |\n`;
+      out += `| \`${t.key}\` | \`${t.cssVar}\` | ${def} | ${docs[t.key] ?? ""} |\n`;
     }
   }
   

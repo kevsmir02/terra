@@ -139,6 +139,14 @@ exports[`resolveTheme > resolves Nothing dark to its structural identity 1`] = `
     "0",
   ],
   [
+    "--motion-scale",
+    "0.72",
+  ],
+  [
+    "--motion-ease",
+    "linear",
+  ],
+  [
     "--chrome-tracking",
     "0.08em",
   ],

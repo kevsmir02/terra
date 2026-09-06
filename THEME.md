@@ -23,13 +23,15 @@ and every allowlist entry names its reason. See ADR 0003.
 |---|---|
 | `src/modules/theme/types.ts` | `Theme`, `ThemeVariant`, and the field types |
 | `src/modules/theme/tokens.ts` | the token registry: key, CSS variable, derivation, fallback |
+| `src/modules/theme/tokenDocs.ts` | one doc line per token, read only by `pnpm theme:sync-tokens` and its test |
 | `src/modules/theme/resolveTheme.ts` | authored value, else derived, else fallback |
 | `src/modules/theme/applyTheme.ts` | writes the variables onto `<html>` |
 | `src/modules/theme/themes/` | one file per builtin, registered in `index.ts` |
 | `src/modules/theme/wallpaper.ts` | `wallpaperAllowed`, read by `SurfaceLayer` |
 | `src/modules/explorer/lib/iconProvider.tsx` | the icon seam the `icons` field selects |
-| `src/styles/globals.css` | defaults, the scale bridges, surface classes, `terra-label` |
+| `src/styles/globals.css` | defaults, the scale bridges, surface classes, `terra-label`, `terra-motion`, the keyframes |
 | `src/app/theme-contract.test.ts` | the consumption contract |
+| `src/styles/motion.test.ts` | the motion contract: compositor-only keyframes, no dead classes |
 
 Themes are TypeScript builtins only. The compiler checks the shape; the tests
 below check the colours.
@@ -73,8 +75,9 @@ choices, not identity.
 | Bevel | `shape.bevel*` | three inset rings on frame, panel, slot |
 | Label voice | `type.chromeTransform`, `type.chromeTracking` | every `terra-label` |
 | Depth | `effects.shadow` | the tint of every `shadow-*`; `transparent` flattens |
-| Glass | `effects.blur` | `on` keeps every `backdrop-blur-*`, `off` zeroes them |
+| Glass | `effects.blur` | `on` keeps every `backdrop-blur-*`, `off` drops the pass |
 | Wallpaper | `effects.wallpaper` | `false` declines the user's image |
+| Motion | `motion.speed`, `motion.easing` | every duration and curve the chrome animates on |
 | Icons | `icons` | `catppuccin` (colour SVGs) or `nerd` (font glyphs in the row colour) |
 | Density | `shape.spacing` | every spacing utility; blunt, expect overflow |
 
@@ -145,6 +148,13 @@ today. Regenerate this block with `pnpm theme:sync-tokens`;
 |---|---|---|---|
 | `effects.shadow` | `--fx-shadow-color` |  | Tint every shadow utility uses; transparent flattens the app. |
 | `effects.blur` | `--fx-blur-factor` | `1` | Backdrop blur: on keeps the scale, off zeroes it. |
+
+### `motion`
+
+| Key | Variable | Default | Doc |
+|---|---|---|---|
+| `motion.speed` | `--motion-scale` | `1` | Multiplier on every chrome duration; instant collapses them to a snap. |
+| `motion.easing` | `--motion-ease` | `cubic-bezier(0.32, 0.72, 0, 1)` | Curve shared by every entrance, exit and transition. |
 
 ### `terminal`
 
@@ -264,6 +274,7 @@ every builtin. Slots: `comment` 8, `keyword` 5, `string` 2, `number` 3,
 | `.terra-panel` | explorer | `panelWidth`, bevel rings |
 | `.terra-slot` | nothing yet | `slotWidth`, one inner ring |
 | `terra-label` | tab titles, rail labels, statusbar chips, panel and menu headings, settings navigation | `chromeTracking`, `chromeTransform` |
+| `terra-motion` | overlays, buttons, chips, list rows: anything that transitions | `motion.speed`, `motion.easing` |
 
 Surface classes live in `@layer components`, so a component's own utilities
 still win. `--surface-border-width` is registered `inherits: false`; without
@@ -276,6 +287,36 @@ terminal, editor, toasts, the breadcrumb path.
 
 The bevel is three stacked inset rings at `bevelWidth`, `2 * bevelWidth`, and
 `3 * bevelWidth`; `bevelWidth: "4px"` with three opaque colours paints 12px.
+
+## Motion
+
+A theme owns how fast the chrome moves and on what curve. `motion.speed` scales
+every duration (`instant` 0, `snappy` 0.72, `smooth` 1, `relaxed` 1.35) and
+`motion.easing` picks the curve (`mechanical` linear, `standard`, `expressive`).
+Nothing runs snappy and mechanical because its identity is a machine; the
+default runs smooth and expressive.
+
+The three durations chrome animates on are `--dur-fast` (110ms, hovers,
+overlays, list rows), `--dur-base` (170ms, panel switches, anything that
+overshoots) and `--dur-slow` (240ms), each already multiplied by the theme's
+scale. Chrome wears `terra-motion` rather than a `duration-*`/`ease-*` pair;
+`tw-animate-css` reads the same two variables, so the Radix overlays follow the
+theme without any extra class.
+
+Two rules keep this cheap, both locked by `src/styles/motion.test.ts`:
+
+- A keyframe animates `transform` and `opacity` and nothing else. Those are the
+  two properties WebKitGTK composites without a relayout or a repaint, and there
+  is a terminal streaming underneath every one of these animations. Animating
+  `height`, `filter`, `box-shadow` or `width` costs a frame's worth of layout or
+  paint per frame.
+- Every animation class the stylesheet defines is worn by something. Dead motion
+  CSS is easy to leave behind and impossible to notice.
+
+Reduced motion collapses `--motion-reduce`, not `--motion-scale`: `applyTheme`
+writes the scale to the root as an inline style, which outranks any stylesheet
+rule the media query could use. Durations stay nonzero so an animation's `both`
+fill state and its `animationend` still resolve.
 
 ## Design guidance
 
@@ -310,11 +351,18 @@ pnpm lint
 1. `types.ts`: add the key to its field type.
 2. `tokens.ts`: add the entry (key, `cssVar`, group, kind, `fallback` or
    `derive`, and `map` for a keyword that becomes a different CSS value).
-3. `globals.css`: consume it with `var(--x, <today's value>)` so a theme that
+3. `tokenDocs.ts`: add the doc line under the same key. It lives there rather
+   than on the entry because the only readers are the sync script and its test,
+   and prose that exists to generate this file has no business in the
+   always-eager theme chunk. `tokens.test.ts` fails on a token without one, and
+   on a doc for a token that does not exist.
+4. `globals.css`: consume it with `var(--x, <today's value>)` so a theme that
    does not set it renders byte-identical.
-4. Tests: `tokens.test.ts` and `surfaceClasses.test.ts` or
+5. Tests: `tokens.test.ts` and `surfaceClasses.test.ts` or
    `tailwindTokens.test.ts` assert the mapping and the default.
-5. `pnpm theme:sync-tokens`.
+6. `pnpm theme:sync-tokens`. A new group also needs its name in the `groups`
+   list in `scripts/theme-token-reference.mjs`, or its table is silently
+   omitted.
 
 A field that is not a CSS variable (`icons`, `effects.wallpaper`) lives on the
 variant type and is read by its consumer through `useTheme().activeVariant`.

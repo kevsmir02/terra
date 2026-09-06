@@ -143,3 +143,19 @@ export function tabAgentStatus(
   if (finished) return { state: "finished", agent: null };
   return { state: null, agent: null };
 }
+
+/**
+ * Store selector for one tab's status. Every open tab renders an icon (in the
+ * strip, the space switcher and the switcher HUD), so selecting `phases` and
+ * `agents` whole would re-render all of them on any pty's signal, and agents
+ * signal constantly. Reducing to this tab's two fields inside the selector
+ * keeps a `useShallow` subscription quiet unless this tab's own status moved.
+ */
+export function selectTabAgentStatus(
+  ptyIds: readonly number[],
+): (s: {
+  phases: Record<number, AgentPhase>;
+  agents: Record<number, string>;
+}) => AgentTabStatus {
+  return (s) => tabAgentStatus(s.phases, s.agents, ptyIds);
+}

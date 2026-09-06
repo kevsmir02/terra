@@ -67,6 +67,7 @@ export const gruvbox: Theme = {
         bevelMid: "transparent",
         bevelInner: "transparent",
       },
+      motion: { speed: "smooth", easing: "standard" },
       terminal: {
         background: "#1d2021",
         foreground: "#ebdbb2",
@@ -135,6 +136,7 @@ export const gruvbox: Theme = {
         bevelMid: "transparent",
         bevelInner: "transparent",
       },
+      motion: { speed: "smooth", easing: "standard" },
       terminal: {
         background: "#f9f5d7",
         foreground: "#3c3836",

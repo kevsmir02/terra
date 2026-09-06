@@ -34,6 +34,7 @@ export type TokenDef = {
     | "shape"
     | "type"
     | "effects"
+    | "motion"
     | "syntax"
     | "status"
     | "emphasis";
@@ -42,10 +43,8 @@ export type TokenDef = {
   deps?: readonly string[];
   derive?: (d: DerivedValues) => string | undefined;
   fallback?: string;
-  keywords?: readonly string[];
   /** Rewrites an authored keyword into the CSS value the variable carries. */
   map?: Readonly<Record<string, string>>;
-  doc: string;
 };
 
 export const TOKENS: readonly TokenDef[] = [
@@ -54,14 +53,12 @@ export const TOKENS: readonly TokenDef[] = [
     cssVar: "--background",
     group: "colors",
     kind: "color",
-    doc: "App canvas.",
   },
   {
     key: "colors.foreground",
     cssVar: "--foreground",
     group: "colors",
     kind: "textColor",
-    doc: "Primary text on the canvas.",
   },
   {
     key: "colors.card",
@@ -70,7 +67,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background"],
     derive: (d) => d["colors.background"],
-    doc: "Raised surface. Falls back to the canvas.",
   },
   {
     key: "colors.cardForeground",
@@ -84,119 +80,102 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Text on card surfaces.",
   },
   {
     key: "colors.popover",
     cssVar: "--popover",
     group: "colors",
     kind: "color",
-    doc: "Popover surface.",
   },
   {
     key: "colors.popoverForeground",
     cssVar: "--popover-foreground",
     group: "colors",
     kind: "textColor",
-    doc: "Text on popover surfaces.",
   },
   {
     key: "colors.primary",
     cssVar: "--primary",
     group: "colors",
     kind: "color",
-    doc: "Primary accent color.",
   },
   {
     key: "colors.primaryForeground",
     cssVar: "--primary-foreground",
     group: "colors",
     kind: "textColor",
-    doc: "Text on primary color.",
   },
   {
     key: "colors.secondary",
     cssVar: "--secondary",
     group: "colors",
     kind: "color",
-    doc: "Secondary accent color.",
   },
   {
     key: "colors.secondaryForeground",
     cssVar: "--secondary-foreground",
     group: "colors",
     kind: "textColor",
-    doc: "Text on secondary color.",
   },
   {
     key: "colors.muted",
     cssVar: "--muted",
     group: "colors",
     kind: "color",
-    doc: "Muted surface.",
   },
   {
     key: "colors.mutedForeground",
     cssVar: "--muted-foreground",
     group: "colors",
     kind: "textColor",
-    doc: "Text on muted surfaces.",
   },
   {
     key: "colors.accent",
     cssVar: "--accent",
     group: "colors",
     kind: "color",
-    doc: "Accent color.",
   },
   {
     key: "colors.accentForeground",
     cssVar: "--accent-foreground",
     group: "colors",
     kind: "textColor",
-    doc: "Text on accent color.",
   },
   {
     key: "colors.destructive",
     cssVar: "--destructive",
     group: "colors",
     kind: "color",
-    doc: "Destructive action color.",
   },
   {
     key: "colors.border",
     cssVar: "--border",
     group: "colors",
     kind: "color",
-    doc: "Default border color.",
   },
   {
     key: "colors.input",
     cssVar: "--input",
     group: "colors",
     kind: "color",
-    doc: "Input border color.",
   },
   {
     key: "colors.ring",
     cssVar: "--ring",
     group: "colors",
     kind: "color",
-    doc: "Focus ring color.",
   },
   {
     key: "colors.radius",
     cssVar: "--radius",
     group: "colors",
     kind: "length",
-    doc: "Border radius.",
   },
   {
     key: "colors.borderStyle",
     cssVar: "--border-style",
     group: "colors",
     kind: "keyword",
-    doc: "Border style.",
   },
 
   {
@@ -205,7 +184,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "1px",
-    doc: "Frame border width.",
   },
   {
     key: "shape.frameRadius",
@@ -213,7 +191,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "12px",
-    doc: "Frame border radius.",
   },
   {
     key: "shape.framePadding",
@@ -221,7 +198,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "0px",
-    doc: "Frame padding.",
   },
   {
     key: "shape.chromeWidth",
@@ -229,7 +205,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "1px",
-    doc: "Chrome border width.",
   },
   {
     key: "shape.panelWidth",
@@ -237,7 +212,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "1px",
-    doc: "Panel border width.",
   },
   {
     key: "shape.slotWidth",
@@ -245,7 +219,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "1px",
-    doc: "Slot border width.",
   },
   {
     key: "shape.bevelWidth",
@@ -253,7 +226,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "0px",
-    doc: "Bevel width.",
   },
   {
     key: "shape.bevelOuter",
@@ -261,7 +233,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "color",
     fallback: "transparent",
-    doc: "Bevel outer color.",
   },
   {
     key: "shape.bevelMid",
@@ -269,7 +240,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "color",
     fallback: "transparent",
-    doc: "Bevel mid color.",
   },
   {
     key: "shape.bevelInner",
@@ -277,7 +247,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "color",
     fallback: "transparent",
-    doc: "Bevel inner color.",
   },
   {
     key: "shape.spacing",
@@ -285,7 +254,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "0.25rem",
-    doc: "UI spacing.",
   },
   {
     key: "shape.pillRadius",
@@ -293,7 +261,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "shape",
     kind: "length",
     fallback: "9999px",
-    doc: "Radius of pills, chips, toggles, and badges (rounded-pill).",
   },
 
   {
@@ -301,17 +268,40 @@ export const TOKENS: readonly TokenDef[] = [
     cssVar: "--fx-shadow-color",
     group: "effects",
     kind: "color",
-    doc: "Tint every shadow utility uses; transparent flattens the app.",
   },
   {
     key: "effects.blur",
     cssVar: "--fx-blur-factor",
     group: "effects",
     kind: "keyword",
-    keywords: ["on", "off"],
     map: { on: "1", off: "0" },
     fallback: "1",
-    doc: "Backdrop blur: on keeps the scale, off zeroes it.",
+  },
+
+  {
+    key: "motion.speed",
+    cssVar: "--motion-scale",
+    group: "motion",
+    kind: "keyword",
+    map: {
+      instant: "0",
+      snappy: "0.72",
+      smooth: "1",
+      relaxed: "1.35",
+    },
+    fallback: "1",
+  },
+  {
+    key: "motion.easing",
+    cssVar: "--motion-ease",
+    group: "motion",
+    kind: "keyword",
+    map: {
+      mechanical: "linear",
+      standard: "cubic-bezier(0.32, 0.72, 0, 1)",
+      expressive: "cubic-bezier(0.16, 1, 0.3, 1)",
+    },
+    fallback: "cubic-bezier(0.32, 0.72, 0, 1)",
   },
 
   {
@@ -319,14 +309,12 @@ export const TOKENS: readonly TokenDef[] = [
     cssVar: "--chrome-tracking",
     group: "type",
     kind: "length",
-    doc: "Chrome letter spacing.",
   },
   {
     key: "type.chromeTransform",
     cssVar: "--chrome-transform",
     group: "type",
     kind: "keyword",
-    doc: "Chrome text transform.",
   },
 
   {
@@ -334,35 +322,30 @@ export const TOKENS: readonly TokenDef[] = [
     cssVar: "--terminal-background",
     group: "terminal",
     kind: "color",
-    doc: "Terminal background.",
   },
   {
     key: "terminal.foreground",
     cssVar: "--terminal-foreground",
     group: "terminal",
     kind: "textColor",
-    doc: "Terminal foreground.",
   },
   {
     key: "terminal.cursor",
     cssVar: "--terminal-cursor",
     group: "terminal",
     kind: "color",
-    doc: "Terminal cursor.",
   },
   {
     key: "terminal.cursorAccent",
     cssVar: "--terminal-cursor-accent",
     group: "terminal",
     kind: "color",
-    doc: "Terminal cursor accent.",
   },
   {
     key: "terminal.selection",
     cssVar: "--terminal-selection",
     group: "terminal",
     kind: "color",
-    doc: "Terminal selection.",
   },
 
   {
@@ -370,112 +353,96 @@ export const TOKENS: readonly TokenDef[] = [
     cssVar: "--terminal-ansi-black",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Black.",
   },
   {
     key: "terminal.ansiRed",
     cssVar: "--terminal-ansi-red",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Red.",
   },
   {
     key: "terminal.ansiGreen",
     cssVar: "--terminal-ansi-green",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Green.",
   },
   {
     key: "terminal.ansiYellow",
     cssVar: "--terminal-ansi-yellow",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Yellow.",
   },
   {
     key: "terminal.ansiBlue",
     cssVar: "--terminal-ansi-blue",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Blue.",
   },
   {
     key: "terminal.ansiMagenta",
     cssVar: "--terminal-ansi-magenta",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Magenta.",
   },
   {
     key: "terminal.ansiCyan",
     cssVar: "--terminal-ansi-cyan",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Cyan.",
   },
   {
     key: "terminal.ansiWhite",
     cssVar: "--terminal-ansi-white",
     group: "terminal",
     kind: "color",
-    doc: "ANSI White.",
   },
   {
     key: "terminal.ansiBrightBlack",
     cssVar: "--terminal-ansi-bright-black",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Black.",
   },
   {
     key: "terminal.ansiBrightRed",
     cssVar: "--terminal-ansi-bright-red",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Red.",
   },
   {
     key: "terminal.ansiBrightGreen",
     cssVar: "--terminal-ansi-bright-green",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Green.",
   },
   {
     key: "terminal.ansiBrightYellow",
     cssVar: "--terminal-ansi-bright-yellow",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Yellow.",
   },
   {
     key: "terminal.ansiBrightBlue",
     cssVar: "--terminal-ansi-bright-blue",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Blue.",
   },
   {
     key: "terminal.ansiBrightMagenta",
     cssVar: "--terminal-ansi-bright-magenta",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Magenta.",
   },
   {
     key: "terminal.ansiBrightCyan",
     cssVar: "--terminal-ansi-bright-cyan",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright Cyan.",
   },
   {
     key: "terminal.ansiBrightWhite",
     cssVar: "--terminal-ansi-bright-white",
     group: "terminal",
     kind: "color",
-    doc: "ANSI Bright White.",
   },
 
   {
@@ -490,7 +457,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 3)
         : undefined;
     },
-    doc: "Comment color.",
   },
   {
     key: "syntax.keyword",
@@ -504,7 +470,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Keyword color.",
   },
   {
     key: "syntax.string",
@@ -518,7 +483,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "String color.",
   },
   {
     key: "syntax.number",
@@ -532,7 +496,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Number color.",
   },
   {
     key: "syntax.constant",
@@ -546,7 +509,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Constant color.",
   },
   {
     key: "syntax.func",
@@ -560,7 +522,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Function color.",
   },
   {
     key: "syntax.variable",
@@ -574,7 +535,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Variable color.",
   },
   {
     key: "syntax.property",
@@ -588,7 +548,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Property color.",
   },
   {
     key: "syntax.gutterFg",
@@ -602,7 +561,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 3)
         : undefined;
     },
-    doc: "Gutter foreground color.",
   },
   {
     key: "syntax.type",
@@ -616,7 +574,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Type color.",
   },
   {
     key: "syntax.operator",
@@ -630,7 +587,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Operator color.",
   },
   {
     key: "syntax.tag",
@@ -644,7 +600,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Tag color.",
   },
   {
     key: "syntax.tagBracket",
@@ -658,7 +613,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 3)
         : undefined;
     },
-    doc: "Tag bracket color.",
   },
   {
     key: "syntax.attr",
@@ -672,7 +626,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Attribute color.",
   },
   {
     key: "syntax.attrValue",
@@ -686,7 +639,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Attribute value color.",
   },
   {
     key: "syntax.heading",
@@ -700,7 +652,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Heading color.",
   },
   {
     key: "syntax.link",
@@ -714,7 +665,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Link color.",
   },
   {
     key: "syntax.invalid",
@@ -728,7 +678,6 @@ export const TOKENS: readonly TokenDef[] = [
         ? ensureContrast(v, d["colors.background"] || "#000", 4.5)
         : undefined;
     },
-    doc: "Invalid token color.",
   },
 
   {
@@ -738,7 +687,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(2),
-    doc: "Added status color.",
   },
   {
     key: "status.modified",
@@ -747,7 +695,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(3),
-    doc: "Modified status color.",
   },
   {
     key: "status.deleted",
@@ -756,7 +703,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(1),
-    doc: "Deleted status color.",
   },
   {
     key: "status.renamed",
@@ -765,7 +711,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(4),
-    doc: "Renamed status color.",
   },
   {
     key: "status.warning",
@@ -774,7 +719,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(3),
-    doc: "Warning status color.",
   },
   {
     key: "status.conflict",
@@ -783,7 +727,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(6),
-    doc: "Conflict status color.",
   },
   {
     key: "status.ok",
@@ -792,7 +735,6 @@ export const TOKENS: readonly TokenDef[] = [
     kind: "color",
     deps: ["colors.background", "colors.card"],
     derive: statusColor(2),
-    doc: "OK status color.",
   },
 
   {
@@ -801,7 +743,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "emphasis",
     kind: "alpha",
     fallback: "10%",
-    doc: "Faint emphasis.",
   },
   {
     key: "emphasis.subtle",
@@ -809,7 +750,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "emphasis",
     kind: "alpha",
     fallback: "30%",
-    doc: "Subtle emphasis.",
   },
   {
     key: "emphasis.soft",
@@ -817,7 +757,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "emphasis",
     kind: "alpha",
     fallback: "40%",
-    doc: "Soft emphasis.",
   },
   {
     key: "emphasis.medium",
@@ -825,7 +764,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "emphasis",
     kind: "alpha",
     fallback: "50%",
-    doc: "Medium emphasis.",
   },
   {
     key: "emphasis.strong",
@@ -833,7 +771,6 @@ export const TOKENS: readonly TokenDef[] = [
     group: "emphasis",
     kind: "alpha",
     fallback: "60%",
-    doc: "Strong emphasis.",
   },
   {
     key: "emphasis.bold",
@@ -841,6 +778,5 @@ export const TOKENS: readonly TokenDef[] = [
     group: "emphasis",
     kind: "alpha",
     fallback: "85%",
-    doc: "Bold emphasis.",
   },
 ];

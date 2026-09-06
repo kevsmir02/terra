@@ -98,7 +98,7 @@ export function ThemesSection() {
                 type="button"
                 onClick={() => setThemeId(t.id)}
                 className={cn(
-                  "group flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
+                  "group flex items-center gap-3 rounded-lg border p-2.5 text-left transition terra-motion",
                   selected
                     ? "border-foreground/(--emph-strong) ring-1 ring-foreground/(--emph-subtle)"
                     : "border-border/(--emph-strong) hover:border-border",

@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -29,7 +30,8 @@ import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import {
   leafIds,
   ptyIdForLeaf,
-  tabAgentStatus,
+  type AgentTabStatus,
+  selectTabAgentStatus,
   useAgentActivityStore,
 } from "@/modules/terminal";
 import {
@@ -228,7 +230,7 @@ export function TabBar({
                         ? "transform, width"
                         : "none",
                       transitionDuration: "var(--dur-base)",
-                      transitionTimingFunction: "var(--ease-premium)",
+                      transitionTimingFunction: "var(--ease-out)",
                     }
                   : { opacity: 0 }
               }
@@ -370,7 +372,7 @@ export function TabBar({
                             role="button"
                             tabIndex={-1}
                             data-no-drag
-                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition-all hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-sm"
+                            className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm p-1 -m-1 transition terra-motion hover:bg-accent hover:text-accent-foreground hover:ring-1 hover:ring-primary/(--emph-subtle) hover:shadow-sm"
                           >
                             <TabIcon tab={t} />
                           </span>
@@ -628,18 +630,21 @@ function DropIndicator() {
   );
 }
 
-function useTabAgentStatus(tab: Tab) {
-  const phases = useAgentActivityStore((s) => s.phases);
-  const agents = useAgentActivityStore((s) => s.agents);
-  if (tab.kind !== "terminal" || tab.private) {
-    return { state: null, agent: null } as const;
-  }
+const NO_PTYS: readonly number[] = [];
+
+function useTabAgentStatus(tab: Tab): AgentTabStatus {
+  const ptyIds = ptyIdsForTab(tab);
+  return useAgentActivityStore(useShallow(selectTabAgentStatus(ptyIds)));
+}
+
+function ptyIdsForTab(tab: Tab): readonly number[] {
+  if (tab.kind !== "terminal" || tab.private) return NO_PTYS;
   const ptyIds: number[] = [];
   for (const leaf of leafIds(tab.paneTree)) {
     const id = ptyIdForLeaf(leaf);
     if (id !== null) ptyIds.push(id);
   }
-  return tabAgentStatus(phases, agents, ptyIds);
+  return ptyIds;
 }
 
 export function TabIcon({ tab }: { tab: Tab }) {

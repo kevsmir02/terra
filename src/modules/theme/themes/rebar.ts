@@ -79,6 +79,7 @@ export const rebar: Theme = {
         panelWidth: "2px",
         bevelWidth: "0px",
       },
+      motion: { speed: "snappy", easing: "standard" },
       type: {
         chromeTracking: "0.08em",
         chromeTransform: "uppercase",
@@ -148,6 +149,7 @@ export const rebar: Theme = {
         panelWidth: "2px",
         bevelWidth: "0px",
       },
+      motion: { speed: "snappy", easing: "standard" },
       type: {
         chromeTracking: "0.08em",
         chromeTransform: "uppercase",

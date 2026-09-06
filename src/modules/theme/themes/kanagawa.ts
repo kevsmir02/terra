@@ -71,6 +71,7 @@ export const kanagawa: Theme = {
         bevelMid: "transparent",
         bevelInner: "transparent",
       },
+      motion: { speed: "smooth", easing: "standard" },
       terminal: {
         background: "#1f1f28",
         foreground: "#dcd7ba",
@@ -139,6 +140,7 @@ export const kanagawa: Theme = {
         bevelMid: "transparent",
         bevelInner: "transparent",
       },
+      motion: { speed: "smooth", easing: "standard" },
       terminal: {
         background: "#eceadf",
         foreground: "#545464",

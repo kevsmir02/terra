@@ -129,7 +129,7 @@ function modeTheme(mode: "light" | "dark"): Extension {
 
 const TOOLTIP_ENTER = {
   animation:
-    "cm-tooltip-enter var(--dur-fast, 120ms) var(--ease-premium, ease-out)",
+    "cm-tooltip-enter var(--dur-fast, 110ms) var(--ease-out, ease-out)",
 };
 
 const chrome = EditorView.theme({

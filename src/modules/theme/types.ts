@@ -98,6 +98,29 @@ export type ThemeEffects = Partial<{
   wallpaper: boolean;
 }>;
 
+export const MOTION_SPEEDS = [
+  "instant",
+  "snappy",
+  "smooth",
+  "relaxed",
+] as const;
+
+export type MotionSpeed = (typeof MOTION_SPEEDS)[number];
+
+export const MOTION_EASINGS = ["mechanical", "standard", "expressive"] as const;
+
+export type MotionEasing = (typeof MOTION_EASINGS)[number];
+
+/**
+ * Chrome motion. `speed` scales every duration the app animates over, so
+ * `instant` snaps a theme that wants no travel; `easing` is the one curve
+ * entrances, exits and transitions share.
+ */
+export type ThemeMotion = Partial<{
+  speed: MotionSpeed;
+  easing: MotionEasing;
+}>;
+
 export const ICON_SETS = ["catppuccin", "nerd"] as const;
 
 export type IconSet = (typeof ICON_SETS)[number];
@@ -164,6 +187,7 @@ export type ThemeVariant = {
   shape?: ThemeShape;
   type?: ThemeTypography;
   effects?: ThemeEffects;
+  motion?: ThemeMotion;
   icons?: IconSet;
   syntax?: Partial<Record<SyntaxRole, string>>;
   status?: Partial<Record<StatusRole, string>>;
