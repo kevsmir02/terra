@@ -63,6 +63,7 @@ type SourceControlPanelState = {
   status: GitStatusSnapshot | null;
   selected: DiffSelection | null;
   commitMessage: string;
+  amend: boolean;
   actionBusy: string | null;
   statusError: string | null;
   actionError: string | null;
@@ -99,6 +100,10 @@ type SourceControlPanelState = {
   generateCommitMessage: () => Promise<void>;
   commit: () => Promise<void>;
   push: () => Promise<void>;
+  setAmend: (value: boolean) => void;
+  stashPush: () => Promise<void>;
+  stashPop: () => Promise<void>;
+  createBranch: (name: string) => Promise<boolean>;
 };
 
 function normalizeError(error: unknown): string {
@@ -287,6 +292,7 @@ export function useSourceControlPanel(
   const [status, setStatus] = useState<GitStatusSnapshot | null>(null);
   const [selected, setSelected] = useState<DiffSelection | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
+  const [amend, setAmend] = useState(false);
   const [localActionBusy, setLocalActionBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -718,10 +724,13 @@ export function useSourceControlPanel(
     setActionMessage(null);
     setActionError(null);
     try {
-      const result = await native.gitCommit(repo.repoRoot, commitMessage);
+      const result = amend
+        ? await native.gitCommitAmend(repo.repoRoot, commitMessage)
+        : await native.gitCommit(repo.repoRoot, commitMessage);
       setCommitMessage("");
+      setAmend(false);
       setActionMessage(
-        `Committed ${result.commitSha.slice(0, 7)} ${result.summary}`,
+        `${amend ? "Amended" : "Committed"} ${result.commitSha.slice(0, 7)} ${result.summary}`,
       );
       invalidateRepoDiffs(repo.repoRoot);
       await summary.refresh({ remote: "never" });
@@ -730,7 +739,59 @@ export function useSourceControlPanel(
     } finally {
       setLocalActionBusy(null);
     }
-  }, [commitMessage, repo, summary]);
+  }, [amend, commitMessage, repo, summary]);
+
+  const runTreeAction = useCallback(
+    async (busy: string, action: () => Promise<string>): Promise<boolean> => {
+      if (!repo || summary.busyAction) return false;
+      setLocalActionBusy(busy);
+      setActionMessage(null);
+      setActionError(null);
+      try {
+        setActionMessage(await action());
+        invalidateRepoDiffs(repo.repoRoot);
+        await summary.refresh({ remote: "never" });
+        return true;
+      } catch (error) {
+        setActionError(normalizeError(error));
+        return false;
+      } finally {
+        setLocalActionBusy(null);
+      }
+    },
+    [repo, summary],
+  );
+
+  const stashPush = useCallback(async () => {
+    if (!repo) return;
+    const root = repo.repoRoot;
+    await runTreeAction("stash", async () =>
+      (await native.gitStashPush(root, ""))
+        ? "Stashed the working tree"
+        : "Nothing to stash",
+    );
+  }, [repo, runTreeAction]);
+
+  const stashPop = useCallback(async () => {
+    if (!repo) return;
+    const root = repo.repoRoot;
+    await runTreeAction("stash", async () => {
+      await native.gitStashPop(root);
+      return "Applied the latest stash";
+    });
+  }, [repo, runTreeAction]);
+
+  const createBranch = useCallback(
+    async (name: string) => {
+      if (!repo) return false;
+      const root = repo.repoRoot;
+      return runTreeAction("branch", async () => {
+        await native.gitCreateBranch(root, name);
+        return `Switched to new branch ${name}`;
+      });
+    },
+    [repo, runTreeAction],
+  );
 
   const push = useCallback(async () => {
     if (!repo) return;
@@ -772,6 +833,7 @@ export function useSourceControlPanel(
     status,
     selected,
     commitMessage,
+    amend,
     actionBusy: localActionBusy ?? summary.busyAction,
     statusError: summary.localError,
     actionError,
@@ -808,5 +870,9 @@ export function useSourceControlPanel(
     generateCommitMessage,
     commit,
     push,
+    setAmend,
+    stashPush,
+    stashPop,
+    createBranch,
   };
 }

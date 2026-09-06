@@ -127,6 +127,11 @@ export type GitBranchListResult = {
   branches: GitBranchEntry[];
 };
 
+export type GitStashEntry = {
+  name: string;
+  message: string;
+};
+
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
   workspaceAuthorize: (path: string) =>
@@ -284,5 +289,28 @@ export const native = {
     invoke<void>("git_checkout_branch", {
       repoRoot,
       branch,
+    }),
+  gitCommitAmend: (repoRoot: string, message: string) =>
+    invoke<GitCommitResult>("git_commit_amend", {
+      repoRoot,
+      message,
+    }),
+  gitStashPush: (repoRoot: string, message: string) =>
+    invoke<boolean>("git_stash_push", {
+      repoRoot,
+      message,
+    }),
+  gitStashPop: (repoRoot: string) =>
+    invoke<void>("git_stash_pop", {
+      repoRoot,
+    }),
+  gitStashList: (repoRoot: string) =>
+    invoke<GitStashEntry[]>("git_stash_list", {
+      repoRoot,
+    }),
+  gitCreateBranch: (repoRoot: string, name: string) =>
+    invoke<void>("git_create_branch", {
+      repoRoot,
+      name,
     }),
 };
