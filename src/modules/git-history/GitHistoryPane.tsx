@@ -537,7 +537,7 @@ export function GitHistoryPane({
         ) : (
           <>
             <div
-              className="grid shrink-0 items-center gap-3 border-b border-border/(--emph-soft) bg-card/(--emph-medium) pr-3 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/(--emph-strong)"
+              className="grid shrink-0 items-center gap-3 border-b border-border/(--emph-soft) bg-card/(--emph-medium) pr-3 text-[9.5px] font-semibold terra-label text-muted-foreground/(--emph-strong)"
               style={{
                 height: TABLE_HEADER_HEIGHT,
                 gridTemplateColumns: gridTemplate,
@@ -750,12 +750,12 @@ const CommitRow = memo(function CommitRow({
         title={commit.authorEmail || commit.author}
       >
         <span
-          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-xs font-mono text-[8.5px] font-bold uppercase tabular-nums text-background"
+          className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-xs font-mono text-[8.5px] font-bold tabular-nums text-background"
           style={{
             backgroundColor: authorTint(commit.authorEmail || commit.author),
           }}
         >
-          {initials}
+          {initials.toUpperCase()}
         </span>
         <span className="min-w-0 truncate">
           {commit.author ? highlight(commit.author, query) : "Unknown"}
@@ -954,7 +954,7 @@ function CommitFiles({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/(--emph-bold)">
+      <div className="flex shrink-0 items-center justify-between px-3 pb-1 pt-2 text-[10px] font-semibold terra-label text-muted-foreground/(--emph-bold)">
         <span>Files</span>
         <span className="rounded-sm bg-muted/(--emph-medium) px-1 py-px text-[9.5px] tabular-nums text-muted-foreground/(--emph-bold) normal-case tracking-normal">
           {filesEntry.files.length}

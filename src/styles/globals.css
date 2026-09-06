@@ -90,6 +90,14 @@
 @utility rounded-pill { border-radius: var(--radius-pill, 9999px); }
 @utility rounded-circle { border-radius: 50%; }
 
+/* Chrome text (tab titles, rail labels, statusbar chips, panel and menu
+ * headings) wears this; content (file names, commits, terminal) never does.
+ * A utility rather than a component class so variants can target it. */
+@utility terra-label {
+  letter-spacing: var(--chrome-tracking, inherit);
+  text-transform: var(--chrome-transform, none);
+}
+
 :root {
     --background: oklch(0.978 0.002 228.8);
     --foreground: oklch(0.148 0.004 228.8);
@@ -601,9 +609,5 @@ html *::-webkit-scrollbar {
     box-shadow: inset 0 0 0 var(--bevel-width) var(--bevel-outer);
   }
 
-  .terra-chrome-label {
-    letter-spacing: var(--chrome-tracking, inherit);
-    text-transform: var(--chrome-transform, none);
-  }
 }
 

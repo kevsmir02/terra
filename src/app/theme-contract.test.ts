@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 // places where a literal is the design (a brand mark, a video surface).
 const ROOT = path.resolve(__dirname, "../..");
 
-type Rule = { id: string; pattern: RegExp; message: string };
+type Rule = { id: string; pattern: RegExp; message: string; skip?: RegExp };
 
 const ALLOWLIST: Record<string, string> = {
   "src/modules/preview/PreviewPane.tsx":
@@ -51,6 +51,17 @@ const RULES: Rule[] = [
     pattern: /(className|class|style)=[^\n]*(#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\()/,
     message: "raw colour in markup; use a theme token",
   },
+  {
+    id: "text-transform-literal",
+    pattern: /["'`][^"'`\n]*\b(uppercase|lowercase)\b[^"'`\n]*["'`]/,
+    skip: /^src\/modules\/theme\//,
+    message: "casing belongs to the theme; put terra-label on the chrome element",
+  },
+  {
+    id: "arbitrary-tracking",
+    pattern: /\btracking-\[/,
+    message: "arbitrary tracking; chrome uses terra-label, content uses a named step",
+  },
 ];
 
 function sourceFiles(): string[] {
@@ -67,6 +78,7 @@ function scan(rules: Rule[]): string[] {
     const lines = src.split("\n");
     lines.forEach((line, i) => {
       for (const rule of rules) {
+        if (rule.skip?.test(rel)) continue;
         if (rule.pattern.test(line)) {
           offenders.push(`${rel}:${i + 1} [${rule.id}] ${rule.message}`);
         }
@@ -79,6 +91,20 @@ function scan(rules: Rule[]): string[] {
 describe("theme consumption contract", () => {
   it("has no literal escape hatch outside the allowlist", () => {
     expect(scan(RULES)).toEqual([]);
+  });
+
+  it("keeps the chrome label class on the anchor surfaces", () => {
+    for (const rel of [
+      "src/modules/tabs/TabBar.tsx",
+      "src/modules/sidebar/SidebarRail.tsx",
+      "src/settings/SettingsApp.tsx",
+      "src/components/ui/command.tsx",
+      "src/modules/explorer/FileExplorer.tsx",
+      "src/modules/statusbar/DiagnosticsBadge.tsx",
+      "src/modules/lsp/components/LspStatusPill.tsx",
+    ]) {
+      expect(readFileSync(path.resolve(ROOT, rel), "utf8"), rel).toContain("terra-label");
+    }
   });
 
   it("names a reason for every allowlisted file, and every file exists", () => {

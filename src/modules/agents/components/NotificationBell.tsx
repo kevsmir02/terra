@@ -313,7 +313,7 @@ export function NotificationBell({ onActivate }: Props) {
             type="button"
             onClick={() => setAlertsOpen((v) => !v)}
             aria-expanded={alertsOpen}
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/(--emph-strong) transition-colors hover:text-foreground"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium terra-label text-muted-foreground/(--emph-strong) transition-colors hover:text-foreground"
           >
             <HugeiconsIcon icon={Notification03Icon} size={11} strokeWidth={2} />
             Agent alerts

@@ -453,7 +453,7 @@ export function TabBar({
                     )}
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
-                    <span className={cn("truncate", isPreview && "italic")}>
+                    <span className={cn("terra-label truncate", isPreview && "italic")}>
                       {labelFor(t)}
                     </span>
                     {t.kind === "editor" && t.dirty ? (

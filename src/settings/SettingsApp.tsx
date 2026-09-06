@@ -142,7 +142,7 @@ export function SettingsApp() {
                 className="h-6 gap-1.5 px-2.5 text-[11.5px]"
               >
                 <HugeiconsIcon icon={t.icon} size={12} strokeWidth={1.75} />
-                <span>{t.label}</span>
+                <span className="terra-label">{t.label}</span>
               </TabsTrigger>
             ))}
           </TabsList>

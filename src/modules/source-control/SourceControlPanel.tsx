@@ -266,7 +266,7 @@ function BranchDropdown({
           <>
             {localBranches.length > 0 && (
               <>
-                <DropdownMenuLabel className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/(--emph-bold)">
+                <DropdownMenuLabel className="text-[10.5px] font-semibold terra-label text-muted-foreground/(--emph-bold)">
                   Local Branches
                 </DropdownMenuLabel>
                 <DropdownMenuGroup>
@@ -295,7 +295,7 @@ function BranchDropdown({
             {worktrees.length > 0 && (
               <>
                 {localBranches.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/(--emph-bold)">
+                <DropdownMenuLabel className="text-[10.5px] font-semibold terra-label text-muted-foreground/(--emph-bold)">
                   Worktrees
                 </DropdownMenuLabel>
                 <DropdownMenuGroup>
@@ -650,7 +650,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               </div>
             ) : null}
             {scm.status?.isDetached ? (
-              <span className="rounded bg-muted/(--emph-medium) px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="rounded bg-muted/(--emph-medium) px-1.5 py-0.5 text-[10px] font-medium terra-label text-muted-foreground">
                 detached
               </span>
             ) : null}
@@ -1096,7 +1096,7 @@ function ListHeader({
 }) {
   return (
     <div className="flex h-7 items-center gap-2 px-3">
-      <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/(--emph-bold)">
+      <span className="text-[10.5px] font-semibold terra-label text-muted-foreground/(--emph-bold)">
         Changes
       </span>
       <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-pill border border-border/(--emph-strong) px-1 text-[9.5px] font-semibold tabular-nums text-muted-foreground">

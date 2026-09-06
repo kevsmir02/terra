@@ -492,7 +492,7 @@ export const FileExplorer = memo(
       >
         <div className="terra-chrome flex h-8 shrink-0 items-center gap-1 border-b border-border/(--emph-strong) px-2">
           <span
-            className="terra-chrome-label flex flex-1 items-center truncate text-xs font-medium text-foreground/(--emph-bold)"
+            className="terra-label flex flex-1 items-center truncate text-xs font-medium text-foreground/(--emph-bold)"
             title={rootPath}
           >
             <img

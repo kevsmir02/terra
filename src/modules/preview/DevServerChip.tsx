@@ -26,7 +26,7 @@ export function DevServerChip({ leafId }: { leafId: number }) {
         <button
           type="button"
           onClick={() => openDevServer(leafId)}
-          className="flex items-center gap-1.5 font-medium text-foreground"
+          className="terra-label flex items-center gap-1.5 font-medium text-foreground"
         >
           <HugeiconsIcon
             icon={Globe02Icon}

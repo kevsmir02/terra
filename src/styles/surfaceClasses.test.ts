@@ -51,10 +51,10 @@ describe("surface classes", () => {
   });
 
   it("gives chrome labels inert typography defaults", () => {
-    const b = block(".terra-chrome-label");
-    expect(b).toContain("var(--chrome-tracking, inherit)");
-    expect(b).toContain("var(--chrome-transform, none)");
-    expect(b).not.toContain("font-family");
+    const b = block("@utility terra-label");
+    expect(b).toContain("letter-spacing: var(--chrome-tracking, inherit)");
+    expect(b).toContain("text-transform: var(--chrome-transform, none)");
+    expect(CSS).not.toContain(".terra-chrome-label");
   });
 
   it("draws the window frame in the theme's border style", () => {

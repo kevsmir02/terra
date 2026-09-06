@@ -258,7 +258,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
         <div className="flex min-w-0 items-center gap-2">
           <Badge
             variant="outline"
-            className="text-[10px] uppercase tracking-wide"
+            className="text-[10px] terra-label"
           >
             {chipLabel ?? mode}
           </Badge>
