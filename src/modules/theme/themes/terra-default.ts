@@ -1,167 +1,188 @@
 import type { Theme } from "../types";
 
-// Terra Default: the neutral, quiet baseline.
+// Terra Default: warm graphite, one ember, a terminal painted in pigments.
 //
-// This used to be `variants: { light: {}, dark: {} }` with ThemeProvider
-// clearing the variables instead of applying any, so what shipped was whatever
-// globals.css happened to hold: the untouched shadcn scaffold plus Tailwind's
-// stock ANSI set on a pure white terminal, where yellow measured about 1.9:1.
-// It was simultaneously the theme most users see and the only one no test could
-// reach, because every guard keys off a resolved --background.
+// This is the theme most people never change, so it is authored as an identity
+// rather than as a neutral baseline. Three decisions carry it:
 //
-// The intent here is polish, not replacement. The chrome keeps its values and
-// its colour space (oklch, so globals.css and this file stay trivially
-// comparable). Two things do change:
+// - The chrome sits on a warm neutral axis (hue 68, chroma under 0.01) instead
+//   of the blue slate every shadcn scaffold ships. It reads as graphite next to
+//   a terminal, and it is the one thing on screen that must never compete with
+//   the terminal.
+// - Exactly one hue is allowed to mean something. Ember carries primary, ring,
+//   the folder glyphs and the terminal cursor, so a saturated pixel in the
+//   chrome always points at an action. Everything else is neutral.
+// - The ANSI palette is a set of earth pigments (clay, sage, wheat, steel,
+//   rosewood, verdigris) rather than screen primaries, authored at even
+//   lightness and chroma per row so the sixteen read as one palette. Since
+//   `syntax` and `status` derive from these slots, the editor, the diff marks
+//   and the agent state bars inherit the same pigments for free.
 //
-// - The light canvas comes off pure white. Canvas and card were both
-//   oklch(1 0 0), which left the header, statusbar and panel container with no
-//   boundary at all. Card is now the raised white surface and the canvas sits
-//   just under it, matching how the dark variant already stacks them.
-// - mutedForeground is darkened. It cleared 4.5:1 only because it sat on pure
-//   white; against the lifted canvas it measured 4.33:1.
+// Chrome colours stay in oklch so this file and the globals.css pre-hydration
+// block remain trivially comparable; the terminal palette is hex because
+// readTerminalTokens round-trips values through getComputedStyle into xterm,
+// which parses hex and rgb but is not obliged to parse oklch.
 //
-// The terminal palette is authored rather than inherited, and is written in hex
-// on purpose: readTerminalTokens round-trips values through getComputedStyle
-// into xterm, which parses hex and rgb but is not obliged to parse oklch.
-//
-// Declaring ANSI also means the editor now derives its syntax roles from this
-// palette instead of falling through to the atomone pairing. That is the engine
-// working as designed: terminal and editor stop being two unrelated colour
-// schemes, and every derived role is contrast-normalized against the canvas.
+// Identity is not only colour. The radius drops to 8px and `pillRadius` to 6px,
+// so chips, badges and switches are soft squares rather than lozenges and the
+// app reads as an instrument panel; motion runs snappy because a tool that
+// fronts a terminal should feel instant; the shadow tint is warm so depth does
+// not go grey against the surfaces above.
 export const terraDefault: Theme = {
   id: "terra-default",
   name: "Terra Default",
-  description: "The default Terra look - clean glass over neutral surfaces.",
+  description: "Warm graphite, one ember, a terminal in earth pigments.",
   variants: {
-    light: {
+    dark: {
       colors: {
-        background: "oklch(0.978 0.002 228.8)",
-        foreground: "oklch(0.148 0.004 228.8)",
-        card: "oklch(1 0 0)",
-        cardForeground: "oklch(0.148 0.004 228.8)",
-        popover: "oklch(1 0 0)",
-        popoverForeground: "oklch(0.148 0.004 228.8)",
-        primary: "oklch(0.218 0.008 223.9)",
-        primaryForeground: "oklch(0.987 0.002 197.1)",
-        secondary: "oklch(0.963 0.002 197.1)",
-        secondaryForeground: "oklch(0.218 0.008 223.9)",
-        muted: "oklch(0.963 0.002 197.1)",
-        mutedForeground: "oklch(0.544 0.021 213.5)",
-        accent: "oklch(0.963 0.002 197.1)",
-        accentForeground: "oklch(0.218 0.008 223.9)",
-        destructive: "oklch(0.577 0.245 27.325)",
-        border: "oklch(0.925 0.005 214.3)",
-        input: "oklch(0.925 0.005 214.3)",
-        ring: "oklch(0.723 0.014 214.4)",
-        radius: "0.625rem",
+        background: "oklch(0.188 0.006 68)",
+        foreground: "oklch(0.926 0.006 84)",
+        card: "oklch(0.229 0.007 68)",
+        cardForeground: "oklch(0.926 0.006 84)",
+        popover: "oklch(0.253 0.0075 68)",
+        popoverForeground: "oklch(0.926 0.006 84)",
+        primary: "oklch(0.705 0.145 47)",
+        primaryForeground: "oklch(0.185 0.02 55)",
+        secondary: "oklch(0.274 0.008 68)",
+        secondaryForeground: "oklch(0.926 0.006 84)",
+        muted: "oklch(0.274 0.008 68)",
+        mutedForeground: "oklch(0.7 0.012 78)",
+        accent: "oklch(0.274 0.008 68)",
+        accentForeground: "oklch(0.926 0.006 84)",
+        destructive: "oklch(0.66 0.18 26)",
+        border: "oklch(0.345 0.009 68)",
+        input: "oklch(0.385 0.01 68)",
+        ring: "oklch(0.7 0.14 47)",
+        radius: "0.5rem",
         borderStyle: "solid",
       },
+      // Raised against the stock ladder: the rule is an opaque warm grey rather
+      // than a white wash, so it needs less alpha taken off it to sit right.
       emphasis: {
-        faint: "10%",
-        subtle: "30%",
-        soft: "40%",
-        medium: "50%",
-        strong: "60%",
-        bold: "85%",
+        faint: "12%",
+        subtle: "32%",
+        soft: "44%",
+        medium: "56%",
+        strong: "72%",
+        bold: "90%",
       },
       shape: {
         frameWidth: "1px",
-        frameRadius: "12px",
+        frameRadius: "11px",
         framePadding: "0px",
         chromeWidth: "1px",
         panelWidth: "1px",
-        bevelWidth: "0px",
+        pillRadius: "6px",
+        // One hairline ring inside the window edge, so the frame catches light
+        // the way the surfaces below it do not.
+        bevelWidth: "1px",
+        bevelOuter: "oklch(0.3 0.008 68)",
+        bevelMid: "transparent",
+        bevelInner: "transparent",
       },
-      motion: { speed: "smooth", easing: "expressive" },
+      type: { chromeTracking: "0.03em" },
+      motion: { speed: "snappy", easing: "expressive" },
+      effects: { shadow: "rgb(10 6 3 / 0.34)", blur: "on" },
+      icons: "nerd",
       terminal: {
-        background: "#f6f8f9",
-        foreground: "#090b0c",
-        cursor: "#090b0c",
-        cursorAccent: "#f6f8f9",
-        selection: "rgba(103,120,124,0.22)",
+        background: "#151311",
+        foreground: "#e0deda",
+        cursor: "#e8804a",
+        cursorAccent: "#151311",
+        selection: "rgba(232,128,74,0.22)",
         ansi: [
-          "#dfe3e6",
-          "#c0392f",
-          "#1f7a52",
-          "#8a6100",
-          "#1f66b0",
-          "#7d47b5",
-          "#10707a",
-          "#4a5259",
-          "#6e7880",
-          "#9e2b24",
-          "#17603f",
-          "#6d4c00",
-          "#17508a",
-          "#62368f",
-          "#0c5960",
-          "#171a1d",
+          "#272420",
+          "#e8796c",
+          "#7ab67b",
+          "#d5aa55",
+          "#70a4d0",
+          "#c588b0",
+          "#63b4b5",
+          "#c0bdb8",
+          "#7e7871",
+          "#fa9e92",
+          "#9bd69c",
+          "#f3cb7a",
+          "#92c4ee",
+          "#e4a9cf",
+          "#88d4d4",
+          "#f2f0ec",
         ],
       },
     },
-    dark: {
+    light: {
       colors: {
-        background: "oklch(0.148 0.004 228.8)",
-        foreground: "oklch(0.987 0.002 197.1)",
-        card: "oklch(0.218 0.008 223.9)",
-        cardForeground: "oklch(0.987 0.002 197.1)",
-        popover: "oklch(0.218 0.008 223.9)",
-        popoverForeground: "oklch(0.987 0.002 197.1)",
-        primary: "oklch(0.925 0.005 214.3)",
-        primaryForeground: "oklch(0.218 0.008 223.9)",
-        secondary: "oklch(0.275 0.011 216.9)",
-        secondaryForeground: "oklch(0.987 0.002 197.1)",
-        muted: "oklch(0.275 0.011 216.9)",
-        mutedForeground: "oklch(0.723 0.014 214.4)",
-        accent: "oklch(0.275 0.011 216.9)",
-        accentForeground: "oklch(0.987 0.002 197.1)",
-        destructive: "oklch(0.704 0.191 22.216)",
-        border: "oklch(1 0 0 / 10%)",
-        input: "oklch(1 0 0 / 15%)",
-        ring: "oklch(0.56 0.021 213.5)",
-        radius: "0.625rem",
+        background: "oklch(0.97 0.004 85)",
+        foreground: "oklch(0.215 0.01 60)",
+        card: "oklch(0.99 0.003 85)",
+        cardForeground: "oklch(0.215 0.01 60)",
+        popover: "oklch(0.995 0.002 85)",
+        popoverForeground: "oklch(0.215 0.01 60)",
+        primary: "oklch(0.545 0.155 45)",
+        primaryForeground: "oklch(0.985 0.004 85)",
+        secondary: "oklch(0.94 0.006 82)",
+        secondaryForeground: "oklch(0.215 0.01 60)",
+        muted: "oklch(0.94 0.006 82)",
+        mutedForeground: "oklch(0.505 0.016 68)",
+        accent: "oklch(0.94 0.006 82)",
+        accentForeground: "oklch(0.215 0.01 60)",
+        destructive: "oklch(0.53 0.2 27)",
+        border: "oklch(0.855 0.009 80)",
+        input: "oklch(0.8 0.011 80)",
+        ring: "oklch(0.6 0.145 45)",
+        radius: "0.5rem",
         borderStyle: "solid",
       },
       emphasis: {
-        faint: "10%",
-        subtle: "30%",
-        soft: "40%",
-        medium: "50%",
-        strong: "60%",
-        bold: "85%",
+        faint: "12%",
+        subtle: "32%",
+        soft: "44%",
+        medium: "56%",
+        strong: "72%",
+        bold: "90%",
       },
       shape: {
         frameWidth: "1px",
-        frameRadius: "12px",
+        frameRadius: "11px",
         framePadding: "0px",
         chromeWidth: "1px",
         panelWidth: "1px",
-        bevelWidth: "0px",
+        pillRadius: "6px",
+        bevelWidth: "1px",
+        bevelOuter: "oklch(1 0 0)",
+        bevelMid: "transparent",
+        bevelInner: "transparent",
       },
-      motion: { speed: "smooth", easing: "expressive" },
+      type: { chromeTracking: "0.03em" },
+      motion: { speed: "snappy", easing: "expressive" },
+      effects: { shadow: "rgb(84 60 38 / 0.13)", blur: "on" },
+      icons: "nerd",
+      // Paper, not white: the canvas comes off pure white so the raised card
+      // surfaces have something to sit on, and the pigments below are mixed for
+      // that ground rather than for a screen.
       terminal: {
-        background: "#090b0c",
-        foreground: "#f9fbfb",
-        cursor: "#f9fbfb",
-        cursorAccent: "#090b0c",
-        selection: "rgba(156,168,171,0.28)",
+        background: "#f6f5f2",
+        foreground: "#231e1b",
+        cursor: "#b64a02",
+        cursorAccent: "#f6f5f2",
+        selection: "rgba(182,74,2,0.16)",
         ansi: [
-          "#1b2124",
-          "#e05561",
-          "#62b47e",
-          "#d3a04a",
-          "#5aa2e0",
-          "#b48ee0",
-          "#4fb3bf",
-          "#c8ced3",
-          "#6b757d",
-          "#ef7078",
-          "#7ecb96",
-          "#e6b866",
-          "#77b8ee",
-          "#c8a6ef",
-          "#6ecad6",
-          "#eef2f4",
+          "#d3cfc8",
+          "#a8372e",
+          "#326d36",
+          "#8b5f00",
+          "#2b6399",
+          "#8a4375",
+          "#006f70",
+          "#4b4742",
+          "#817b73",
+          "#8a1d18",
+          "#1f5323",
+          "#674809",
+          "#124a7b",
+          "#6b2d59",
+          "#035353",
+          "#25211b",
         ],
       },
     },
