@@ -9,11 +9,13 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { outputRange, stepCommandLine } from "./commandMarks";
 import { DormantRing } from "./dormantRing";
 import {
   createShellIntegrationState,
   registerCwdHandler,
   registerOsc52ClipboardHandler,
+  type PromptTracker,
   registerPromptTracker,
 } from "./osc-handlers";
 import { openPty, type PtySession } from "./pty-bridge";
@@ -82,6 +84,7 @@ type Session = {
   commandRunning: boolean;
   hiddenReleaseTimer: ReturnType<typeof setTimeout> | null;
   spawnFailed: boolean;
+  prompt: PromptTracker | null;
 };
 
 const sessions = new Map<number, Session>();
@@ -335,6 +338,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     commandRunning: false,
     hiddenReleaseTimer: null,
     spawnFailed: false,
+    prompt: null,
   };
   sessions.set(leafId, session);
 
@@ -461,6 +465,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
       const prompt = registerPromptTracker(term, shellState, (running) =>
         onLeafCommandState(leafId, running),
       );
+      s.prompt = prompt;
       const cwd = registerCwdHandler(
         term,
         (next) => {
@@ -472,7 +477,14 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         shellState,
       );
       const osc52 = registerOsc52ClipboardHandler(term);
-      return [prompt.dispose, cwd, osc52];
+      return [
+        () => {
+          prompt.dispose();
+          if (s.prompt === prompt) s.prompt = null;
+        },
+        cwd,
+        osc52,
+      ];
     },
     onSearchReady: (addon) => s.callbacks.onSearchReady?.(addon),
   });
@@ -785,6 +797,52 @@ export function useTerminalSession({
     return sel.length > 0 ? sel : null;
   }, [leafId]);
 
+  const scrollToCommand = useCallback(
+    (delta: 1 | -1): boolean => {
+      const slot = getSlotForLeaf(leafId);
+      if (!slot) return false;
+      const lines = sessions.get(leafId)?.prompt?.commandLines() ?? [];
+      const target = stepCommandLine(
+        lines,
+        slot.term.buffer.active.viewportY,
+        delta,
+      );
+      if (target === null) return false;
+      slot.term.scrollToLine(target);
+      return true;
+    },
+    [leafId],
+  );
+
+  const lastOutputLines = useCallback((): [number, number] | null => {
+    const slot = getSlotForLeaf(leafId);
+    const marks = sessions.get(leafId)?.prompt?.lastOutput();
+    if (!slot || !marks) return null;
+    return outputRange(marks.start, marks.end, slot.term.buffer.active.length);
+  }, [leafId]);
+
+  const selectLastOutput = useCallback((): boolean => {
+    const slot = getSlotForLeaf(leafId);
+    const range = lastOutputLines();
+    if (!slot || !range) return false;
+    slot.term.selectLines(range[0], range[1]);
+    return true;
+  }, [leafId, lastOutputLines]);
+
+  const getLastOutput = useCallback((): string | null => {
+    const slot = getSlotForLeaf(leafId);
+    const range = lastOutputLines();
+    if (!slot || !range) return null;
+    const out: string[] = [];
+    for (let y = range[0]; y <= range[1]; y++) {
+      out.push(
+        slot.term.buffer.active.getLine(y)?.translateToString(true) ?? "",
+      );
+    }
+    while (out.length && out[out.length - 1] === "") out.pop();
+    return out.length ? out.join("\n") : null;
+  }, [leafId, lastOutputLines]);
+
   const applyTheme = useCallback(() => {
     applyPoolTheme();
   }, []);
@@ -795,9 +853,21 @@ export function useTerminalSession({
       focus,
       getBuffer,
       getSelection,
+      scrollToCommand,
+      selectLastOutput,
+      getLastOutput,
       applyTheme,
     }),
-    [write, focus, getBuffer, getSelection, applyTheme],
+    [
+      write,
+      focus,
+      getBuffer,
+      getSelection,
+      scrollToCommand,
+      selectLastOutput,
+      getLastOutput,
+      applyTheme,
+    ],
   );
 }
 

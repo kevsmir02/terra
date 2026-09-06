@@ -675,6 +675,22 @@ export default function App() {
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
+      "terminal.prevCommand": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.scrollToCommand(-1);
+      },
+      "terminal.nextCommand": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.scrollToCommand(1);
+      },
+      "terminal.selectLastOutput": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.selectLastOutput();
+      },
+      "terminal.copyLastOutput": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.copyLastOutput();
+      },
       "search.focus": () => {
         const editor = editorRefs.current.get(activeId);
         if (editor) editor.openSearch();
@@ -698,6 +714,7 @@ export default function App() {
     }),
     [
       activeId,
+      activeLeafId,
       openCommandPalette,
       stepSwitcher,
       cycleSpace,
@@ -733,6 +750,14 @@ export default function App() {
         id === "editor.codeComplete"
       ) {
         return activeTab?.kind !== "editor";
+      }
+      if (
+        id === "terminal.prevCommand" ||
+        id === "terminal.nextCommand" ||
+        id === "terminal.selectLastOutput" ||
+        id === "terminal.copyLastOutput"
+      ) {
+        return activeTab?.kind !== "terminal";
       }
       if (id === "terminal.clear") {
         // Only intercept ⌘K while a terminal is focused; elsewhere let the key

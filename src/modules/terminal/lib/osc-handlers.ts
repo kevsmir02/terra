@@ -38,8 +38,14 @@ export function registerCwdHandler(
 
 export type PromptTracker = {
   getMarker: () => IMarker | null;
+  /** Buffer line of every prompt still in the buffer, oldest first. */
+  commandLines: () => number[];
+  /** Line markers of the last command's output: C to D, D null while running. */
+  lastOutput: () => { start: number | null; end: number | null };
   dispose: () => void;
 };
+
+const MAX_PROMPT_MARKERS = 500;
 
 export function registerPromptTracker(
   term: Terminal,
@@ -49,13 +55,17 @@ export function registerPromptTracker(
   onCommandState?: (running: boolean) => void,
 ): PromptTracker {
   let marker: IMarker | null = null;
+  const prompts: IMarker[] = [];
+  let outputStart: IMarker | null = null;
+  let outputEnd: IMarker | null = null;
   const d = term.parser.registerOscHandler(133, (data) => {
     // OSC 133 A — start of new prompt (between commands).
     if (data.startsWith("A")) {
       if (state) state.inCommand = false;
       onCommandState?.(false);
-      marker?.dispose();
-      marker = term.registerMarker(0);
+      marker = term.registerMarker(0) ?? null;
+      if (marker) prompts.push(marker);
+      if (prompts.length > MAX_PROMPT_MARKERS) prompts.shift()?.dispose();
     } else if (data.startsWith("B")) {
       // OSC 133 B — command begins. From here on, treat all output as
       // untrusted until we see D (command exit) or the next A (new prompt).
@@ -64,18 +74,33 @@ export function registerPromptTracker(
       // OSC 133 C — command pre-execution marker; still inside command.
       if (state) state.inCommand = true;
       onCommandState?.(true);
+      outputStart?.dispose();
+      outputEnd?.dispose();
+      outputEnd = null;
+      outputStart = term.registerMarker(0) ?? null;
     } else if (data.startsWith("D")) {
       // OSC 133 D — command ends.
       if (state) state.inCommand = false;
       onCommandState?.(false);
+      outputEnd?.dispose();
+      outputEnd = term.registerMarker(0) ?? null;
     }
     return true;
   });
+  const lineOf = (m: IMarker | null) => (m && !m.isDisposed ? m.line : null);
   return {
     getMarker: () => (marker && !marker.isDisposed ? marker : null),
+    commandLines: () =>
+      prompts.filter((m) => !m.isDisposed).map((m) => m.line),
+    lastOutput: () => ({ start: lineOf(outputStart), end: lineOf(outputEnd) }),
     dispose: () => {
       d.dispose();
-      marker?.dispose();
+      for (const m of prompts) m.dispose();
+      prompts.length = 0;
+      outputStart?.dispose();
+      outputEnd?.dispose();
+      outputStart = null;
+      outputEnd = null;
       marker = null;
     },
   };

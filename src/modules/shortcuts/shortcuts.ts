@@ -30,6 +30,10 @@ export type ShortcutId =
   | "terminal.copy"
   | "terminal.paste"
   | "terminal.newline"
+  | "terminal.prevCommand"
+  | "terminal.nextCommand"
+  | "terminal.selectLastOutput"
+  | "terminal.copyLastOutput"
   | "search.focus"
   | "explorer.search"
   | "explorer.focus"
@@ -202,6 +206,32 @@ export const SHORTCUTS: Shortcut[] = [
     // still repeats because useGlobalShortcuts lets every keydown through to
     // xterm for a shortcut it has no handler for.
     defaultBindings: [{ shift: true, key: "Enter" }],
+  },
+  {
+    id: "terminal.prevCommand",
+    label: "Scroll to previous command",
+    group: "Terminal",
+    defaultBindings: [{ ctrl: true, shift: true, key: "ArrowUp" }],
+    allowRepeat: true,
+  },
+  {
+    id: "terminal.nextCommand",
+    label: "Scroll to next command",
+    group: "Terminal",
+    defaultBindings: [{ ctrl: true, shift: true, key: "ArrowDown" }],
+    allowRepeat: true,
+  },
+  {
+    id: "terminal.selectLastOutput",
+    label: "Select last command output",
+    group: "Terminal",
+    defaultBindings: [],
+  },
+  {
+    id: "terminal.copyLastOutput",
+    label: "Copy last command output",
+    group: "Terminal",
+    defaultBindings: [],
   },
   {
     id: "tab.next",

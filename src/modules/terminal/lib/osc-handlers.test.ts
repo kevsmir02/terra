@@ -194,3 +194,54 @@ describe("OSC 52 clipboard handler", () => {
     expect(writeClipboard).not.toHaveBeenCalled();
   });
 });
+
+describe("registerPromptTracker command marks", () => {
+  function makeMarkerTerm() {
+    const { term, handlers } = makeFakeTerm();
+    let line = 0;
+    const registerMarker = vi.fn(() => {
+      const marker = {
+        line: line++,
+        isDisposed: false,
+        dispose() {
+          marker.isDisposed = true;
+        },
+      };
+      return marker;
+    });
+    Object.assign(term, { registerMarker });
+    const osc = (data: string) => {
+      const handler = handlers.get(133);
+      if (!handler) throw new Error("no OSC 133 handler");
+      handler(data);
+    };
+    return { term, osc, registerMarker };
+  }
+
+  it("records every prompt line and the last output span", () => {
+    const { term, osc } = makeMarkerTerm();
+    const tracker = registerPromptTracker(term);
+    for (const seq of ["A", "B", "C", "D", "A"]) osc(seq);
+    expect(tracker.commandLines()).toEqual([0, 3]);
+    expect(tracker.lastOutput()).toEqual({ start: 1, end: 2 });
+  });
+
+  it("reports a running command with no end marker", () => {
+    const { term, osc } = makeMarkerTerm();
+    const tracker = registerPromptTracker(term);
+    for (const seq of ["A", "B", "C"]) osc(seq);
+    expect(tracker.lastOutput()).toEqual({ start: 1, end: null });
+  });
+
+  it("drops markers the buffer trimmed and releases everything on dispose", () => {
+    const { term, osc, registerMarker } = makeMarkerTerm();
+    const tracker = registerPromptTracker(term);
+    osc("A");
+    osc("A");
+    registerMarker.mock.results[0]?.value.dispose();
+    expect(tracker.commandLines()).toEqual([1]);
+    tracker.dispose();
+    expect(tracker.commandLines()).toEqual([]);
+    expect(tracker.lastOutput()).toEqual({ start: null, end: null });
+  });
+});

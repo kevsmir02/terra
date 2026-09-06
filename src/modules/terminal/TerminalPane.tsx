@@ -26,6 +26,10 @@ export type TerminalPaneHandle = {
   focus: () => void;
   getBuffer: (maxLines?: number) => string | null;
   getSelection: () => string | null;
+  /** Scroll to the previous (-1) or next (+1) prompt in the buffer. */
+  scrollToCommand: (delta: 1 | -1) => boolean;
+  selectLastOutput: () => boolean;
+  copyLastOutput: () => boolean;
 };
 
 type Props = {
@@ -121,6 +125,16 @@ export const TerminalPane = memo(
         focus: () => session.focus(),
         getBuffer: (max?: number) => session.getBuffer(max),
         getSelection: () => session.getSelection(),
+        scrollToCommand: (delta) => session.scrollToCommand(delta),
+        selectLastOutput: () => session.selectLastOutput(),
+        copyLastOutput: () => {
+          const text = session.getLastOutput();
+          if (!text) return false;
+          void Promise.resolve(writeTerminalClipboard(text)).then(() =>
+            toast.success("Copied last command output", { id: COPY_TOAST_ID }),
+          );
+          return true;
+        },
       }),
       [session],
     );
