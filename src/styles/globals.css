@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "./fonts.css";
 @import "./code-highlight.css";
 
 @source "../../node_modules/streamdown/dist/index.js";
@@ -10,8 +9,8 @@
 
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: var(--ui-font-sans, 'Inter Variable', sans-serif);
-    --font-mono: var(--ui-font-mono, 'JetBrains Mono', monospace);
+    --font-sans: "JetBrainsMono Nerd Font", monospace;
+    --font-mono: "JetBrainsMono Nerd Font", monospace;
     --spacing: var(--ui-spacing, 0.25rem);
     --color-status-added: var(--status-added);
     --color-status-modified: var(--status-modified);
@@ -635,7 +634,6 @@ html *::-webkit-scrollbar {
   }
 
   .terra-chrome-label {
-    font-family: var(--ui-font-display, inherit);
     letter-spacing: var(--chrome-tracking, inherit);
     text-transform: var(--chrome-transform, none);
   }

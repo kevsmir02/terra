@@ -71,7 +71,6 @@ export const rebar: Theme = {
         cursor: "#ff3d8b",
         cursorAccent: "#0b0b0b",
         selection: "rgba(255, 61, 139, 0.30)",
-        fontFamily: "JetBrainsMono Nerd Font",
         ansi: [
           "#2a2a27",
           "#ff5a4d",
@@ -100,11 +99,8 @@ export const rebar: Theme = {
         bevelWidth: "0px",
       },
       type: {
-        sans: "'Space Grotesk', 'Inter Variable', sans-serif",
-        display: "'Space Grotesk', 'Inter Variable', sans-serif",
         chromeTracking: "0.08em",
         chromeTransform: "uppercase",
-        fonts: ["space-grotesk"],
       },
     },
     light: {
@@ -152,7 +148,6 @@ export const rebar: Theme = {
         cursor: "#ff3d8b",
         cursorAccent: "#0b0b0b",
         selection: "rgba(255, 61, 139, 0.22)",
-        fontFamily: "JetBrainsMono Nerd Font",
         ansi: [
           "#0b0b0b",
           "#c7261c",
@@ -181,11 +176,8 @@ export const rebar: Theme = {
         bevelWidth: "0px",
       },
       type: {
-        sans: "'Space Grotesk', 'Inter Variable', sans-serif",
-        display: "'Space Grotesk', 'Inter Variable', sans-serif",
         chromeTracking: "0.08em",
         chromeTransform: "uppercase",
-        fonts: ["space-grotesk"],
       },
     },
   },

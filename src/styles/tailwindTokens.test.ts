@@ -49,13 +49,10 @@ describe("border width overrides", () => {
     }
   });
 
-  it("keeps the wrapped theme tokens falling back to today's values", () => {
-    expect(GLOBALS).toContain(
-      "--font-sans: var(--ui-font-sans, 'Inter Variable', sans-serif)",
-    );
-    expect(GLOBALS).toContain(
-      "--font-mono: var(--ui-font-mono, 'JetBrains Mono', monospace)",
-    );
+  it("pins every face to the app font and keeps spacing themeable", () => {
+    expect(GLOBALS).toContain('--font-sans: "JetBrainsMono Nerd Font", monospace');
+    expect(GLOBALS).toContain('--font-mono: "JetBrainsMono Nerd Font", monospace');
+    expect(GLOBALS).not.toContain("fonts.css");
     expect(GLOBALS).toContain("--spacing: var(--ui-spacing, 0.25rem)");
   });
 });

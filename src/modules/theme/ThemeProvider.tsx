@@ -15,7 +15,6 @@ import {
   type ThemePref,
 } from "@/modules/settings/store";
 import { applyTheme } from "./applyTheme";
-import { loadFonts } from "./fonts";
 import { SurfaceLayer } from "./SurfaceLayer";
 import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
@@ -120,11 +119,6 @@ export function ThemeProvider({ children, defaultMode = "system" }: ThemeProvide
   const effectiveId = previewId ?? themeId;
   const activeTheme = useMemo(() => resolveTheme(effectiveId), [effectiveId]);
   useEffect(() => {
-    const fonts =
-      activeTheme.variants[resolvedMode]?.type?.fonts ??
-      activeTheme.variants.dark?.type?.fonts ??
-      activeTheme.variants.light?.type?.fonts;
-    if (fonts?.length) void loadFonts(fonts);
     applyTheme(activeTheme, resolvedMode);
   }, [activeTheme, resolvedMode]);
 

@@ -462,12 +462,12 @@ function FontFamilyInput({
   return (
     <SettingRow
       title="Font family"
-      description='Nerd Font name for icons (e.g. "CaskaydiaCove Nerd Font Mono"). Leave blank to auto-detect.'
+      description="Terminal face. Leave blank for JetBrainsMono Nerd Font Mono."
     >
       <input
         type="text"
         value={draft}
-        placeholder="Auto-detect"
+        placeholder="JetBrainsMono Nerd Font Mono"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {

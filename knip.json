@@ -19,10 +19,6 @@
     "tailwindcss",
     "tw-animate-css",
     "shadcn",
-    "@fontsource-variable/inter",
-    "@fontsource/jetbrains-mono",
-    "@fontsource/pixelify-sans",
-    "@fontsource/space-grotesk",
     "@codemirror/autocomplete",
     "@uiw/codemirror-themes"
   ],

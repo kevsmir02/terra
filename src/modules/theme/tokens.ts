@@ -89,9 +89,6 @@ export const TOKENS: readonly TokenDef[] = [
   { key: "shape.liftDepth", cssVar: "--lift-depth", group: "shape", kind: "length", fallback: "0px", doc: "Lift depth." },
   { key: "shape.spacing", cssVar: "--ui-spacing", group: "shape", kind: "length", fallback: "0.25rem", doc: "UI spacing." },
 
-  { key: "type.sans", cssVar: "--ui-font-sans", group: "type", kind: "keyword", doc: "Sans serif font." },
-  { key: "type.mono", cssVar: "--ui-font-mono", group: "type", kind: "keyword", doc: "Monospace font." },
-  { key: "type.display", cssVar: "--ui-font-display", group: "type", kind: "keyword", doc: "Display font." },
   { key: "type.chromeTracking", cssVar: "--chrome-tracking", group: "type", kind: "length", doc: "Chrome letter spacing." },
   { key: "type.chromeTransform", cssVar: "--chrome-transform", group: "type", kind: "keyword", doc: "Chrome text transform." },
 

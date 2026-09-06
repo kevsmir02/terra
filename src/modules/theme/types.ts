@@ -1,5 +1,3 @@
-import type { FontId } from "./fonts";
-
 export type ThemeMode = "light" | "dark";
 
 export const BORDER_STYLES = [
@@ -49,9 +47,6 @@ export type TerminalPalette = Partial<{
   cursor: string;
   cursorAccent: string;
   selection: string;
-  fontFamily: string;
-  fontWeight: string;
-  fontSize: number;
   ansi: readonly [
     string, string, string, string, string, string, string, string,
     string, string, string, string, string, string, string, string,
@@ -80,12 +75,8 @@ export type ThemeShape = Partial<{
 }>;
 
 export type ThemeTypography = Partial<{
-  sans: string;
-  mono: string;
-  display: string;
   chromeTracking: string;
   chromeTransform: TextTransform;
-  fonts?: readonly FontId[];
 }>;
 
 export const SYNTAX_ROLES = [

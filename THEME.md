@@ -202,7 +202,6 @@ unset and keeps JetBrains Mono.
 
 
 <!-- token-reference:start -->
-<!-- token-reference:start -->
 
 ### `colors`
 
@@ -260,9 +259,6 @@ unset and keeps JetBrains Mono.
 
 | Key | Variable | Default | Doc |
 |---|---|---|---|
-| `type.sans` | `--ui-font-sans` |  | Sans serif font. |
-| `type.mono` | `--ui-font-mono` |  | Monospace font. |
-| `type.display` | `--ui-font-display` |  | Display font. |
 | `type.chromeTracking` | `--chrome-tracking` |  | Chrome letter spacing. |
 | `type.chromeTransform` | `--chrome-transform` |  | Chrome text transform. |
 
@@ -338,7 +334,6 @@ unset and keeps JetBrains Mono.
 | `emphasis.strong` | `--emph-strong` | `60%` | Strong emphasis. |
 | `emphasis.bold` | `--emph-bold` | `85%` | Bold emphasis. |
 
-<!-- token-reference:end -->
 <!-- token-reference:end -->
 
 ## Fonts

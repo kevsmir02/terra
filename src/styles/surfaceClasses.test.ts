@@ -57,7 +57,7 @@ describe("surface classes", () => {
     const b = block(".terra-chrome-label");
     expect(b).toContain("var(--chrome-tracking, inherit)");
     expect(b).toContain("var(--chrome-transform, none)");
-    expect(b).toContain("var(--ui-font-display, inherit)");
+    expect(b).not.toContain("font-family");
   });
 
   it("draws the window frame in the theme's border style", () => {

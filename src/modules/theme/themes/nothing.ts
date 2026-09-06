@@ -25,15 +25,6 @@ import type { Theme } from "../types";
 // `syntax.tag` is pinned off slot 1. Left to derive it would inherit the red,
 // and in a theme where red means "attention" every tag in every file would fire
 // the signal. `invalid`, `status.deleted` and `destructive` still derive.
-//
-// DotGothic16 stays on `display` and Space Grotesk stays on `sans`. The dot
-// face was tried on `sans` and reverted in c9d32d2: it is a 16px bitmap face
-// and Terra's chrome renders at 9px to 13px, where its strokes shimmer. That
-// leaves the signature face on `--ui-font-display`, which only
-// `.terra-chrome-label` consumes, so it reaches one element until more of the
-// chrome opts into that class. Uppercase at 0.14em carries the identity in the
-// meantime, which is the half of Nothing's typography a theme can actually
-// reach.
 export const nothing: Theme = {
   id: "nothing",
   name: "Nothing",
@@ -89,7 +80,6 @@ export const nothing: Theme = {
         cursor: "#d63b2e",
         cursorAccent: "#ffffff",
         selection: "rgba(214, 59, 46, 0.30)",
-        fontFamily: "JetBrainsMono Nerd Font",
         ansi: [
           "#1e1e1e",
           "#e5342a",
@@ -118,13 +108,7 @@ export const nothing: Theme = {
         chromeWidth: "2px",
         panelWidth: "2px",
       },
-      type: {
-        sans: "'Space Grotesk', 'Inter Variable', sans-serif",
-        display: "'DotGothic16', monospace",
-        chromeTracking: "0.14em",
-        chromeTransform: "uppercase",
-        fonts: ["space-grotesk", "dotgothic16"],
-      },
+      type: { chromeTracking: "0.14em", chromeTransform: "uppercase" },
     },
     light: {
       colors: {
@@ -172,7 +156,6 @@ export const nothing: Theme = {
         cursor: "#c8342a",
         cursorAccent: "#ffffff",
         selection: "rgba(200, 52, 42, 0.22)",
-        fontFamily: "JetBrainsMono Nerd Font",
         ansi: [
           "#0a0a0a",
           "#c42419",
@@ -201,13 +184,7 @@ export const nothing: Theme = {
         chromeWidth: "2px",
         panelWidth: "2px",
       },
-      type: {
-        sans: "'Space Grotesk', 'Inter Variable', sans-serif",
-        display: "'DotGothic16', monospace",
-        chromeTracking: "0.14em",
-        chromeTransform: "uppercase",
-        fonts: ["space-grotesk", "dotgothic16"],
-      },
+      type: { chromeTracking: "0.14em", chromeTransform: "uppercase" },
     },
   },
 };

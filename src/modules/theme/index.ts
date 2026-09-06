@@ -1,8 +1,4 @@
 export { ThemeProvider, useTheme, type Theme } from "./ThemeProvider";
-export {
-  resolveTerminalFont,
-  type TerminalFont,
-} from "./resolveTerminalFont";
 export { listBuiltinThemes } from "./themes";
 export {
   resolveEditorTheme,
