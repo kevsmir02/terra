@@ -10,7 +10,11 @@ async function build(source: string, candidates: string[]): Promise<string> {
     base: ROOT,
     loadStylesheet: async () => {
       const p = path.resolve(ROOT, "node_modules/tailwindcss/index.css");
-      return { path: p, base: path.dirname(p), content: readFileSync(p, "utf8") };
+      return {
+        path: p,
+        base: path.dirname(p),
+        content: readFileSync(p, "utf8"),
+      };
     },
   });
   return compiler.build(candidates);
@@ -50,9 +54,13 @@ describe("border width overrides", () => {
   });
 
   it("pins every face to the app font and keeps spacing themeable", () => {
-    expect(GLOBALS).toContain('--font-sans: "JetBrainsMono Nerd Font", monospace');
-    expect(GLOBALS).toContain('--font-mono: "JetBrainsMono Nerd Font", monospace');
-    expect(GLOBALS).not.toContain("fonts.css");
+    expect(GLOBALS).toContain(
+      '--font-sans: "JetBrainsMono Nerd Font", monospace',
+    );
+    expect(GLOBALS).toContain(
+      '--font-mono: "JetBrainsMono Nerd Font", monospace',
+    );
+    expect(GLOBALS).toContain('@import "./fonts.css"');
     expect(GLOBALS).toContain("--spacing: var(--ui-spacing, 0.25rem)");
   });
 });
@@ -76,7 +84,13 @@ describe("no element combines a bare border with an explicit width", () => {
 });
 
 const STATUS_ROLE_NAMES = [
-  "added", "modified", "deleted", "renamed", "warning", "conflict", "ok",
+  "added",
+  "modified",
+  "deleted",
+  "renamed",
+  "warning",
+  "conflict",
+  "ok",
 ] as const;
 
 describe("status tokens", () => {
@@ -123,26 +137,43 @@ describe("theme-owned scales", () => {
       GLOBALS.indexOf("@utility border"),
     );
   const utilities = () =>
-    GLOBALS.split("\n").filter((l) => l.trimStart().startsWith("@utility rounded-"));
+    GLOBALS.split("\n").filter((l) =>
+      l.trimStart().startsWith("@utility rounded-"),
+    );
 
   it("routes every shadow utility through the theme's shadow tint", async () => {
     const css = await build(`@import "tailwindcss";\n${inline()}`, [
-      "shadow-2xs", "shadow-xs", "shadow-sm", "shadow-md", "shadow-lg",
-      "shadow-xl", "shadow-2xl", "shadow", "shadow-inner",
+      "shadow-2xs",
+      "shadow-xs",
+      "shadow-sm",
+      "shadow-md",
+      "shadow-lg",
+      "shadow-xl",
+      "shadow-2xl",
+      "shadow",
+      "shadow-inner",
     ]);
     const blocks = css.match(/\.shadow[^{]*\{[^}]*\}/g) ?? [];
     expect(blocks).toHaveLength(9);
-    for (const b of blocks) expect(b).toContain("var(--fx-shadow-color, rgb(0 0 0 /");
+    for (const b of blocks)
+      expect(b).toContain("var(--fx-shadow-color, rgb(0 0 0 /");
   });
 
   it("multiplies every blur step by the theme's blur factor", async () => {
     const css = await build(`@import "tailwindcss";\n${inline()}`, [
-      "backdrop-blur", "backdrop-blur-xs", "backdrop-blur-sm", "backdrop-blur-md",
-      "backdrop-blur-lg", "backdrop-blur-xl", "backdrop-blur-2xl", "backdrop-blur-3xl",
+      "backdrop-blur",
+      "backdrop-blur-xs",
+      "backdrop-blur-sm",
+      "backdrop-blur-md",
+      "backdrop-blur-lg",
+      "backdrop-blur-xl",
+      "backdrop-blur-2xl",
+      "backdrop-blur-3xl",
     ]);
     const blocks = css.match(/\.backdrop-blur[^{]*\{[^}]*\}/g) ?? [];
     expect(blocks).toHaveLength(8);
-    for (const b of blocks) expect(b).toContain("blur(calc(var(--fx-blur-factor, 1) *");
+    for (const b of blocks)
+      expect(b).toContain("blur(calc(var(--fx-blur-factor, 1) *");
   });
 
   it("scales rounded-xs with the theme radius like the other steps", () => {
@@ -154,7 +185,9 @@ describe("theme-owned scales", () => {
       `@import "tailwindcss";\n${utilities().join("\n")}`,
       ["rounded-pill", "rounded-circle"],
     );
-    expect(css).toContain(".rounded-pill {\n    border-radius: var(--radius-pill, 9999px);");
+    expect(css).toContain(
+      ".rounded-pill {\n    border-radius: var(--radius-pill, 9999px);",
+    );
     expect(css).toContain(".rounded-circle {\n    border-radius: 50%;");
   });
 });

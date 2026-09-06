@@ -1,6 +1,13 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import {
+  listenFsChanged,
+  parentDir,
+  watchAdd,
+  watchRemove,
+} from "@/modules/explorer/lib/watch";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
 import { MarkdownViewToggle } from "./MarkdownViewToggle";
@@ -17,6 +24,8 @@ type Status =
   | { kind: "toolarge"; size: number; limit: number }
   | { kind: "error"; message: string };
 
+const RELOAD_DEBOUNCE_MS = 150;
+
 type Props = {
   path: string;
   visible: boolean;
@@ -26,27 +35,58 @@ type Props = {
 export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "loading" });
 
+  // Follows the disk while mounted: an agent rewriting the document is the
+  // normal case. Bursts of writes coalesce, and a re-read keeps the rendered
+  // page up instead of flashing the loading state.
   useEffect(() => {
     let cancelled = false;
-    setStatus({ kind: "loading" });
-    invoke<ReadResult>("fs_read_file", {
-      path,
-    })
-      .then((res) => {
-        if (cancelled) return;
-        if (res.kind === "text") {
-          setStatus({ kind: "ready", content: res.content });
-        } else if (res.kind === "binary") {
-          setStatus({ kind: "binary" });
-        } else {
-          setStatus({ kind: "toolarge", size: res.size, limit: res.limit });
-        }
+    let timer: number | null = null;
+    const read = (initial: boolean) => {
+      if (initial) setStatus({ kind: "loading" });
+      invoke<ReadResult>("fs_read_file", {
+        path,
       })
-      .catch((e) => {
-        if (!cancelled) setStatus({ kind: "error", message: String(e) });
-      });
+        .then((res) => {
+          if (cancelled) return;
+          if (res.kind === "text") {
+            setStatus({ kind: "ready", content: res.content });
+          } else if (res.kind === "binary") {
+            setStatus({ kind: "binary" });
+          } else {
+            setStatus({ kind: "toolarge", size: res.size, limit: res.limit });
+          }
+        })
+        .catch((e) => {
+          if (!cancelled) setStatus({ kind: "error", message: String(e) });
+        });
+    };
+    read(true);
+
+    const normalized = path.replace(/\\/g, "/");
+    const schedule = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        read(false);
+      }, RELOAD_DEBOUNCE_MS);
+    };
+    const dir = parentDir(path);
+    watchAdd([dir]);
+    const unlistenChanged = listenFsChanged((paths) => {
+      if (paths.some((p) => p.replace(/\\/g, "/") === normalized)) schedule();
+    });
+    const unlistenWritten = getCurrentWebviewWindow().listen<{ path: string }>(
+      "fs:file-written",
+      (e) => {
+        if (e.payload.path.replace(/\\/g, "/") === normalized) schedule();
+      },
+    );
     return () => {
       cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+      watchRemove([dir]);
+      void unlistenChanged.then((un) => un());
+      void unlistenWritten.then((un) => un());
     };
   }, [path]);
 
@@ -70,7 +110,7 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
           )}
           {status.kind === "binary" && (
             <p className="text-[12px] text-muted-foreground">
-              Binary file — cannot render as markdown.
+              Binary file: cannot render as markdown.
             </p>
           )}
           {status.kind === "toolarge" && (

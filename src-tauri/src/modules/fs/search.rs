@@ -32,7 +32,7 @@ pub struct SearchResult {
 /// tree is effectively unbounded.
 const MAX_SCANNED: usize = 50_000;
 
-/// Directory names pruned unconditionally — they're rarely useful in a
+/// Directory names pruned unconditionally, they're rarely useful in a
 /// file-explorer search and they dominate scan time when present.
 const PRUNE_DIRS: &[&str] = &[
     "node_modules",

@@ -57,8 +57,11 @@ falls back to a stock CodeMirror preset.
 
 ## What a theme can change
 
-The whole app renders in the system JetBrainsMono Nerd Font. Themes do not pick
-a face, a weight, or a size; those are reading-comfort choices, not identity.
+The whole app renders in the bundled JetBrainsMono Nerd Font (`src/assets/fonts`,
+declared in `src/styles/fonts.css`); the terminal can switch to the bundled
+FiraCode or CaskaydiaCove Nerd Font Mono, or to a system family, in Settings.
+Themes do not pick a face, a weight, or a size; those are reading-comfort
+choices, not identity.
 
 | Identity | Field | Reaches |
 |---|---|---|

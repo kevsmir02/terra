@@ -1,5 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTerminalDropStore } from "./dropStore";
 import { formatDroppedPaths } from "./quoteShellPath";
 import { pasteIntoLeaf } from "./rendererPool";
@@ -24,7 +24,15 @@ function leafIdAt(x: number, y: number): number | null {
 /** Wires native OS file drops into the terminal pane under the cursor: shows a
  * drop overlay on that pane while dragging, and bracketed-pastes the
  * shell-quoted path(s) on drop. Drops outside any terminal leaf are ignored. */
-export function useTerminalFileDrop(): void {
+type Options = {
+  /** Shell cwd of a leaf, so a dropped path under it pastes relative. */
+  cwdForLeaf?: (leafId: number) => string | undefined;
+};
+
+export function useTerminalFileDrop({ cwdForLeaf }: Options = {}): void {
+  const cwdForLeafRef = useRef(cwdForLeaf);
+  cwdForLeafRef.current = cwdForLeaf;
+
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
@@ -46,7 +54,10 @@ export function useTerminalFileDrop(): void {
           if (!p.paths.length) return;
           const leafId = leafIdAt(p.position.x, p.position.y);
           if (leafId !== null) {
-            pasteIntoLeaf(leafId, formatDroppedPaths(p.paths));
+            pasteIntoLeaf(
+              leafId,
+              formatDroppedPaths(p.paths, cwdForLeafRef.current?.(leafId)),
+            );
           }
         }
       })

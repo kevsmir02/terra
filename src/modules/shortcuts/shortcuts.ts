@@ -1,4 +1,3 @@
-
 /**
  * Single source of truth for keyboard shortcuts.
  */
@@ -30,6 +29,10 @@ export type ShortcutId =
   | "terminal.copy"
   | "terminal.paste"
   | "terminal.newline"
+  | "terminal.prevCommand"
+  | "terminal.nextCommand"
+  | "terminal.selectLastOutput"
+  | "terminal.copyLastOutput"
   | "search.focus"
   | "explorer.search"
   | "explorer.focus"
@@ -204,6 +207,32 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [{ shift: true, key: "Enter" }],
   },
   {
+    id: "terminal.prevCommand",
+    label: "Scroll to previous command",
+    group: "Terminal",
+    defaultBindings: [{ ctrl: true, shift: true, key: "ArrowUp" }],
+    allowRepeat: true,
+  },
+  {
+    id: "terminal.nextCommand",
+    label: "Scroll to next command",
+    group: "Terminal",
+    defaultBindings: [{ ctrl: true, shift: true, key: "ArrowDown" }],
+    allowRepeat: true,
+  },
+  {
+    id: "terminal.selectLastOutput",
+    label: "Select last command output",
+    group: "Terminal",
+    defaultBindings: [],
+  },
+  {
+    id: "terminal.copyLastOutput",
+    label: "Copy last command output",
+    group: "Terminal",
+    defaultBindings: [],
+  },
+  {
     id: "tab.next",
     label: "Next tab",
     group: "Tabs",
@@ -311,7 +340,7 @@ export const SHORTCUTS: Shortcut[] = [
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface
-  // them — they don't have App-level handlers, so `useGlobalShortcuts` falls
+  // them, they don't have App-level handlers, so `useGlobalShortcuts` falls
   // through without `preventDefault`, leaving CodeMirror to handle the event.
   // Also excluded from the customization UI in ShortcutsSection.
   {
@@ -380,7 +409,7 @@ export type KeyEventLike = Pick<
 export function matchBinding(
   e: KeyEventLike,
   binding: KeyBinding,
-  id?: ShortcutId
+  id?: ShortcutId,
 ): boolean {
   const eventKey = e.key.toLowerCase();
   const bindingKey = binding.key.toLowerCase();

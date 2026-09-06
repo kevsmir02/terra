@@ -91,10 +91,14 @@ describe("builtin syntax legibility", () => {
         const onBg = ratio(c.value(cssVar), c.bg);
         if (onBg === null) continue;
         measured++;
-        expect(onBg, `${c.label} ${key} on canvas`).toBeGreaterThanOrEqual(4.48);
+        expect(onBg, `${c.label} ${key} on canvas`).toBeGreaterThanOrEqual(
+          4.48,
+        );
         const onCard = ratio(c.value(cssVar), c.card ?? "");
         if (onCard !== null) {
-          expect(onCard, `${c.label} ${key} on card`).toBeGreaterThanOrEqual(4.48);
+          expect(onCard, `${c.label} ${key} on card`).toBeGreaterThanOrEqual(
+            4.48,
+          );
         }
       }
       expect(measured, `${key} was never measurable`).toBeGreaterThan(0);
@@ -107,7 +111,9 @@ describe("builtin syntax legibility", () => {
       for (const c of cases) {
         const v = c.value(cssVar);
         if (!v) continue;
-        expect(v.toLowerCase(), `${c.label} ${key}`).not.toBe(c.bg.toLowerCase());
+        expect(v.toLowerCase(), `${c.label} ${key}`).not.toBe(
+          c.bg.toLowerCase(),
+        );
       }
     },
   );

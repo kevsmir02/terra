@@ -9,7 +9,7 @@ export type Point = { x: number; y: number };
  *
  * Each axis is judged on its own rather than by diagonal distance: the handler
  * this replaces compared only `clientY`, which classified a selection inside a
- * single line — a filename, a hash, a URL — as a click. A null origin means no
+ * single line, a filename, a hash, a URL, as a click. A null origin means no
  * matching mousedown was seen, which is never a drag.
  */
 export function isDragGesture(
@@ -25,8 +25,8 @@ export function isDragGesture(
 
 /**
  * The text worth putting on the clipboard, or null when the selection carries
- * no content. Content is returned unchanged — leading indentation is frequently
- * what the user is selecting — but a selection of only whitespace is dropped,
+ * no content. Content is returned unchanged, leading indentation is frequently
+ * what the user is selecting, but a selection of only whitespace is dropped,
  * since dragging across blank rows picks up row padding and would otherwise
  * silently replace the clipboard with spaces.
  */

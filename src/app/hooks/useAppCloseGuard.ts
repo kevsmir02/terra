@@ -1,5 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { Tab } from "@/modules/tabs";
 import { leafHasForegroundProcess, leafIds } from "@/modules/terminal";
 
@@ -17,10 +23,36 @@ export type AppCloseBlocker = {
   busyTerminal: boolean;
 };
 
-export function useAppCloseGuard(tabsRef: RefObject<Tab[]>) {
+const CLOSE_FLUSH_TIMEOUT_MS = 1500;
+
+type Options = {
+  /** Runs once a close is decided, before the window goes; bounded by a deadline. */
+  beforeClose?: () => Promise<void>;
+};
+
+export function useAppCloseGuard(
+  tabsRef: RefObject<Tab[]>,
+  { beforeClose }: Options = {},
+) {
   const [pendingAppClose, setPendingAppClose] =
     useState<AppCloseBlocker | null>(null);
   const forceClose = useRef(false);
+  const beforeCloseRef = useRef(beforeClose);
+  beforeCloseRef.current = beforeClose;
+
+  const closeNow = useCallback(async () => {
+    forceClose.current = true;
+    const work = beforeCloseRef.current?.().catch(() => undefined);
+    if (work) {
+      await Promise.race([
+        work,
+        new Promise<void>((resolve) =>
+          setTimeout(resolve, CLOSE_FLUSH_TIMEOUT_MS),
+        ),
+      ]);
+    }
+    void getCurrentWindow().close();
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -37,8 +69,7 @@ export function useAppCloseGuard(tabsRef: RefObject<Tab[]>) {
         if (dirtyEditors > 0 || busyTerminal) {
           setPendingAppClose({ dirtyEditors, busyTerminal });
         } else {
-          forceClose.current = true;
-          void getCurrentWindow().close();
+          void closeNow();
         }
       })
       .then((un) => {
@@ -49,13 +80,12 @@ export function useAppCloseGuard(tabsRef: RefObject<Tab[]>) {
       disposed = true;
       unlisten?.();
     };
-  }, [tabsRef]);
+  }, [tabsRef, closeNow]);
 
   const confirmAppClose = useCallback(() => {
     setPendingAppClose(null);
-    forceClose.current = true;
-    void getCurrentWindow().close();
-  }, []);
+    void closeNow();
+  }, [closeNow]);
 
   const cancelAppClose = useCallback(() => setPendingAppClose(null), []);
 

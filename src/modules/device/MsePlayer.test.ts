@@ -37,7 +37,10 @@ class FakeSourceBuffer extends EventTarget {
     super.addEventListener(type, listener);
   }
 
-  removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ) {
     this.listenerCounts.set(type, (this.listenerCounts.get(type) ?? 0) - 1);
     super.removeEventListener(type, listener);
   }
@@ -111,7 +114,10 @@ const CODEC = "avc1.42001E";
 // never offset 0. pushData must anchor its DataView at payload.byteOffset,
 // not payload.buffer directly; a fixture at offset 0 would pass even if that
 // anchoring regressed, so every payload built here carries a real offset.
-function withDiscriminator(kind: number, bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+function withDiscriminator(
+  kind: number,
+  bytes: Uint8Array,
+): Uint8Array<ArrayBuffer> {
   const encoded = new Uint8Array(1 + bytes.length);
   encoded[0] = kind;
   encoded.set(bytes, 1);
@@ -183,12 +189,21 @@ describe("MsePlayer append cycle", () => {
     player.pushData(1, fragment(2));
 
     const sb = lastSourceBuffer();
-    expect(lastMediaSource().mimeTypes).toEqual([`video/mp4; codecs="${CODEC}"`]);
+    expect(lastMediaSource().mimeTypes).toEqual([
+      `video/mp4; codecs="${CODEC}"`,
+    ]);
     expect(bytes(sb.appended)).toEqual([[9, 9]]);
     sb.finish();
-    expect(bytes(sb.appended)).toEqual([[9, 9], [1, 1, 1]]);
+    expect(bytes(sb.appended)).toEqual([
+      [9, 9],
+      [1, 1, 1],
+    ]);
     sb.finish();
-    expect(bytes(sb.appended)).toEqual([[9, 9], [1, 1, 1], [2, 2, 2]]);
+    expect(bytes(sb.appended)).toEqual([
+      [9, 9],
+      [1, 1, 1],
+      [2, 2, 2],
+    ]);
   });
 
   it("waits for sourceopen before creating the SourceBuffer", () => {
@@ -210,7 +225,9 @@ describe("MsePlayer init segment validation", () => {
     const onError = vi.fn<(message: string) => void>();
     const player = new MsePlayer(fakeVideo(), onError);
 
-    expect(() => player.pushData(0, withDiscriminator(0, new Uint8Array([1, 2, 3])))).not.toThrow();
+    expect(() =>
+      player.pushData(0, withDiscriminator(0, new Uint8Array([1, 2, 3]))),
+    ).not.toThrow();
 
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toMatch(/too short/i);
@@ -241,7 +258,10 @@ describe("MsePlayer buffer trimming", () => {
     expect(sb.appended).toHaveLength(1);
 
     sb.finish();
-    expect(bytes(sb.appended)).toEqual([[9, 9], [1, 1, 1]]);
+    expect(bytes(sb.appended)).toEqual([
+      [9, 9],
+      [1, 1, 1],
+    ]);
 
     player.pushData(1, fragment(2));
     sb.finish();
@@ -311,9 +331,14 @@ describe("MsePlayer live catch-up (rule 2)", () => {
 
     player.pushData(1, fragment(1));
 
-    expect(video.currentTime).toBe(10 - PLAYBACK_POLICY.liveTargetOffsetSeconds);
+    expect(video.currentTime).toBe(
+      10 - PLAYBACK_POLICY.liveTargetOffsetSeconds,
+    );
     // The seek does not gate the append: it lands in the same tick.
-    expect(bytes(sb.appended)).toEqual([[9, 9], [1, 1, 1]]);
+    expect(bytes(sb.appended)).toEqual([
+      [9, 9],
+      [1, 1, 1],
+    ]);
   });
 
   it("does not warn for a routine live catch-up from within a continuous range", () => {
@@ -341,7 +366,9 @@ describe("MsePlayer live catch-up (rule 2)", () => {
 
     player.pushData(1, fragment(1));
 
-    expect(video.currentTime).toBe(20 - PLAYBACK_POLICY.liveTargetOffsetSeconds);
+    expect(video.currentTime).toBe(
+      20 - PLAYBACK_POLICY.liveTargetOffsetSeconds,
+    );
     expect(warn).not.toHaveBeenCalled();
   });
 });
@@ -358,7 +385,10 @@ describe("MsePlayer append failures", () => {
     expect(sb.appended).toHaveLength(1);
 
     sb.finish();
-    expect(bytes(sb.appended)).toEqual([[9, 9], [7, 7, 7]]);
+    expect(bytes(sb.appended)).toEqual([
+      [9, 9],
+      [7, 7, 7],
+    ]);
     expect(onError).not.toHaveBeenCalled();
   });
 

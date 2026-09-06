@@ -21,7 +21,10 @@ import {
   EXPOSED_LANGUAGES,
 } from "@/modules/editor/lib/languageDefinitions";
 import { resolveDisplayName } from "@/modules/editor/lib/languageResolver";
-import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
+import {
+  FileIconView,
+  useIconProvider,
+} from "@/modules/explorer/lib/iconProvider";
 import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import {
   leafIds,
@@ -388,7 +391,10 @@ export function TabBar({
                             }}
                             className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-default focus:bg-accent focus:text-accent-foreground"
                           >
-                            <FileIconView icon={icons.file(t.title)} className="size-3.5" />
+                            <FileIconView
+                              icon={icons.file(t.title)}
+                              className="size-3.5"
+                            />
                             <div className="flex flex-1 flex-col">
                               <span>Auto Detect</span>
                               <span className="text-[10px] text-muted-foreground italic">
@@ -449,7 +455,12 @@ export function TabBar({
                     )}
                     {/* Preview tabs use italic to signal the transient state,
                         matching the visual convention from VSCode. */}
-                    <span className={cn("terra-label truncate", isPreview && "italic")}>
+                    <span
+                      className={cn(
+                        "terra-label truncate",
+                        isPreview && "italic",
+                      )}
+                    >
                       {labelFor(t)}
                     </span>
                     {t.kind === "editor" && t.dirty ? (
@@ -714,7 +725,9 @@ export function TabIcon({ tab }: { tab: Tab }) {
     );
   }
   if (agentStatus.state === "working" && agentStatus.agent) {
-    return <AgentIcon agent={agentStatus.agent} size={14} className="shrink-0" />;
+    return (
+      <AgentIcon agent={agentStatus.agent} size={14} className="shrink-0" />
+    );
   }
   return (
     <HugeiconsIcon

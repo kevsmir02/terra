@@ -12,6 +12,7 @@ use crate::modules::git::types::{
     GitDiffContentResult, GitDiffResult, GitLogEntry, GitOutput, GitPanelSnapshot,
     GitPushResult, GitRepoInfo, GitStatusSnapshot, TextSource, DEFAULT_TIMEOUT_SECS,
     NETWORK_TIMEOUT_SECS,
+    GitStashEntry,
 };
 use crate::modules::git::utils::{
     authorized_repo_root, canonical_dir, resolve_within_repo, split_upstream,
@@ -393,21 +394,145 @@ pub fn commit(
         return Err(GitError::command("git commit", "nothing staged"));
     }
     ensure_success(&output, "git commit failed")?;
+    head_commit_result(&repo_root.git_path)
+}
 
-    let combined = git_stdout_lines(
-        &repo_root.git_path,
-        ["show", "-s", "--format=%H%n%s", "HEAD"],
-    )?;
+fn head_commit_result(git_path: &str) -> Result<GitCommitResult> {
+    let combined = git_stdout_lines(git_path, ["show", "-s", "--format=%H%n%s", "HEAD"])?;
     let sha = combined.first().cloned().ok_or(GitError::CommandFailed {
         context: "failed to resolve commit sha",
         detail: String::new(),
     })?;
     let summary = combined.get(1).cloned().unwrap_or_default();
-
     Ok(GitCommitResult {
         commit_sha: sha,
         summary,
     })
+}
+
+/// Rewrites HEAD with the staged changes; an empty message keeps the old one.
+pub fn commit_amend(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    message: &str,
+) -> Result<GitCommitResult> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let trimmed = message.trim();
+    let mut args: Vec<OsString> = vec!["commit".into(), "--amend".into()];
+    if trimmed.is_empty() {
+        args.push("--no-edit".into());
+    } else {
+        args.push("-m".into());
+        args.push(trimmed.into());
+    }
+    let output = run_git(Some(&repo_root.git_path), &args, DEFAULT_TIMEOUT_SECS)?;
+    ensure_success(&output, "git commit --amend failed")?;
+    head_commit_result(&repo_root.git_path)
+}
+
+/// Returns false when there was nothing to stash.
+pub fn stash_push(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    message: &str,
+) -> Result<bool> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let trimmed = message.trim();
+    let mut args: Vec<OsString> =
+        vec!["stash".into(), "push".into(), "--include-untracked".into()];
+    if !trimmed.is_empty() {
+        args.push("-m".into());
+        args.push(trimmed.into());
+    }
+    let output = run_git(Some(&repo_root.git_path), &args, DEFAULT_TIMEOUT_SECS)?;
+    ensure_success(&output, "git stash push failed")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(!stdout.contains("No local changes to save"))
+}
+
+pub fn stash_pop(registry: &WorkspaceRegistry, repo_root: &str) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let output = run_git(
+        Some(&repo_root.git_path),
+        ["stash", "pop"],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git stash pop failed")
+}
+
+pub fn stash_list(registry: &WorkspaceRegistry, repo_root: &str) -> Result<Vec<GitStashEntry>> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let lines = git_stdout_lines(
+        &repo_root.git_path,
+        ["stash", "list", "--format=%gd%x00%s"],
+    )?;
+    Ok(parse_stash_list(&lines))
+}
+
+fn parse_stash_list(lines: &[String]) -> Vec<GitStashEntry> {
+    lines
+        .iter()
+        .filter_map(|line| {
+            let (name, message) = line.split_once('\0')?;
+            if name.is_empty() {
+                return None;
+            }
+            Some(GitStashEntry {
+                name: name.to_string(),
+                message: message.to_string(),
+            })
+        })
+        .collect()
+}
+
+pub fn create_branch(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    name: &str,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    if !is_safe_branch_name(name) {
+        return Err(GitError::InvalidPath(name.into()));
+    }
+    let output = run_git(
+        Some(&repo_root.git_path),
+        ["switch", "-c", name],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git switch -c failed")
+}
+
+/// The shapes git check-ref-format --branch accepts, minus anything that
+/// could read as an argument: no leading dash, no whitespace or control
+/// bytes, none of git's reserved punctuation, no empty or dot-led components.
+pub fn is_safe_branch_name(name: &str) -> bool {
+    if name.is_empty()
+        || name.len() > 255
+        || name.starts_with('-')
+        || name.starts_with('/')
+        || name.ends_with('/')
+        || name.ends_with('.')
+        || name.contains("..")
+        || name.contains("@{")
+        || name.contains("//")
+        || name == "@"
+    {
+        return false;
+    }
+    if name.chars().any(|c| {
+        c.is_control()
+            || c.is_whitespace()
+            || matches!(c, '~' | '^' | ':' | '?' | '*' | '[' | '\\')
+    }) {
+        return false;
+    }
+    name.split('/')
+        .all(|part| !part.is_empty() && !part.starts_with('.') && !part.ends_with(".lock"))
 }
 
 pub fn push(
@@ -1062,7 +1187,7 @@ fn push_worktree(
     let name = if let Some(ref b) = branch {
         b.clone()
     } else if let Some(ref sha) = head_sha {
-        // if detached HEAD with no branch — show shortened SHA as name
+        // if detached HEAD with no branch, show shortened SHA as name
         let short = if sha.len() >= 7 { &sha[..7] } else { sha.as_str() };
         format!("(detached @ {})", short)
     } else {
@@ -1098,6 +1223,41 @@ pub fn checkout_branch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn branch_names_that_git_accepts_pass() {
+        for name in ["main", "feature/x-1", "fix.thing", "v1.2", "a/b/c"] {
+            assert!(is_safe_branch_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn branch_names_that_read_as_arguments_or_bad_refs_fail() {
+        for name in [
+            "", "-x", "--force", "a b", "a\tb", "a..b", "a/.b", "x.lock", "a@{1}",
+            "a:b", "/a", "a/", "a.", "a?b", "a*b", "a[b", "a\\b", "a~b", "a^b",
+            "@", "a//b",
+        ] {
+            assert!(!is_safe_branch_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn stash_list_parses_name_and_message_and_skips_junk() {
+        let lines = vec![
+            "stash@{0}\0WIP on main: abc".to_string(),
+            "stash@{1}\0saved".to_string(),
+            "garbage".to_string(),
+            "\0no name".to_string(),
+        ];
+        assert_eq!(
+            parse_stash_list(&lines),
+            vec![
+                GitStashEntry { name: "stash@{0}".into(), message: "WIP on main: abc".into() },
+                GitStashEntry { name: "stash@{1}".into(), message: "saved".into() },
+            ]
+        );
+    }
 
     #[test]
     fn sha_is_safe_accepts_hex() {

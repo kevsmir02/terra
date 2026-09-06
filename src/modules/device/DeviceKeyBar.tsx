@@ -1,5 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft01Icon, Home01Icon, SquareIcon } from "@hugeicons/core-free-icons";
+import {
+  ArrowLeft01Icon,
+  Home01Icon,
+  SquareIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 type Keycodes = {

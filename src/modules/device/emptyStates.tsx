@@ -36,7 +36,9 @@ function Shell({
           icon={icon}
           size={18}
           strokeWidth={1.5}
-          className={tone === "failure" ? "text-destructive" : "text-muted-foreground"}
+          className={
+            tone === "failure" ? "text-destructive" : "text-muted-foreground"
+          }
         />
       </div>
       <p className="text-[12.5px] font-medium text-foreground">{title}</p>
@@ -65,14 +67,26 @@ export function AdbMissing({ narrow }: { narrow?: boolean }) {
   );
 }
 
-export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: () => void }) {
-  const { avds, boot, error, busy, launch, stop, create } = useAvds(() => onRefresh());
+export function NoDevices({
+  narrow,
+  onRefresh,
+}: {
+  narrow?: boolean;
+  onRefresh: () => void;
+}) {
+  const { avds, boot, error, busy, launch, stop, create } = useAvds(() =>
+    onRefresh(),
+  );
 
   return (
-    <Shell title="No active devices connected" icon={SmartPhone01Icon} narrow={narrow}>
+    <Shell
+      title="No active devices connected"
+      icon={SmartPhone01Icon}
+      narrow={narrow}
+    >
       <p className="mb-2">
-        Plug in a physical device via USB, or launch an emulator below. It runs headless and
-        streams here, so no separate emulator window opens.
+        Plug in a physical device via USB, or launch an emulator below. It runs
+        headless and streams here, so no separate emulator window opens.
       </p>
 
       {error && <p className="mb-2 break-words text-destructive">{error}</p>}
@@ -92,7 +106,11 @@ export function NoDevices({ narrow, onRefresh }: { narrow?: boolean; onRefresh: 
                 >
                   <span className="truncate">{avd.name}</span>
                   <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
-                    {booting ? BOOT_PHASE_LABEL[boot.phase] : runningSerial ? "Running" : "Launch"}
+                    {booting
+                      ? BOOT_PHASE_LABEL[boot.phase]
+                      : runningSerial
+                        ? "Running"
+                        : "Launch"}
                   </span>
                 </button>
                 {avd.managed && runningSerial && (
@@ -157,9 +175,17 @@ export function ServerFailed({
   onRetry: () => void;
 }) {
   return (
-    <Shell title="Device preview failed to start" icon={AlertCircleIcon} tone="failure" narrow={narrow}>
+    <Shell
+      title="Device preview failed to start"
+      icon={AlertCircleIcon}
+      tone="failure"
+      narrow={narrow}
+    >
       <p className="break-words">{message}</p>
-      <p className="mt-1">Possibly unsupported Android version for the bundled scrcpy server; check the JAR version in About.</p>
+      <p className="mt-1">
+        Possibly unsupported Android version for the bundled scrcpy server;
+        check the JAR version in About.
+      </p>
       <button
         type="button"
         onClick={onRetry}

@@ -10,7 +10,6 @@ import { useTerminalDropStore } from "./lib/dropStore";
 import { firstLeafSlotId, type PaneNode } from "./lib/panes";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
-
 type LeafBundle = {
   setRef: (h: TerminalPaneHandle | null) => void;
   onSearchReady: (leafId: number, addon: SearchAddon) => void;
@@ -39,7 +38,7 @@ export function PaneTreeView(props: Props) {
           if (!focused) onFocusLeaf(node.id);
         }}
         // Catches focus from Tab, programmatic focus, or any path that
-        // skips mousedown — keeps activeLeafId in sync with DOM focus.
+        // skips mousedown, keeps activeLeafId in sync with DOM focus.
         onFocus={() => {
           if (!focused) onFocusLeaf(node.id);
         }}

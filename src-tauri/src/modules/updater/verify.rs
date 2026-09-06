@@ -2,7 +2,7 @@ use base64::Engine;
 use minisign_verify::{PublicKey, Signature};
 
 /// Verifies `data` against `signature` using the pubkey exactly as stored in
-/// `tauri.conf.json` — base64 of the two-line minisign public key file.
+/// `tauri.conf.json`, base64 of the two-line minisign public key file.
 pub fn verify(pubkey_field: &str, data: &[u8], signature: &str) -> Result<(), String> {
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(pubkey_field.trim())
@@ -27,7 +27,7 @@ pub fn verify(pubkey_field: &str, data: &[u8], signature: &str) -> Result<(), St
 mod tests {
     use super::*;
 
-    // Throwaway keypair generated for tests only — see the plan's Task 3.
+    // Throwaway keypair generated for tests only, see the plan's Task 3.
     const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzMjg0MUQ2NThDNEFFRjAKUldUd3JzUlkxa0VvUS8vdTFWUUpYS1ZUWC9aUU5WbkphT2VKcm5reUhSdWpXcnRsaFA0T0Vtb2YK";
     const FIXTURE_SIG: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUd3JzUlkxa0VvUTZwTG9Nb0lONXQ4TkFzbTNwYjNmTk1OVXZHQnA0TzVaaWszZ0xPSEZXQStTaFVWQTBzWW82WXYzcDBJQW9pQ2t1OXFyTnI2RzVMWnZNNSsveUxGd0FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1MDg1Njg3CWZpbGU6Zml4dHVyZS5iaW4KalJ5RDU4SEVXNEtPckhPTWw1RGJnWEoxWjBJUXJZUjNZOXBPWEVCb2U2N0tKSHBORUNTM3dVYXRsZjJRN1BRejJTdXNxYlE3N2VwZkRFSEN5L0pLQ0E9PQo=";
     const FIXTURE_DATA: &[u8] = b"terra updater fixture\n";

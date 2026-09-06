@@ -24,7 +24,7 @@ type Props = {
   onUrlChange: (url: string) => void;
 };
 
-// Tear the iframe down after this much invisibility — a background dev
+// Tear the iframe down after this much invisibility, a background dev
 // server page can hold hundreds of MB inside the WebView.
 const SUSPEND_AFTER_MS = 30_000;
 
@@ -106,7 +106,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, Props>(
                 // sandbox grants the bare minimum for a dev preview: scripts,
                 // same-origin (cookies/storage for the previewed app), forms,
                 // popups for "open in new tab". Critically OMITS
-                // `allow-top-navigation*` — without it the iframe cannot
+                // `allow-top-navigation*`, without it the iframe cannot
                 // navigate the parent Tauri webview to an attacker origin,
                 // which would otherwise expose `window.__TAURI__` IPC.
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
@@ -171,8 +171,8 @@ function EmptyState() {
             Ports
           </span>{" "}
           dropdown to jump straight to your running dev server. Public sites
-          often block embedding — open them in your browser via the link icon
-          if you see a blank page.
+          often block embedding; open them in your browser via the link icon if
+          you see a blank page.
         </p>
       </div>
     </div>

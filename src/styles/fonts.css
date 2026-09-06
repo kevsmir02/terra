@@ -1,0 +1,107 @@
+/* Bundled from Nerd Fonts v3.5.1 (src/assets/fonts, OFL licensed). A face is
+   parsed only when text renders in it, so unused families cost disk, not
+   startup. src/styles/fonts.test.ts keeps this list and src/lib/fonts.ts in
+   step. */
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFont-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFont-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFont-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: italic;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFont-BoldItalic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFontMono-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  font-style: italic;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/jetbrains-mono/JetBrainsMonoNerdFontMono-BoldItalic.woff2") format("woff2");
+}
+
+/* Fira Code has no italic; the browser slants the upright face. */
+@font-face {
+  font-family: "FiraCode Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/fira-code/FiraCodeNerdFontMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "FiraCode Nerd Font Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/fira-code/FiraCodeNerdFontMono-Bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "CaskaydiaCove Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/cascadia-code/CaskaydiaCoveNerdFontMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CaskaydiaCove Nerd Font Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/cascadia-code/CaskaydiaCoveNerdFontMono-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CaskaydiaCove Nerd Font Mono";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/cascadia-code/CaskaydiaCoveNerdFontMono-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "CaskaydiaCove Nerd Font Mono";
+  font-style: italic;
+  font-weight: 700;
+  font-display: block;
+  src: url("../assets/fonts/cascadia-code/CaskaydiaCoveNerdFontMono-BoldItalic.woff2") format("woff2");
+}

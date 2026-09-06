@@ -51,14 +51,22 @@ export function playbackPolicy(
   if (liveEdge - currentTime > policy.liveLagThresholdSeconds) {
     // Behind by more than the lag threshold is a stall: rejoin near live
     // instead of playing out the backlog in real time.
-    seekTo = Math.max(liveEdge - policy.liveTargetOffsetSeconds, lastRange.start);
+    seekTo = Math.max(
+      liveEdge - policy.liveTargetOffsetSeconds,
+      lastRange.start,
+    );
     seekReason = "live";
   } else {
-    const insideAny = buffered.some((r) => currentTime >= r.start && currentTime <= r.end);
+    const insideAny = buffered.some(
+      (r) => currentTime >= r.start && currentTime <= r.end,
+    );
     if (!insideAny) {
       let nextStart: number | undefined;
       for (const r of buffered) {
-        if (r.start > currentTime && (nextStart === undefined || r.start < nextStart)) {
+        if (
+          r.start > currentTime &&
+          (nextStart === undefined || r.start < nextStart)
+        ) {
           nextStart = r.start;
         }
       }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { PLAYBACK_POLICY, type PlaybackState, playbackPolicy } from "./playbackPolicy";
+import {
+  PLAYBACK_POLICY,
+  type PlaybackState,
+  playbackPolicy,
+} from "./playbackPolicy";
 
 describe("playbackPolicy", () => {
   it("takes no action when there is nothing buffered", () => {
@@ -8,19 +12,28 @@ describe("playbackPolicy", () => {
   });
 
   it("takes no action when within both the lag and evict thresholds", () => {
-    const state: PlaybackState = { currentTime: 9.5, buffered: [{ start: 0, end: 10 }] };
+    const state: PlaybackState = {
+      currentTime: 9.5,
+      buffered: [{ start: 0, end: 10 }],
+    };
     expect(playbackPolicy(state)).toEqual({});
   });
 
   it("seeks to just behind live once the lag threshold is crossed", () => {
-    const state: PlaybackState = { currentTime: 5, buffered: [{ start: 0, end: 10 }] };
+    const state: PlaybackState = {
+      currentTime: 5,
+      buffered: [{ start: 0, end: 10 }],
+    };
     expect(playbackPolicy(state)).toEqual({ seekTo: 9.9, seekReason: "live" });
   });
 
   it("evicts exactly the configured window behind the playhead", () => {
     // currentTime - firstStart = 29.5 > 24, so it evicts; the surviving
     // window (currentTime - evictBefore) is exactly keepBehindSeconds (12).
-    const state: PlaybackState = { currentTime: 29.5, buffered: [{ start: 0, end: 30 }] };
+    const state: PlaybackState = {
+      currentTime: 29.5,
+      buffered: [{ start: 0, end: 30 }],
+    };
     const intent = playbackPolicy(state);
     expect(intent.evictBefore).toBe(17.5);
     expect(state.currentTime - (intent.evictBefore as number)).toBe(12);
@@ -29,12 +42,18 @@ describe("playbackPolicy", () => {
   });
 
   it("takes no action at stream start when the buffer barely leads the playhead", () => {
-    const state: PlaybackState = { currentTime: 0, buffered: [{ start: 0, end: 0.5 }] };
+    const state: PlaybackState = {
+      currentTime: 0,
+      buffered: [{ start: 0, end: 0.5 }],
+    };
     expect(playbackPolicy(state)).toEqual({});
   });
 
   it("seeks to just behind live at stream start once the buffer leads by more than the lag threshold", () => {
-    const state: PlaybackState = { currentTime: 0, buffered: [{ start: 0, end: 3 }] };
+    const state: PlaybackState = {
+      currentTime: 0,
+      buffered: [{ start: 0, end: 3 }],
+    };
     const intent = playbackPolicy(state);
     expect(intent).toEqual({ seekTo: 2.9, seekReason: "live" });
     expect(intent.evictBefore).toBeUndefined();
@@ -84,12 +103,18 @@ describe("playbackPolicy", () => {
   it("does not heal when the playhead sits outside every range but nothing lies ahead of it", () => {
     // currentTime (10) is ahead of the only range's end (5), so it is
     // outside every range, but there is no later range to heal into.
-    const state: PlaybackState = { currentTime: 10, buffered: [{ start: 0, end: 5 }] };
+    const state: PlaybackState = {
+      currentTime: 10,
+      buffered: [{ start: 0, end: 5 }],
+    };
     expect(playbackPolicy(state)).toEqual({});
   });
 
   it("combines a live-catch-up seek with an eviction in one intent", () => {
-    const state: PlaybackState = { currentTime: 29, buffered: [{ start: 0, end: 40 }] };
+    const state: PlaybackState = {
+      currentTime: 29,
+      buffered: [{ start: 0, end: 40 }],
+    };
     const intent = playbackPolicy(state);
     expect(intent.seekTo).toBe(39.9);
     expect(intent.seekReason).toBe("live");
@@ -99,14 +124,28 @@ describe("playbackPolicy", () => {
   it("never evicts when the reclaimable window would not clear the buffer start", () => {
     // Quota-retry policy: thresholds zeroed, so eviction is only guarded by
     // evictBefore having to exceed firstStart.
-    const zeroed = { ...PLAYBACK_POLICY, keepBehindSeconds: 0, evictThresholdSeconds: 0 };
-    const state: PlaybackState = { currentTime: 0, buffered: [{ start: 0, end: 0 }] };
+    const zeroed = {
+      ...PLAYBACK_POLICY,
+      keepBehindSeconds: 0,
+      evictThresholdSeconds: 0,
+    };
+    const state: PlaybackState = {
+      currentTime: 0,
+      buffered: [{ start: 0, end: 0 }],
+    };
     expect(playbackPolicy(state, zeroed)).toEqual({});
   });
 
   it("reclaims everything up to the playhead under the quota-retry policy", () => {
-    const zeroed = { ...PLAYBACK_POLICY, keepBehindSeconds: 0, evictThresholdSeconds: 0 };
-    const state: PlaybackState = { currentTime: 9.5, buffered: [{ start: 0, end: 10 }] };
+    const zeroed = {
+      ...PLAYBACK_POLICY,
+      keepBehindSeconds: 0,
+      evictThresholdSeconds: 0,
+    };
+    const state: PlaybackState = {
+      currentTime: 9.5,
+      buffered: [{ start: 0, end: 10 }],
+    };
     expect(playbackPolicy(state, zeroed)).toEqual({ evictBefore: 9.5 });
   });
 
@@ -119,7 +158,10 @@ describe("playbackPolicy", () => {
       keepBehindSeconds: 30,
       evictThresholdSeconds: 5,
     };
-    const state: PlaybackState = { currentTime: 10, buffered: [{ start: 0, end: 10.5 }] };
+    const state: PlaybackState = {
+      currentTime: 10,
+      buffered: [{ start: 0, end: 10.5 }],
+    };
     expect(playbackPolicy(state, policy).evictBefore).toBeUndefined();
   });
 });

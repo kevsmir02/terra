@@ -1,3 +1,8 @@
+import {
+  DEFAULT_TERMINAL_FONT,
+  migrateTerminalFont,
+  type TerminalFontId,
+} from "@/lib/fonts";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
@@ -109,10 +114,12 @@ export type Preferences = {
   editorWordWrap: boolean;
   showHidden: boolean;
   explorerGitDecorations: boolean;
+  explorerOpenOnDoubleClick: boolean;
   terminalWebglEnabled: boolean;
   terminalCursorBlink: boolean;
   terminalCopyOnSelect: boolean;
   terminalFontFamily: string;
+  terminalFont: TerminalFontId;
   terminalFontWeight: string;
   terminalShell: string;
   terminalLetterSpacing: number;
@@ -156,10 +163,12 @@ const KEY_EDITOR_WORD_WRAP = "editorWordWrap";
 const KEY_SHOW_HIDDEN = "showHidden";
 const LEGACY_KEY_SHOW_HIDDEN_DIRS = "showHiddenDirectories";
 const KEY_EXPLORER_GIT_DECORATIONS = "explorerGitDecorations";
+const KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK = "explorerOpenOnDoubleClick";
 const KEY_TERMINAL_WEBGL_ENABLED = "terminalWebglEnabled";
 const KEY_TERMINAL_CURSOR_BLINK = "terminalCursorBlink";
 const KEY_TERMINAL_COPY_ON_SELECT = "terminalCopyOnSelect";
 const KEY_TERMINAL_FONT_FAMILY = "terminalFontFamily";
+const KEY_TERMINAL_FONT = "terminalFont";
 const KEY_TERMINAL_FONT_WEIGHT = "terminalFontWeight";
 const KEY_TERMINAL_SHELL = "terminalShell";
 const KEY_TERMINAL_LETTER_SPACING = "terminalLetterSpacing";
@@ -210,10 +219,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorWordWrap: false,
   showHidden: false,
   explorerGitDecorations: true,
+  explorerOpenOnDoubleClick: false,
   terminalWebglEnabled: true,
   terminalCursorBlink: false,
   terminalCopyOnSelect: false,
   terminalFontFamily: "",
+  terminalFont: DEFAULT_TERMINAL_FONT,
   terminalFontWeight: "normal",
   terminalShell: "",
   terminalLetterSpacing: 0,
@@ -244,7 +255,7 @@ async function writePref<T>(key: string, value: T): Promise<void> {
 }
 
 export async function loadPreferences(): Promise<Preferences> {
-  // Single IPC roundtrip — fetching keys individually fans out to one
+  // Single IPC roundtrip, fetching keys individually fans out to one
   // `plugin:store|get` per setting and is the dominant boot cost.
   const entries = await store.entries();
   const map = new Map<string, unknown>(entries);
@@ -285,6 +296,9 @@ export async function loadPreferences(): Promise<Preferences> {
     explorerGitDecorations:
       get<boolean>(KEY_EXPLORER_GIT_DECORATIONS) ??
       DEFAULT_PREFERENCES.explorerGitDecorations,
+    explorerOpenOnDoubleClick:
+      get<boolean>(KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK) ??
+      DEFAULT_PREFERENCES.explorerOpenOnDoubleClick,
     terminalWebglEnabled:
       get<boolean>(KEY_TERMINAL_WEBGL_ENABLED) ??
       DEFAULT_PREFERENCES.terminalWebglEnabled,
@@ -297,6 +311,10 @@ export async function loadPreferences(): Promise<Preferences> {
     terminalFontFamily:
       get<string>(KEY_TERMINAL_FONT_FAMILY) ??
       DEFAULT_PREFERENCES.terminalFontFamily,
+    terminalFont: migrateTerminalFont(
+      get<string>(KEY_TERMINAL_FONT),
+      get<string>(KEY_TERMINAL_FONT_FAMILY) ?? "",
+    ),
     terminalFontWeight: coerceFontWeight(
       get<string>(KEY_TERMINAL_FONT_WEIGHT) ??
         DEFAULT_PREFERENCES.terminalFontWeight,
@@ -366,7 +384,7 @@ export async function setThemeId(value: string): Promise<void> {
 }
 
 /** Slider stores 0..1. Actual rendered opacity is halved in SurfaceLayer
- *  so the image never exceeds 50% — keeps UI/terminal readable at any setting. */
+ *  so the image never exceeds 50%, keeps UI/terminal readable at any setting. */
 export const BG_OPACITY_RENDER_FACTOR = 0.5;
 
 function clampBgOpacity(v: number): number {
@@ -433,6 +451,12 @@ export async function setExplorerGitDecorations(value: boolean): Promise<void> {
   await writePref(KEY_EXPLORER_GIT_DECORATIONS, value);
 }
 
+export async function setExplorerOpenOnDoubleClick(
+  value: boolean,
+): Promise<void> {
+  await writePref(KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK, value);
+}
+
 export async function setTerminalWebglEnabled(value: boolean): Promise<void> {
   await writePref(KEY_TERMINAL_WEBGL_ENABLED, value);
 }
@@ -447,6 +471,10 @@ export async function setTerminalCopyOnSelect(value: boolean): Promise<void> {
 
 export async function setTerminalFontFamily(value: string): Promise<void> {
   await writePref(KEY_TERMINAL_FONT_FAMILY, value.trim());
+}
+
+export async function setTerminalFont(value: TerminalFontId): Promise<void> {
+  await writePref(KEY_TERMINAL_FONT, value);
 }
 
 const TERMINAL_FONT_WEIGHT_VALUES = new Set(["normal", "500", "600", "bold"]);
@@ -554,10 +582,12 @@ export async function onPreferencesChange(
     [KEY_EDITOR_WORD_WRAP]: "editorWordWrap",
     [KEY_SHOW_HIDDEN]: "showHidden",
     [KEY_EXPLORER_GIT_DECORATIONS]: "explorerGitDecorations",
+    [KEY_EXPLORER_OPEN_ON_DOUBLE_CLICK]: "explorerOpenOnDoubleClick",
     [KEY_TERMINAL_WEBGL_ENABLED]: "terminalWebglEnabled",
     [KEY_TERMINAL_CURSOR_BLINK]: "terminalCursorBlink",
     [KEY_TERMINAL_COPY_ON_SELECT]: "terminalCopyOnSelect",
     [KEY_TERMINAL_FONT_FAMILY]: "terminalFontFamily",
+    [KEY_TERMINAL_FONT]: "terminalFont",
     [KEY_TERMINAL_FONT_WEIGHT]: "terminalFontWeight",
     [KEY_TERMINAL_SHELL]: "terminalShell",
     [KEY_TERMINAL_LETTER_SPACING]: "terminalLetterSpacing",

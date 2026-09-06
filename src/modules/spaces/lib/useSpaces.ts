@@ -47,8 +47,19 @@ export const useSpaces = create<State>((set, get) => ({
   initialActiveIndex: {},
   panelSizesBySpace: {},
 
-  hydrate: (spaces, activeId, initialActiveIndex = {}, panelSizesBySpace = {}) => {
-    set({ spaces, activeId, initialActiveIndex, panelSizesBySpace, hydrated: true });
+  hydrate: (
+    spaces,
+    activeId,
+    initialActiveIndex = {},
+    panelSizesBySpace = {},
+  ) => {
+    set({
+      spaces,
+      activeId,
+      initialActiveIndex,
+      panelSizesBySpace,
+      hydrated: true,
+    });
   },
 
   create: (input) => {

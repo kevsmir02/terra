@@ -102,7 +102,7 @@ async fn open_settings_window(app: tauri::AppHandle, tab: Option<String>) -> Res
         let _ = window.show();
         let _ = window.set_focus();
         if let Some(t) = tab.as_deref().filter(|s| !s.is_empty()) {
-            // emit() serializes via JSON — no string-escape footgun, unlike
+            // emit() serializes via JSON, no string-escape footgun, unlike
             // eval() with format!(). Frontend listens via Tauri event API.
             let _ = window.emit("terra:settings-tab", t);
         }
@@ -159,7 +159,7 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        // Skip restoring VISIBLE — frontend calls window.show() after first
+        // Skip restoring VISIBLE, frontend calls window.show() after first
         // paint so the user never sees a transparent window-shadow flash on
         // Windows/Linux.
         .plugin(
@@ -266,6 +266,11 @@ pub fn run() {
             git::commands::git_remote_url,
             git::commands::git_list_branches,
             git::commands::git_checkout_branch,
+            git::commands::git_commit_amend,
+            git::commands::git_stash_push,
+            git::commands::git_stash_pop,
+            git::commands::git_stash_list,
+            git::commands::git_create_branch,
             updater::updater_package_kind,
             updater::updater_download,
             updater::updater_install,

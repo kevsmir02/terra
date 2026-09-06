@@ -127,6 +127,11 @@ export type GitBranchListResult = {
   branches: GitBranchEntry[];
 };
 
+export type GitStashEntry = {
+  name: string;
+  message: string;
+};
+
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
   workspaceAuthorize: (path: string) =>
@@ -151,10 +156,8 @@ export const native = {
     invoke<string>("fs_canonicalize", {
       path,
     }),
-  createFile: (path: string) =>
-    invoke<void>("fs_create_file", { path }),
-  createDir: (path: string) =>
-    invoke<void>("fs_create_dir", { path }),
+  createFile: (path: string) => invoke<void>("fs_create_file", { path }),
+  createDir: (path: string) => invoke<void>("fs_create_dir", { path }),
   readDir: (path: string) =>
     invoke<DirEntry[]>("fs_read_dir", {
       path,
@@ -242,7 +245,10 @@ export const native = {
     invoke<GitPushResult>("git_push", {
       repoRoot,
     }),
-  gitLog: (repoRoot: string, options?: { limit?: number; beforeSha?: string }) =>
+  gitLog: (
+    repoRoot: string,
+    options?: { limit?: number; beforeSha?: string },
+  ) =>
     invoke<GitLogEntry[]>("git_log", {
       repoRoot,
       limit: options?.limit ?? null,
@@ -283,5 +289,28 @@ export const native = {
     invoke<void>("git_checkout_branch", {
       repoRoot,
       branch,
+    }),
+  gitCommitAmend: (repoRoot: string, message: string) =>
+    invoke<GitCommitResult>("git_commit_amend", {
+      repoRoot,
+      message,
+    }),
+  gitStashPush: (repoRoot: string, message: string) =>
+    invoke<boolean>("git_stash_push", {
+      repoRoot,
+      message,
+    }),
+  gitStashPop: (repoRoot: string) =>
+    invoke<void>("git_stash_pop", {
+      repoRoot,
+    }),
+  gitStashList: (repoRoot: string) =>
+    invoke<GitStashEntry[]>("git_stash_list", {
+      repoRoot,
+    }),
+  gitCreateBranch: (repoRoot: string, name: string) =>
+    invoke<void>("git_create_branch", {
+      repoRoot,
+      name,
     }),
 };

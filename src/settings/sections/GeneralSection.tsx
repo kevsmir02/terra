@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { BUNDLED_FONTS, type TerminalFontId } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { ThemePref } from "@/modules/settings/store";
@@ -20,10 +21,12 @@ import {
   setAgentNotifications,
   setAutostart,
   setExplorerGitDecorations,
+  setExplorerOpenOnDoubleClick,
   setRestoreWindowState,
   setShowHidden,
   setTerminalCopyOnSelect,
   setTerminalCursorBlink,
+  setTerminalFont,
   setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalFontWeight,
@@ -81,6 +84,9 @@ export function GeneralSection() {
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
+  const explorerOpenOnDoubleClick = usePreferencesStore(
+    (s) => s.explorerOpenOnDoubleClick,
+  );
   const terminalWebglEnabled = usePreferencesStore(
     (s) => s.terminalWebglEnabled,
   );
@@ -88,6 +94,7 @@ export function GeneralSection() {
   const terminalCopyOnSelect = usePreferencesStore(
     (s) => s.terminalCopyOnSelect,
   );
+  const terminalFont = usePreferencesStore((s) => s.terminalFont);
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
@@ -205,6 +212,15 @@ export function GeneralSection() {
             onCheckedChange={(v) => void setExplorerGitDecorations(v)}
           />
         </SettingRow>
+        <SettingRow
+          title="Open files on double click"
+          description="A single click only selects a file in the explorer; a double click opens it in a tab."
+        >
+          <Switch
+            checked={explorerOpenOnDoubleClick}
+            onCheckedChange={(v) => void setExplorerOpenOnDoubleClick(v)}
+          />
+        </SettingRow>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -228,7 +244,7 @@ export function GeneralSection() {
                     xterm's WebGL renderer caches glyphs in a GPU texture atlas.
                     On some macOS setups (especially with Nerd Fonts), the atlas
                     corrupts and terminal text becomes unreadable. Turn this off
-                    as a fallback — performance dips slightly, but text renders
+                    as a fallback; performance dips slightly, but text renders
                     correctly via the DOM renderer.
                   </TooltipContent>
                 </Tooltip>
@@ -253,17 +269,49 @@ export function GeneralSection() {
         </SettingRow>
         <SettingRow
           title="Copy on selection"
-          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
+          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents; Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
         >
           <Switch
             checked={terminalCopyOnSelect}
             onCheckedChange={(v) => void setTerminalCopyOnSelect(v)}
           />
         </SettingRow>
-        <FontFamilyInput
-          value={terminalFontFamily}
-          onCommit={(v) => void setTerminalFontFamily(v)}
-        />
+        <SettingRow
+          title="Font"
+          description="Bundled Nerd Fonts render every terminal icon as designed. Pick System font to type any family installed on this machine."
+        >
+          <Select
+            value={terminalFont}
+            onValueChange={(v) => void setTerminalFont(v as TerminalFontId)}
+          >
+            <SelectTrigger
+              value={terminalFont}
+              className="h-8 w-56 text-[12px]"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {BUNDLED_FONTS.map((font) => (
+                <SelectItem
+                  key={font.id}
+                  value={font.id}
+                  className="text-[12px]"
+                >
+                  {font.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="system" className="text-[12px]">
+                System font
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+        {terminalFont === "system" ? (
+          <FontFamilyInput
+            value={terminalFontFamily}
+            onCommit={(v) => void setTerminalFontFamily(v)}
+          />
+        ) : null}
         <SettingRow
           title="Font weight"
           description="Thickness of terminal characters"

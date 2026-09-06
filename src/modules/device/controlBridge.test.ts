@@ -46,7 +46,10 @@ describe("scaleCoordinates letterboxing", () => {
     const rect = { left: 0, top: 0, width: 500, height: 1000 } as DOMRect;
 
     // Centre of the element is the centre of the picture.
-    expect(scaleCoordinates(250, 500, rect, 1080, 2000)).toMatchObject({ x: 540, y: 1000 });
+    expect(scaleCoordinates(250, 500, rect, 1080, 2000)).toMatchObject({
+      x: 540,
+      y: 1000,
+    });
 
     // Top of the *element* is inside the bar, so it clamps to the picture's top
     // edge rather than reporting a negative or skewed y.
@@ -145,17 +148,23 @@ describe("DeviceControlBridge", () => {
     bridge.handlePointerDown(pointerEvent({ clientX: 0, clientY: 0 }));
     vi.mocked(invoke).mockClear();
 
-    bridge.handlePointerMove(pointerEvent({ clientX: 100, clientY: 100, buttons: 0 }));
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 100, clientY: 100, buttons: 0 }),
+    );
     vi.runAllTimers();
 
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it("ignores pointer move from a pointer that is not the active one", () => {
-    bridge.handlePointerDown(pointerEvent({ clientX: 0, clientY: 0, pointerId: 1 }));
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 0, clientY: 0, pointerId: 1 }),
+    );
     vi.mocked(invoke).mockClear();
 
-    bridge.handlePointerMove(pointerEvent({ clientX: 100, clientY: 100, pointerId: 2 }));
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 100, clientY: 100, pointerId: 2 }),
+    );
     vi.runAllTimers();
 
     expect(invoke).not.toHaveBeenCalled();
@@ -179,60 +188,101 @@ describe("DeviceControlBridge", () => {
     bridge.handlePointerMove(pointerEvent({ clientX: 100, clientY: 100 }));
     bridge.handlePointerUp(pointerEvent({ clientX: 250, clientY: 500 }));
 
-    const actions = vi.mocked(invoke).mock.calls.map((c) => (c[1] as { action: number }).action);
+    const actions = vi
+      .mocked(invoke)
+      .mock.calls.map((c) => (c[1] as { action: number }).action);
     expect(actions[actions.length - 1]).toBe(1);
   });
 
   it("tracks two fingers independently and coalesces both into one frame", () => {
-    bridge.handlePointerDown(pointerEvent({ clientX: 100, clientY: 100, pointerId: 1 }));
-    bridge.handlePointerDown(pointerEvent({ clientX: 400, clientY: 800, pointerId: 2 }));
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 100, clientY: 100, pointerId: 1 }),
+    );
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 400, clientY: 800, pointerId: 2 }),
+    );
     expect(bridge.activePointerCount).toBe(2);
     vi.mocked(invoke).mockClear();
 
     // Both fingers move within the same frame; each keeps its own latest point.
-    bridge.handlePointerMove(pointerEvent({ clientX: 150, clientY: 150, pointerId: 1 }));
-    bridge.handlePointerMove(pointerEvent({ clientX: 350, clientY: 750, pointerId: 2 }));
-    bridge.handlePointerMove(pointerEvent({ clientX: 200, clientY: 200, pointerId: 1 }));
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 150, clientY: 150, pointerId: 1 }),
+    );
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 350, clientY: 750, pointerId: 2 }),
+    );
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 200, clientY: 200, pointerId: 1 }),
+    );
     vi.runAllTimers();
 
     const moves = vi
       .mocked(invoke)
-      .mock.calls.map((c) => c[1] as { pointerId: number; action: number; x: number; y: number });
+      .mock.calls.map(
+        (c) =>
+          c[1] as { pointerId: number; action: number; x: number; y: number },
+      );
     expect(moves).toHaveLength(2);
     expect(moves.every((m) => m.action === 2)).toBe(true);
-    expect(moves.find((m) => m.pointerId === 1)).toMatchObject({ x: 432, y: 352 });
-    expect(moves.find((m) => m.pointerId === 2)).toMatchObject({ x: 756, y: 1540 });
+    expect(moves.find((m) => m.pointerId === 1)).toMatchObject({
+      x: 432,
+      y: 352,
+    });
+    expect(moves.find((m) => m.pointerId === 2)).toMatchObject({
+      x: 756,
+      y: 1540,
+    });
   });
 
   it("keeps the other finger's queued move when one finger lifts", () => {
-    bridge.handlePointerDown(pointerEvent({ clientX: 100, clientY: 100, pointerId: 1 }));
-    bridge.handlePointerDown(pointerEvent({ clientX: 400, clientY: 800, pointerId: 2 }));
-    bridge.handlePointerMove(pointerEvent({ clientX: 150, clientY: 150, pointerId: 1 }));
-    bridge.handlePointerMove(pointerEvent({ clientX: 350, clientY: 750, pointerId: 2 }));
-    bridge.handlePointerUp(pointerEvent({ clientX: 150, clientY: 150, pointerId: 1 }));
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 100, clientY: 100, pointerId: 1 }),
+    );
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 400, clientY: 800, pointerId: 2 }),
+    );
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 150, clientY: 150, pointerId: 1 }),
+    );
+    bridge.handlePointerMove(
+      pointerEvent({ clientX: 350, clientY: 750, pointerId: 2 }),
+    );
+    bridge.handlePointerUp(
+      pointerEvent({ clientX: 150, clientY: 150, pointerId: 1 }),
+    );
     vi.mocked(invoke).mockClear();
 
     vi.runAllTimers();
 
-    const calls = vi.mocked(invoke).mock.calls.map((c) => c[1] as { pointerId: number; action: number });
+    const calls = vi
+      .mocked(invoke)
+      .mock.calls.map((c) => c[1] as { pointerId: number; action: number });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ pointerId: 2, action: 2 });
     expect(bridge.activePointerCount).toBe(1);
   });
 
   it("ignores an up for a pointer that was never down", () => {
-    bridge.handlePointerUp(pointerEvent({ clientX: 100, clientY: 100, pointerId: 9 }));
+    bridge.handlePointerUp(
+      pointerEvent({ clientX: 100, clientY: 100, pointerId: 9 }),
+    );
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it("releases every held finger on teardown", () => {
-    bridge.handlePointerDown(pointerEvent({ clientX: 100, clientY: 100, pointerId: 1 }));
-    bridge.handlePointerDown(pointerEvent({ clientX: 400, clientY: 800, pointerId: 2 }));
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 100, clientY: 100, pointerId: 1 }),
+    );
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 400, clientY: 800, pointerId: 2 }),
+    );
     vi.mocked(invoke).mockClear();
 
     bridge.releaseAll();
 
-    const ups = vi.mocked(invoke).mock.calls.map((c) => c[1] as { pointerId: number; action: number });
+    const ups = vi
+      .mocked(invoke)
+      .mock.calls.map((c) => c[1] as { pointerId: number; action: number });
     expect(ups).toHaveLength(2);
     expect(ups.every((u) => u.action === 1)).toBe(true);
     expect(ups.map((u) => u.pointerId).sort()).toEqual([1, 2]);
@@ -317,15 +367,23 @@ describe("DeviceControlBridge", () => {
     bridge.setVideoSize(864, 1920);
     bridge.handlePointerDown(pointerEvent({ clientX: 250, clientY: 500 }));
 
-    let args = vi.mocked(invoke).mock.calls[0][1] as { width: number; height: number };
+    let args = vi.mocked(invoke).mock.calls[0][1] as {
+      width: number;
+      height: number;
+    };
     expect(args).toMatchObject({ width: 864, height: 1920 });
 
     // A rotation re-encodes at swapped dimensions; without tracking it, touch
     // would silently stop working until the tab was reopened.
     vi.mocked(invoke).mockClear();
     bridge.setVideoSize(1920, 864);
-    bridge.handlePointerDown(pointerEvent({ clientX: 250, clientY: 500, pointerId: 5 }));
-    args = vi.mocked(invoke).mock.calls[0][1] as { width: number; height: number };
+    bridge.handlePointerDown(
+      pointerEvent({ clientX: 250, clientY: 500, pointerId: 5 }),
+    );
+    args = vi.mocked(invoke).mock.calls[0][1] as {
+      width: number;
+      height: number;
+    };
     expect(args).toMatchObject({ width: 1920, height: 864 });
   });
 
@@ -333,7 +391,10 @@ describe("DeviceControlBridge", () => {
     // videoWidth/videoHeight are 0 until the first frame decodes.
     bridge.setVideoSize(0, 0);
     bridge.handlePointerDown(pointerEvent({ clientX: 250, clientY: 500 }));
-    const args = vi.mocked(invoke).mock.calls[0][1] as { width: number; height: number };
+    const args = vi.mocked(invoke).mock.calls[0][1] as {
+      width: number;
+      height: number;
+    };
     expect(args.width).toBe(1080);
     expect(args.height).toBe(2000);
   });

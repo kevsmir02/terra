@@ -1,4 +1,4 @@
-import { resolveFontFamily } from "@/lib/fonts";
+import { ensureTerminalFontLoaded, resolveTerminalFont } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -6,6 +6,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { lazyPathLinkProvider } from "./linkDeps";
+import {
+  capScrollback,
+  PERSIST_MAX_BYTES,
+  PERSIST_SCROLLBACK_LINES,
+} from "./scrollbackPersist";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type FontWeight, Terminal } from "@xterm/xterm";
 import { shouldCursorBlink } from "./cursorBlink";
@@ -180,7 +186,10 @@ function bgActive(
 function termOptions() {
   const prefs = usePreferencesStore.getState();
   const font = configuredFont ?? {
-    fontFamily: resolveFontFamily(prefs.terminalFontFamily),
+    fontFamily: resolveTerminalFont(
+      prefs.terminalFont,
+      prefs.terminalFontFamily,
+    ),
     fontWeight: prefs.terminalFontWeight,
     fontSize: Math.max(4, Math.round(prefs.terminalFontSize * prefs.zoomLevel)),
   };
@@ -251,10 +260,21 @@ function createSlot(): Slot {
     lastUsedAt: 0,
   };
 
+  term.registerLinkProvider(
+    lazyPathLinkProvider(term, () => slot.currentLeafId),
+  );
+  term.onBell(() => {
+    const leafId = slot.currentLeafId;
+    if (leafId === null) return;
+    window.dispatchEvent(
+      new CustomEvent("terra:terminal-bell", { detail: { leafId } }),
+    );
+  });
+
   term.attachCustomKeyEventHandler((event) => {
     // During IME composition the browser is assembling a multi-keystroke
     // character (Chinese pinyin → hanzi, Korean jamo → syllable, etc.).
-    // Raw keydown events — including the Enter that commits a candidate —
+    // Raw keydown events, including the Enter that commits a candidate,
     // must NOT be forwarded to the PTY; xterm will receive the final
     // composed string through its own compositionend handler instead.
     // keyCode 229 ("Process") is what Chromium reports for every key
@@ -283,7 +303,7 @@ function createSlot(): Slot {
     }
     if (action === "copy") {
       // Swallowed even with nothing selected. Falling through would hand the
-      // chord to xterm, which can emit \x03 and SIGINT a running job — worse
+      // chord to xterm, which can emit \x03 and SIGINT a running job, worse
       // than doing nothing.
       if (event.type === "keydown" && slot.term.hasSelection()) {
         const sel = slot.term.getSelection();
@@ -296,7 +316,8 @@ function createSlot(): Slot {
       if (event.type === "keydown") {
         const targetLeafId = slot.currentLeafId;
         void readTerminalClipboard().then((text) => {
-          if (text && slot.currentLeafId === targetLeafId) slot.term.paste(text);
+          if (text && slot.currentLeafId === targetLeafId)
+            slot.term.paste(text);
         });
       }
       event.preventDefault();
@@ -304,7 +325,6 @@ function createSlot(): Slot {
     }
 
     const readlineSequence = terminalReadlineSequence(event, {
-      isMac: false,
       isAlternateScreen: isAltScreen(slot),
     });
     if (readlineSequence) {
@@ -902,7 +922,9 @@ export function applyWebglPreference(enabled: boolean): void {
 function cellSize(term: Terminal): CellSize | null {
   const core = (
     term as unknown as {
-      _core?: { _renderService?: { dimensions?: { css?: { cell?: CellSize } } } };
+      _core?: {
+        _renderService?: { dimensions?: { css?: { cell?: CellSize } } };
+      };
     }
   )._core;
   const cell = core?._renderService?.dimensions?.css?.cell;
@@ -953,27 +975,26 @@ export function applyLetterSpacing(spacing: number): void {
 }
 
 export function applyTerminalFont(font: RendererFont): void {
-  const next = {
-    fontFamily: resolveFontFamily(font.fontFamily),
-    fontWeight: font.fontWeight,
-    fontSize: font.fontSize,
-  };
+  const next = { ...font };
   configuredFont = next;
   for (const slot of slots) {
-    let refit = false;
-    if (slot.term.options.fontFamily !== next.fontFamily) {
-      slot.term.options.fontFamily = next.fontFamily;
-      refit = true;
-    }
-    if (slot.term.options.fontSize !== next.fontSize) {
-      slot.term.options.fontSize = next.fontSize;
-      refit = true;
-    }
     if (slot.term.options.fontWeight !== next.fontWeight) {
       slot.term.options.fontWeight = next.fontWeight as FontWeight;
     }
-    if (refit) refitSlot(slot);
+    if (slot.term.options.fontSize === next.fontSize) continue;
+    slot.term.options.fontSize = next.fontSize;
+    refitSlot(slot);
   }
+  // The family waits for its faces so xterm measures the real glyphs rather
+  // than a fallback's; a newer call in the meantime wins.
+  void ensureTerminalFontLoaded(next.fontFamily).then(() => {
+    if (configuredFont !== next) return;
+    for (const slot of slots) {
+      if (slot.term.options.fontFamily === next.fontFamily) continue;
+      slot.term.options.fontFamily = next.fontFamily;
+      refitSlot(slot);
+    }
+  });
 }
 
 export function applyScrollback(value: number): void {
@@ -1016,6 +1037,23 @@ function applyCursorBlinkOnSlot(slot: Slot, focused: boolean): void {
   const desired = shouldCursorBlink(cursorBlinkEnabled, windowActive, focused);
   if (slot.term.options.cursorBlink === desired) return;
   slot.term.options.cursorBlink = desired;
+}
+
+// Buffer text worth carrying across a relaunch: a parked slot still holds
+// its leaf, and an alternate-screen app (a TUI) has nothing worth replaying.
+export function serializeLeafForPersistence(leafId: number): string | null {
+  const slot = slots.find(
+    (s) => s.currentLeafId === leafId || s.retainedLeafId === leafId,
+  );
+  if (!slot || isAltScreen(slot)) return null;
+  try {
+    return capScrollback(
+      slot.serializeAddon.serialize({ scrollback: PERSIST_SCROLLBACK_LINES }),
+      PERSIST_MAX_BYTES,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function getSlotForLeaf(leafId: number): Slot | null {
@@ -1087,4 +1125,3 @@ export function getLiveSlotForLeaf(leafId: number): Slot | null {
     ) ?? null
   );
 }
-

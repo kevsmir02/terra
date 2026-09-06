@@ -108,12 +108,23 @@ export function ThemesSection() {
                   className="flex h-10 w-14 shrink-0 items-center justify-center gap-1 rounded-md border border-border/(--emph-soft)"
                   style={{ background: swatchBg }}
                 >
-                  <span className="h-5 w-2 rounded-sm" style={{ background: swatchAccent }} />
-                  <span className="h-5 w-2 rounded-sm" style={{ background: swatchFg, opacity: 0.7 }} />
-                  <span className="h-5 w-2 rounded-sm" style={{ background: swatchMuted }} />
+                  <span
+                    className="h-5 w-2 rounded-sm"
+                    style={{ background: swatchAccent }}
+                  />
+                  <span
+                    className="h-5 w-2 rounded-sm"
+                    style={{ background: swatchFg, opacity: 0.7 }}
+                  />
+                  <span
+                    className="h-5 w-2 rounded-sm"
+                    style={{ background: swatchMuted }}
+                  />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[12.5px] font-medium">{t.name}</span>
+                  <span className="truncate text-[12.5px] font-medium">
+                    {t.name}
+                  </span>
                   {t.description ? (
                     <span className="truncate text-[11px] text-muted-foreground">
                       {t.description}
@@ -218,10 +229,14 @@ export function ThemesSection() {
             {bgError}
           </div>
         ) : null}
-        {backgroundKind === "image" && backgroundImageId && !wallpaperDeclined ? (
+        {backgroundKind === "image" &&
+        backgroundImageId &&
+        !wallpaperDeclined ? (
           <div className="flex flex-col gap-3 rounded-lg border border-border/(--emph-strong) p-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[11.5px] text-muted-foreground">Opacity</span>
+              <span className="text-[11.5px] text-muted-foreground">
+                Opacity
+              </span>
               <span className="tabular-nums text-[11px] text-muted-foreground">
                 {Math.round(backgroundOpacity * 100)}%
               </span>

@@ -16,7 +16,7 @@ const bootSrc = readFileSync(
  * `usePreferencesStore.init()` both loads persisted values AND subscribes to
  * `onPreferencesChange`, which is how a write in the separate settings window
  * reaches the main window. Hydration used to live only inside useSpacesBoot's
- * `if (spaces.length === 0)` first-run branch, which early-returns — so every
+ * `if (spaces.length === 0)` first-run branch, which early-returns, so every
  * user past their first launch ran the whole main window on
  * DEFAULT_PREFERENCES and never received cross-window updates. Theming masked
  * it by calling `loadPreferences()` directly, and the remaining defaults were
@@ -34,15 +34,14 @@ describe("main window preference hydration", () => {
     const insideBranch = bootSrc.slice(branchStart);
 
     // If useSpacesBoot still hydrates, it must not be exclusively inside the
-    // first-run branch — either it moved above the branch, or App.tsx covers it.
+    // first-run branch, either it moved above the branch, or App.tsx covers it.
     const hydratesInsideBranch = /\.init\(\)/.test(insideBranch);
     const hydratesBeforeBranch = /\.init\(\)/.test(beforeBranch);
-    const appHydrates = /usePreferencesStore\s*\.getState\(\)\s*\.init\(\)/.test(
-      appSrc,
-    );
+    const appHydrates =
+      /usePreferencesStore\s*\.getState\(\)\s*\.init\(\)/.test(appSrc);
 
     expect(hydratesBeforeBranch || appHydrates).toBe(true);
-    // The branch-local call may remain — init() is idempotent via initPromise.
+    // The branch-local call may remain, init() is idempotent via initPromise.
     expect(hydratesInsideBranch || hydratesBeforeBranch || appHydrates).toBe(
       true,
     );

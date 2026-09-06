@@ -10,7 +10,7 @@ function basename(path: string): string {
   return parts.length ? parts[parts.length - 1] : "/";
 }
 
-/** Label of the focused tab — for terminals, the active pane's folder. */
+/** Label of the focused tab, for terminals, the active pane's folder. */
 function tabLabel(tab: Tab | undefined): string {
   if (!tab) return "";
   if (tab.kind === "terminal") {
@@ -25,7 +25,7 @@ function tabLabel(tab: Tab | undefined): string {
  * Spotify shows the current track instead of just the app name. Without this
  * the window keeps the build-time default ("Tauri App" on Linux).
  *
- * Format: `<project> — <tab>` (e.g. `terra-ai — src`), collapsing to just the
+ * Format: `<project> - <tab>` (e.g. `terra-ai - src`), collapsing to just the
  * project when the focused terminal sits at the project root. Falls back to the
  * app name when there's nothing to show.
  */
@@ -38,7 +38,7 @@ export function useWindowTitle(
 
   useEffect(() => {
     let title: string;
-    if (project && label && label !== project) title = `${project} — ${label}`;
+    if (project && label && label !== project) title = `${project} - ${label}`;
     else title = project || label || APP_NAME;
 
     document.title = title;

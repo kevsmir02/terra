@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { contrast, ensureContrast, fromOklab, isHexColor, parseColor, toOklab } from "./oklab";
+import {
+  contrast,
+  ensureContrast,
+  fromOklab,
+  isHexColor,
+  parseColor,
+  toOklab,
+} from "./oklab";
 
 const WHITE_IN_EVERY_NOTATION = [
   "#fff",

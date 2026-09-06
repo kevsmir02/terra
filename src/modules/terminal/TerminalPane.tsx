@@ -10,11 +10,7 @@ import {
   useImperativeHandle,
   useRef,
 } from "react";
-import {
-  isDragGesture,
-  type Point,
-  selectionToCopy,
-} from "./lib/copyOnSelect";
+import { isDragGesture, type Point, selectionToCopy } from "./lib/copyOnSelect";
 import { writeTerminalClipboard } from "./lib/terminalClipboard";
 import { useTerminalSession } from "./lib/useTerminalSession";
 
@@ -26,6 +22,10 @@ export type TerminalPaneHandle = {
   focus: () => void;
   getBuffer: (maxLines?: number) => string | null;
   getSelection: () => string | null;
+  /** Scroll to the previous (-1) or next (+1) prompt in the buffer. */
+  scrollToCommand: (delta: 1 | -1) => boolean;
+  selectLastOutput: () => boolean;
+  copyLastOutput: () => boolean;
 };
 
 type Props = {
@@ -33,7 +33,7 @@ type Props = {
   leafId: number;
   /** Tab containing this pane is on screen. */
   visible: boolean;
-  /** This leaf is the active pane within its tab — receives auto-focus. */
+  /** This leaf is the active pane within its tab, receives auto-focus. */
   focused?: boolean;
   initialCwd?: string;
   onSearchReady?: (leafId: number, addon: SearchAddon) => void;
@@ -74,7 +74,8 @@ export const TerminalPane = memo(
       // Only a left-button press starts a selection drag. Clearing on other
       // buttons stops a right- or middle-button release from being measured
       // against a stale origin and copying.
-      downPtRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+      downPtRef.current =
+        e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
     }, []);
 
     // Copies the selection when the gesture was a drag and the preference is
@@ -94,7 +95,7 @@ export const TerminalPane = memo(
             void writeTerminalClipboard(text).then((ok) => {
               // A stable id makes a repeat selection replace the existing
               // toast instead of stacking one per drag. Only on a confirmed
-              // write — claiming success on a silently failed one is how the
+              // write, claiming success on a silently failed one is how the
               // clipboard path stayed invisible before.
               if (ok) {
                 toast.success("Copied selection", { id: COPY_TOAST_ID });
@@ -121,6 +122,16 @@ export const TerminalPane = memo(
         focus: () => session.focus(),
         getBuffer: (max?: number) => session.getBuffer(max),
         getSelection: () => session.getSelection(),
+        scrollToCommand: (delta) => session.scrollToCommand(delta),
+        selectLastOutput: () => session.selectLastOutput(),
+        copyLastOutput: () => {
+          const text = session.getLastOutput();
+          if (!text) return false;
+          void Promise.resolve(writeTerminalClipboard(text)).then(() =>
+            toast.success("Copied last command output", { id: COPY_TOAST_ID }),
+          );
+          return true;
+        },
       }),
       [session],
     );

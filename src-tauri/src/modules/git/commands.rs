@@ -5,6 +5,7 @@ use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
     GitDiffContentResult, GitDiffResult, GitLogEntry, GitPanelSnapshot, GitPushResult,
     GitRepoInfo, GitStatusSnapshot,
+    GitStashEntry,
 };
 use crate::modules::workspace::WorkspaceRegistry;
 
@@ -265,6 +266,61 @@ pub async fn git_checkout_branch(
 ) -> Result<(), String> {
     blocking(app, move |r| {
         operations::checkout_branch(r, &repo_root, &branch).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_commit_amend(
+    repo_root: String,
+    message: String,
+    app: AppHandle,
+) -> Result<GitCommitResult, String> {
+    blocking(app, move |r| {
+        operations::commit_amend(r, &repo_root, &message).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_push(
+    repo_root: String,
+    message: String,
+    app: AppHandle,
+) -> Result<bool, String> {
+    blocking(app, move |r| {
+        operations::stash_push(r, &repo_root, &message).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_pop(repo_root: String, app: AppHandle) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::stash_pop(r, &repo_root).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_stash_list(
+    repo_root: String,
+    app: AppHandle,
+) -> Result<Vec<GitStashEntry>, String> {
+    blocking(app, move |r| {
+        operations::stash_list(r, &repo_root).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_create_branch(
+    repo_root: String,
+    name: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::create_branch(r, &repo_root, &name).map_err(Into::into)
     })
     .await
 }

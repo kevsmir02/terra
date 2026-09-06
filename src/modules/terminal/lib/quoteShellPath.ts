@@ -7,6 +7,19 @@ export function quoteShellPath(p: string): string {
   return `'${p.replace(/'/g, `'\\''`)}'`;
 }
 
-export function formatDroppedPaths(paths: string[]): string {
-  return `${paths.map(quoteShellPath).join(" ")} `;
+// A path under the pane's cwd pastes as its tail so it stays short for the
+// shell and for CLI agents; anything else, and a tail that would read as a
+// flag, stays absolute.
+export function relativeToCwd(path: string, cwd: string | undefined): string {
+  if (!cwd) return path;
+  const base = cwd.length > 1 ? cwd.replace(/\/+$/, "") : cwd;
+  if (path === base) return ".";
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  if (!path.startsWith(prefix)) return path;
+  const tail = path.slice(prefix.length);
+  return tail.startsWith("-") ? path : tail;
+}
+
+export function formatDroppedPaths(paths: string[], cwd?: string): string {
+  return `${paths.map((p) => quoteShellPath(relativeToCwd(p, cwd))).join(" ")} `;
 }

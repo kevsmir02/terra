@@ -3,11 +3,16 @@ import type { Theme } from "./types";
 import { wallpaperAllowed } from "./wallpaper";
 
 const accepting: Theme = {
-  id: "a", name: "A",
-  variants: { dark: { colors: { background: "#000" } }, light: { colors: { background: "#fff" } } },
+  id: "a",
+  name: "A",
+  variants: {
+    dark: { colors: { background: "#000" } },
+    light: { colors: { background: "#fff" } },
+  },
 };
 const declining: Theme = {
-  id: "d", name: "D",
+  id: "d",
+  name: "D",
   variants: {
     dark: { colors: { background: "#000" }, effects: { wallpaper: false } },
     light: { colors: { background: "#fff" } },
@@ -29,7 +34,11 @@ describe("wallpaperAllowed", () => {
 
   it("follows the variant that actually renders", () => {
     expect(wallpaperAllowed(declining, "light", { active: true })).toBe(true);
-    const darkOnly: Theme = { id: "x", name: "X", variants: { dark: { effects: { wallpaper: false } } } };
+    const darkOnly: Theme = {
+      id: "x",
+      name: "X",
+      variants: { dark: { effects: { wallpaper: false } } },
+    };
     expect(wallpaperAllowed(darkOnly, "light", { active: true })).toBe(false);
   });
 });

@@ -18,17 +18,15 @@ const src = readFileSync(path.join(here, "WorkspaceSurface.tsx"), "utf8");
 
 describe("WorkspaceSurface preview stacking", () => {
   it("imports OVERLAY_Z from the theme module", () => {
-    expect(src).toMatch(/import\s*{\s*OVERLAY_Z\s*}\s*from\s*"@\/modules\/theme"/);
+    expect(src).toMatch(
+      /import\s*{\s*OVERLAY_Z\s*}\s*from\s*"@\/modules\/theme"/,
+    );
   });
 
   it("paints the preview wrapper strictly above OVERLAY_Z", () => {
-    const previewBlock = src.match(
-      /!isPreviewTab[\s\S]*?<PreviewStack/,
-    )?.[0];
+    const previewBlock = src.match(/!isPreviewTab[\s\S]*?<PreviewStack/)?.[0];
     expect(previewBlock).toBeTruthy();
-    const zIndexMatch = previewBlock?.match(
-      /zIndex:\s*OVERLAY_Z\s*\+\s*(\d+)/,
-    );
+    const zIndexMatch = previewBlock?.match(/zIndex:\s*OVERLAY_Z\s*\+\s*(\d+)/);
     expect(zIndexMatch).toBeTruthy();
     expect(Number(zIndexMatch?.[1])).toBeGreaterThan(0);
   });

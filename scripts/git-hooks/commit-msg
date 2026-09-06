@@ -1,0 +1,7 @@
+#!/bin/sh
+# Backstop for the TERRA.md convention: no AI attribution in commit messages.
+# Installed through the package.json prepare script (core.hooksPath).
+msg="$1"
+tmp="$msg.terra"
+grep -viE '^Co-Authored-By:.*(claude|anthropic|assistant)|Generated with .*Claude Code' "$msg" > "$tmp" || true
+mv "$tmp" "$msg"

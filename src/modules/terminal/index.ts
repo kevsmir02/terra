@@ -5,6 +5,7 @@ export {
   disposeSession,
   leafHasForegroundProcess,
   leafIdForPty,
+  persistedScrollback,
   ptyIdForLeaf,
   respawnSession,
   whenSessionReady,
@@ -15,6 +16,11 @@ export {
   useAgentActivityStore,
 } from "./lib/agentActivity";
 export { useTerminalFileDrop } from "./lib/useTerminalFileDrop";
+export { useTerminalDropStore } from "./lib/dropStore";
+export { pasteIntoLeaf } from "./lib/rendererPool";
+export { formatDroppedPaths } from "./lib/quoteShellPath";
+export { configureTerminalLinks } from "./lib/linkDeps";
+export { stashRestoredScrollback } from "./lib/scrollbackPersist";
 export {
   findLeafCwd,
   hasLeaf,

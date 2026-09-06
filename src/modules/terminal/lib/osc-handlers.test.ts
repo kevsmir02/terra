@@ -9,7 +9,7 @@ import {
 
 // git-bash path mapping is Windows-only; exercise that branch.
 /**
- * Minimal in-memory fake of the xterm `Terminal` surface we touch — just
+ * Minimal in-memory fake of the xterm `Terminal` surface we touch, just
  * enough to register OSC handlers and invoke them with crafted payloads.
  * The OSC handler signature is `(data: string) => boolean | Promise<boolean>`.
  */
@@ -24,7 +24,9 @@ function makeFakeTerm() {
         return { dispose: () => handlers.delete(code) };
       },
     },
-    registerMarker: vi.fn().mockReturnValue({ isDisposed: false, dispose: vi.fn() }),
+    registerMarker: vi
+      .fn()
+      .mockReturnValue({ isDisposed: false, dispose: vi.fn() }),
   } as unknown as Terminal;
   return { term, handlers };
 }
@@ -33,7 +35,7 @@ async function flushClipboardQueue() {
   await Promise.resolve();
 }
 
-describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
+describe("OSC 7 cwd handler: gated by OSC 133 in-command state", () => {
   it("accepts OSC 7 when no command is running", () => {
     const { term, handlers } = makeFakeTerm();
     const state = createShellIntegrationState();
@@ -41,7 +43,7 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
     registerPromptTracker(term, state);
     registerCwdHandler(term, onCwd, state);
 
-    // OSC 133 A means "new prompt is about to be drawn" — we're between
+    // OSC 133 A means "new prompt is about to be drawn", we're between
     // commands and OSC 7 from the shell is legitimate here.
     handlers.get(133)?.("A");
     handlers.get(7)?.("file://host/home/me/project");
@@ -83,7 +85,7 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
   });
 
   it("works without state for backwards compatibility (legacy callers)", () => {
-    // The state parameter is optional — when omitted, OSC 7 is always
+    // The state parameter is optional, when omitted, OSC 7 is always
     // honored (legacy behavior). Tests must confirm we didn't break this.
     const { term, handlers } = makeFakeTerm();
     const onCwd = vi.fn();
@@ -192,5 +194,56 @@ describe("OSC 52 clipboard handler", () => {
     await flushClipboardQueue();
 
     expect(writeClipboard).not.toHaveBeenCalled();
+  });
+});
+
+describe("registerPromptTracker command marks", () => {
+  function makeMarkerTerm() {
+    const { term, handlers } = makeFakeTerm();
+    let line = 0;
+    const registerMarker = vi.fn(() => {
+      const marker = {
+        line: line++,
+        isDisposed: false,
+        dispose() {
+          marker.isDisposed = true;
+        },
+      };
+      return marker;
+    });
+    Object.assign(term, { registerMarker });
+    const osc = (data: string) => {
+      const handler = handlers.get(133);
+      if (!handler) throw new Error("no OSC 133 handler");
+      handler(data);
+    };
+    return { term, osc, registerMarker };
+  }
+
+  it("records every prompt line and the last output span", () => {
+    const { term, osc } = makeMarkerTerm();
+    const tracker = registerPromptTracker(term);
+    for (const seq of ["A", "B", "C", "D", "A"]) osc(seq);
+    expect(tracker.commandLines()).toEqual([0, 3]);
+    expect(tracker.lastOutput()).toEqual({ start: 1, end: 2 });
+  });
+
+  it("reports a running command with no end marker", () => {
+    const { term, osc } = makeMarkerTerm();
+    const tracker = registerPromptTracker(term);
+    for (const seq of ["A", "B", "C"]) osc(seq);
+    expect(tracker.lastOutput()).toEqual({ start: 1, end: null });
+  });
+
+  it("drops markers the buffer trimmed and releases everything on dispose", () => {
+    const { term, osc, registerMarker } = makeMarkerTerm();
+    const tracker = registerPromptTracker(term);
+    osc("A");
+    osc("A");
+    registerMarker.mock.results[0]?.value.dispose();
+    expect(tracker.commandLines()).toEqual([1]);
+    tracker.dispose();
+    expect(tracker.commandLines()).toEqual([]);
+    expect(tracker.lastOutput()).toEqual({ start: null, end: null });
   });
 });

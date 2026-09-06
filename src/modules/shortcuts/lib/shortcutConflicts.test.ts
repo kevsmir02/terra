@@ -7,7 +7,6 @@ import {
   shortcutLabels,
 } from "./shortcutConflicts";
 
-
 describe("sameBinding", () => {
   it("compares the key case-insensitively", () => {
     // The recorder saves e.key verbatim ("C"); the table is authored "c".
@@ -30,7 +29,10 @@ describe("sameBinding", () => {
 
   it("rejects a differing modifier", () => {
     expect(
-      sameBinding({ key: "c", ctrl: true }, { key: "c", ctrl: true, shift: true }),
+      sameBinding(
+        { key: "c", ctrl: true },
+        { key: "c", ctrl: true, shift: true },
+      ),
     ).toBe(false);
   });
 });

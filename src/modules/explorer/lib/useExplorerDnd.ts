@@ -1,34 +1,65 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { type DragHit, type DropPlan, planDrop, samePlan } from "./dropPlan";
 
 type Options = {
   rootPath: string;
   isDir: (path: string) => boolean | undefined;
   onMove: (from: string, toDir: string) => void;
+  onDropToTerminal?: (leafId: number, path: string) => void;
+  onTerminalHover?: (leafId: number | null) => void;
 };
 
 const THRESHOLD = 5;
+const NONE: DropPlan = { kind: "none" };
 
-function parentDir(path: string): string {
-  const i = path.lastIndexOf("/");
-  return i > 0 ? path.slice(0, i) : path;
+function hitAt(x: number, y: number): DragHit {
+  const el = document.elementFromPoint(x, y);
+  const leaf = el?.closest<HTMLElement>("[data-pane-leaf]");
+  const leafId = leaf ? Number(leaf.dataset.paneLeaf) : Number.NaN;
+  return {
+    fsPath:
+      el
+        ?.closest<HTMLElement>("[data-fs-path]")
+        ?.getAttribute("data-fs-path") ?? null,
+    insideExplorer: !!el?.closest("[data-explorer-drop]"),
+    paneLeafId: Number.isFinite(leafId) ? leafId : null,
+  };
 }
 
 // Pointer-based, delegated on the container (no per-row handlers); sidesteps
 // native HTML5 DnD which Tauri intercepts when dragDropEnabled is on. The ghost
 // follows the cursor via direct DOM writes, so dragging re-renders only when the
 // drop target changes, not on every move.
-export function useExplorerDnd({ rootPath, isDir, onMove }: Options) {
+export function useExplorerDnd({
+  rootPath,
+  isDir,
+  onMove,
+  onDropToTerminal,
+  onTerminalHover,
+}: Options) {
   const [dragLabel, setDragLabel] = useState<string | null>(null);
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
 
   const ghostElRef = useRef<HTMLDivElement | null>(null);
   const lastPosRef = useRef({ x: 0, y: 0 });
-  const dropTargetRef = useRef<string | null>(null);
+  const planRef = useRef<DropPlan>(NONE);
   const suppressClickRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
-  const optsRef = useRef({ rootPath, isDir, onMove });
-  optsRef.current = { rootPath, isDir, onMove };
+  const optsRef = useRef({
+    rootPath,
+    isDir,
+    onMove,
+    onDropToTerminal,
+    onTerminalHover,
+  });
+  optsRef.current = {
+    rootPath,
+    isDir,
+    onMove,
+    onDropToTerminal,
+    onTerminalHover,
+  };
 
   const placeGhost = useCallback((x: number, y: number) => {
     lastPosRef.current = { x, y };
@@ -47,7 +78,16 @@ export function useExplorerDnd({ rootPath, isDir, onMove }: Options) {
     [placeGhost],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: placeGhost only touches refs, so the first-render identity behaves identically
+  const setPlan = useCallback((plan: DropPlan) => {
+    if (samePlan(planRef.current, plan)) return;
+    planRef.current = plan;
+    setDropTargetDir(plan.kind === "move" ? plan.toDir : null);
+    optsRef.current.onTerminalHover?.(
+      plan.kind === "terminal" ? plan.leafId : null,
+    );
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: placeGhost and setPlan only touch refs, so the first-render identity behaves identically
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-fs-path]");
@@ -67,19 +107,7 @@ export function useExplorerDnd({ rootPath, isDir, onMove }: Options) {
       }
       placeGhost(ev.clientX, ev.clientY);
       const { rootPath, isDir } = optsRef.current;
-      const hit = document
-        .elementFromPoint(ev.clientX, ev.clientY)
-        ?.closest<HTMLElement>("[data-fs-path]");
-      const p = hit?.getAttribute("data-fs-path");
-      const t = p ? (isDir(p) ? p : parentDir(p)) : rootPath;
-      const valid =
-        t !== source && !t.startsWith(`${source}/`) && parentDir(source) !== t
-          ? t
-          : null;
-      if (dropTargetRef.current !== valid) {
-        dropTargetRef.current = valid;
-        setDropTargetDir(valid);
-      }
+      setPlan(planDrop(hitAt(ev.clientX, ev.clientY), source, rootPath, isDir));
     };
     const detach = () => {
       window.removeEventListener("pointermove", move);
@@ -90,15 +118,18 @@ export function useExplorerDnd({ rootPath, isDir, onMove }: Options) {
     const end = (commit: boolean) => {
       detach();
       if (!active) return;
-      if (commit && dropTargetRef.current)
-        optsRef.current.onMove(source, dropTargetRef.current);
+      const plan = planRef.current;
+      if (commit && plan.kind === "move") {
+        optsRef.current.onMove(source, plan.toDir);
+      } else if (commit && plan.kind === "terminal") {
+        optsRef.current.onDropToTerminal?.(plan.leafId, source);
+      }
       suppressClickRef.current = true;
       setTimeout(() => {
         suppressClickRef.current = false;
       }, 0);
-      dropTargetRef.current = null;
+      setPlan(NONE);
       setDragLabel(null);
-      setDropTargetDir(null);
     };
     const up = () => end(true);
     const cancel = () => end(false);

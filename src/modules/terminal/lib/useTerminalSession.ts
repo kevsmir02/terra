@@ -1,4 +1,4 @@
-import { ensureMonoFontsLoaded } from "@/lib/fonts";
+import { ensureTerminalFontLoaded, resolveTerminalFont } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -9,11 +9,19 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { outputRange, stepCommandLine } from "./commandMarks";
+import {
+  capScrollback,
+  PERSIST_MAX_BYTES,
+  peekRestoredScrollback,
+  takeRestoredScrollback,
+} from "./scrollbackPersist";
 import { DormantRing } from "./dormantRing";
 import {
   createShellIntegrationState,
   registerCwdHandler,
   registerOsc52ClipboardHandler,
+  type PromptTracker,
   registerPromptTracker,
 } from "./osc-handlers";
 import { openPty, type PtySession } from "./pty-bridge";
@@ -44,6 +52,7 @@ import {
   refreshLeafSlot,
   releaseSlot,
   setSlotFocused,
+  serializeLeafForPersistence,
 } from "./rendererPool";
 import { useTerminalFont } from "./useTerminalFont";
 
@@ -82,9 +91,26 @@ type Session = {
   commandRunning: boolean;
   hiddenReleaseTimer: ReturnType<typeof setTimeout> | null;
   spawnFailed: boolean;
+  prompt: PromptTracker | null;
 };
 
 const sessions = new Map<number, Session>();
+
+// A buffer persisted at the last exit replays before the shell spawns; the
+// trailing newline keeps the new prompt off the old one.
+function restoredSnapshot(leafId: number): string | null {
+  const text = takeRestoredScrollback(leafId);
+  return text ? `${text}\r\n` : null;
+}
+
+/** Buffer text to persist for a leaf at exit, live or retained, or null. */
+export function persistedScrollback(leafId: number): string | null {
+  const live = serializeLeafForPersistence(leafId);
+  if (live !== null) return live;
+  const s = sessions.get(leafId);
+  if (s?.snapshot) return capScrollback(s.snapshot, PERSIST_MAX_BYTES);
+  return peekRestoredScrollback(leafId);
+}
 
 const readyLeaves = new Set<number>();
 const readyWaiters = new Map<
@@ -148,7 +174,7 @@ export function leafCwd(leafId: number): string | null {
 
 /**
  * Clear the scrollback and screen of the currently focused terminal, keeping
- * the active prompt line — macOS Terminal's ⌘K behaviour. Returns false when no
+ * the active prompt line, macOS Terminal's ⌘K behaviour. Returns false when no
  * focused terminal slot is bound (e.g. focus is in the editor or AI panel).
  */
 export function clearFocusedTerminal(): boolean {
@@ -326,7 +352,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     cols: 0,
     rows: 0,
     container: null,
-    snapshot: null,
+    snapshot: restoredSnapshot(leafId),
     searchQuery: null,
     dormantRing: new DormantRing(),
     pendingInput: "",
@@ -335,11 +361,15 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     commandRunning: false,
     hiddenReleaseTimer: null,
     spawnFailed: false,
+    prompt: null,
   };
   sessions.set(leafId, session);
 
   session.ready = (async () => {
-    await ensureMonoFontsLoaded();
+    const prefs = usePreferencesStore.getState();
+    await ensureTerminalFontLoaded(
+      resolveTerminalFont(prefs.terminalFont, prefs.terminalFontFamily),
+    );
     await document.fonts.ready;
   })();
 
@@ -450,7 +480,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
     cols: s.cols,
     rows: s.rows,
     registerOsc: (term) => {
-      // Shared in-command flag — see osc-handlers.ts. The prompt tracker
+      // Shared in-command flag, see osc-handlers.ts. The prompt tracker
       // flips it on OSC 133 B/C/D/A; the cwd handler reads it to ignore OSC
       // 7 emitted by untrusted command output (remote SSH, `cat` of an
       // attacker file, etc.).
@@ -458,6 +488,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
       const prompt = registerPromptTracker(term, shellState, (running) =>
         onLeafCommandState(leafId, running),
       );
+      s.prompt = prompt;
       const cwd = registerCwdHandler(
         term,
         (next) => {
@@ -469,7 +500,14 @@ function bindLeafToSlot(leafId: number, s: Session): void {
         shellState,
       );
       const osc52 = registerOsc52ClipboardHandler(term);
-      return [prompt.dispose, cwd, osc52];
+      return [
+        () => {
+          prompt.dispose();
+          if (s.prompt === prompt) s.prompt = null;
+        },
+        cwd,
+        osc52,
+      ];
     },
     onSearchReady: (addon) => s.callbacks.onSearchReady?.(addon),
   });
@@ -782,6 +820,52 @@ export function useTerminalSession({
     return sel.length > 0 ? sel : null;
   }, [leafId]);
 
+  const scrollToCommand = useCallback(
+    (delta: 1 | -1): boolean => {
+      const slot = getSlotForLeaf(leafId);
+      if (!slot) return false;
+      const lines = sessions.get(leafId)?.prompt?.commandLines() ?? [];
+      const target = stepCommandLine(
+        lines,
+        slot.term.buffer.active.viewportY,
+        delta,
+      );
+      if (target === null) return false;
+      slot.term.scrollToLine(target);
+      return true;
+    },
+    [leafId],
+  );
+
+  const lastOutputLines = useCallback((): [number, number] | null => {
+    const slot = getSlotForLeaf(leafId);
+    const marks = sessions.get(leafId)?.prompt?.lastOutput();
+    if (!slot || !marks) return null;
+    return outputRange(marks.start, marks.end, slot.term.buffer.active.length);
+  }, [leafId]);
+
+  const selectLastOutput = useCallback((): boolean => {
+    const slot = getSlotForLeaf(leafId);
+    const range = lastOutputLines();
+    if (!slot || !range) return false;
+    slot.term.selectLines(range[0], range[1]);
+    return true;
+  }, [leafId, lastOutputLines]);
+
+  const getLastOutput = useCallback((): string | null => {
+    const slot = getSlotForLeaf(leafId);
+    const range = lastOutputLines();
+    if (!slot || !range) return null;
+    const out: string[] = [];
+    for (let y = range[0]; y <= range[1]; y++) {
+      out.push(
+        slot.term.buffer.active.getLine(y)?.translateToString(true) ?? "",
+      );
+    }
+    while (out.length && out[out.length - 1] === "") out.pop();
+    return out.length ? out.join("\n") : null;
+  }, [leafId, lastOutputLines]);
+
   const applyTheme = useCallback(() => {
     applyPoolTheme();
   }, []);
@@ -792,9 +876,21 @@ export function useTerminalSession({
       focus,
       getBuffer,
       getSelection,
+      scrollToCommand,
+      selectLastOutput,
+      getLastOutput,
       applyTheme,
     }),
-    [write, focus, getBuffer, getSelection, applyTheme],
+    [
+      write,
+      focus,
+      getBuffer,
+      getSelection,
+      scrollToCommand,
+      selectLastOutput,
+      getLastOutput,
+      applyTheme,
+    ],
   );
 }
 

@@ -46,7 +46,7 @@ export function AboutSection() {
               : status.kind === "installing"
                 ? "Installing…"
                 : status.kind === "error"
-                  ? "Check failed — retry"
+                  ? "Check failed, retry"
                   : "Check for updates";
 
   const onPrimary = () => {
@@ -58,7 +58,10 @@ export function AboutSection() {
 
   const progress =
     status.kind === "downloading" && status.contentLength
-      ? Math.min(100, Math.round((status.downloaded / status.contentLength) * 100))
+      ? Math.min(
+          100,
+          Math.round((status.downloaded / status.contentLength) * 100),
+        )
       : null;
 
   useEffect(() => {
@@ -88,7 +91,7 @@ export function AboutSection() {
             Open-source terminal IDE
           </span>
           <span className="mt-1 font-mono text-[11px] text-muted-foreground">
-            v{version || "—"}
+            v{version || "…"}
           </span>
         </div>
       </div>
@@ -152,7 +155,7 @@ export function AboutSection() {
         )}
         {status.kind === "available" && !status.info.pair && (
           <p className="text-[11px] text-muted-foreground">
-            This install format updates manually — the button opens the release
+            This install format updates manually; the button opens the release
             page.
           </p>
         )}

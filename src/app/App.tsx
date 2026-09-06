@@ -71,14 +71,20 @@ import {
   useWorkspaceCwd,
 } from "@/modules/tabs";
 import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
+import { invoke } from "@tauri-apps/api/core";
 import {
   clearFocusedTerminal,
+  configureTerminalLinks,
   disposeSession,
   findLeafCwd,
+  formatDroppedPaths,
   hasLeaf,
   leafIds,
   type PaneBounds,
+  pasteIntoLeaf,
+  persistedScrollback,
   type TerminalPaneHandle,
+  useTerminalDropStore,
   useTerminalFileDrop,
 } from "@/modules/terminal";
 import { ThemeProvider } from "@/modules/theme";
@@ -134,6 +140,14 @@ export default function App() {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
+  const cwdForLeaf = useCallback((leafId: number): string | undefined => {
+    const tab = tabsRef.current.find(
+      (t) => t.kind === "terminal" && hasLeaf(t.paneTree, leafId),
+    );
+    if (tab?.kind !== "terminal") return undefined;
+    return findLeafCwd(tab.paneTree, leafId) ?? tab.cwd;
+  }, []);
+
   const activeTerminalTab = useMemo(() => {
     const t = tabs.find((x) => x.id === activeId);
     return t && t.kind === "terminal" ? t : null;
@@ -153,10 +167,10 @@ export default function App() {
     useState<GitHistorySearchHandle | null>(null);
   const { zoomIn, zoomOut, zoomReset } = useZoom();
   useApplyEditorFontSize();
-  useTerminalFileDrop();
+  useTerminalFileDrop({ cwdForLeaf });
   const explorerRef = useRef<FileExplorerHandle>(null);
 
-  // Drives session disposal off the pane tree, not React lifecycles —
+  // Drives session disposal off the pane tree, not React lifecycles,
   // split/unsplit re-mount components but the leaf is still live.
   const liveLeavesRef = useRef<Set<number>>(new Set());
 
@@ -171,7 +185,7 @@ export default function App() {
   // onPreferencesChange, which is how a write in the separate settings window
   // reaches this one. It used to be called only from useSpacesBoot's first-run
   // branch, so returning users ran on DEFAULT_PREFERENCES and never saw a
-  // setting change take effect. Idempotent — useSpacesBoot may still call it.
+  // setting change take effect. Idempotent, useSpacesBoot may still call it.
   useEffect(() => {
     void usePreferencesStore
       .getState()
@@ -195,13 +209,17 @@ export default function App() {
     undefined,
   );
 
-  useSpacePersistence({
+  const { flushWithScrollback } = useSpacePersistence({
     tabs,
     activeId,
     activeSpaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
     enabled: spacesHydrated,
     activeSidebarPct,
   });
+  const persistScrollback = useCallback(
+    () => flushWithScrollback(persistedScrollback),
+    [flushWithScrollback],
+  );
 
   const prevSpaceRef = useRef(activeSpaceId);
   useEffect(() => {
@@ -345,8 +363,10 @@ export default function App() {
     handlePathDeleted,
   } = useTabCloseGuards({ tabs, disposeTab });
 
-  const { pendingAppClose, confirmAppClose, cancelAppClose } =
-    useAppCloseGuard(tabsRef);
+  const { pendingAppClose, confirmAppClose, cancelAppClose } = useAppCloseGuard(
+    tabsRef,
+    { beforeClose: persistScrollback },
+  );
 
   useEffect(() => {
     const live = new Set<number>();
@@ -438,6 +458,24 @@ export default function App() {
     },
     [newTab],
   );
+
+  const pastePathIntoLeaf = useCallback(
+    (leafId: number, path: string) => {
+      pasteIntoLeaf(leafId, formatDroppedPaths([path], cwdForLeaf(leafId)));
+    },
+    [cwdForLeaf],
+  );
+
+  const pastePathIntoActiveTerminal = useCallback(
+    (path: string) => {
+      const t = tabsRef.current.find((x) => x.id === activeId);
+      if (t?.kind !== "terminal") return;
+      pastePathIntoLeaf(t.activeLeafId, path);
+    },
+    [activeId, pastePathIntoLeaf],
+  );
+
+  const setTerminalDropTarget = useTerminalDropStore((s) => s.setTarget);
 
   const handleOpenFile = useCallback(
     (path: string, pin?: boolean) => {
@@ -644,6 +682,22 @@ export default function App() {
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
+      "terminal.prevCommand": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.scrollToCommand(-1);
+      },
+      "terminal.nextCommand": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.scrollToCommand(1);
+      },
+      "terminal.selectLastOutput": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.selectLastOutput();
+      },
+      "terminal.copyLastOutput": () => {
+        if (activeLeafId !== null)
+          terminalRefs.current.get(activeLeafId)?.copyLastOutput();
+      },
       "search.focus": () => {
         const editor = editorRefs.current.get(activeId);
         if (editor) editor.openSearch();
@@ -667,6 +721,7 @@ export default function App() {
     }),
     [
       activeId,
+      activeLeafId,
       openCommandPalette,
       stepSwitcher,
       cycleSpace,
@@ -702,6 +757,14 @@ export default function App() {
         id === "editor.codeComplete"
       ) {
         return activeTab?.kind !== "editor";
+      }
+      if (
+        id === "terminal.prevCommand" ||
+        id === "terminal.nextCommand" ||
+        id === "terminal.selectLastOutput" ||
+        id === "terminal.copyLastOutput"
+      ) {
+        return activeTab?.kind !== "terminal";
       }
       if (id === "terminal.clear") {
         // Only intercept ⌘K while a terminal is focused; elsewhere let the key
@@ -990,11 +1053,28 @@ export default function App() {
     [openFileTab],
   );
 
+  // Path links in terminal output: the provider itself is registered per
+  // renderer slot and only runs for the hovered line.
+  useEffect(() => {
+    configureTerminalLinks({
+      cwdForLeaf,
+      home: () => home,
+      exists: (path) =>
+        invoke<{ kind: string }>("fs_stat", { path }).then(
+          (stat) => stat.kind !== "dir",
+        ),
+      open: (path, line) => {
+        if (line) openContentHit(path, line);
+        else handleOpenFile(path, true);
+      },
+    });
+    return () => configureTerminalLinks(null);
+  }, [cwdForLeaf, home, openContentHit, handleOpenFile]);
+
   useEffect(() => {
     setLspNavigator({ openFile: openContentHit });
     return () => setLspNavigator(null);
   }, [openContentHit]);
-
 
   const shell = (
     <ThemeProvider>
@@ -1069,6 +1149,13 @@ export default function App() {
                         onPathRenamed={handlePathRenamed}
                         onPathDeleted={handlePathDeleted}
                         onRevealInTerminal={cdInNewTab}
+                        onPastePath={
+                          activeTerminalTab
+                            ? pastePathIntoActiveTerminal
+                            : undefined
+                        }
+                        onDropToTerminal={pastePathIntoLeaf}
+                        onTerminalHover={setTerminalDropTarget}
                       />
                     ) : sidebarView === "source-control" ? (
                       <SourceControlPanel

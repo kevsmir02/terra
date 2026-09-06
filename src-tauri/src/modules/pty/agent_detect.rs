@@ -12,7 +12,7 @@ const DEFAULT_AGENTS: &[&str] = &["claude", "codex", "opencode"];
 //
 // `notify;Terax;` is the pre-rename spelling. Hooks live in the user's own
 // agent config (~/.claude/settings.json and friends), so installs predating
-// the rename keep emitting it until they're reinstalled from Settings —
+// the rename keep emitting it until they're reinstalled from Settings,
 // accept both spellings rather than silently dropping their notifications.
 const MARKERS: [&[u8]; 2] = [b"notify;Terra;", b"notify;Terax;"];
 

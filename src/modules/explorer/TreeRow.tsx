@@ -6,6 +6,7 @@ import { InlineInput } from "./InlineInput";
 import { explorerGitTextClass } from "./lib/gitStatusColor";
 import type { GitStatusCode } from "./lib/gitStatusUtils";
 import { FileIconView, useIconProvider } from "./lib/iconProvider";
+import { type RowGesture, rowActivation } from "./lib/rowActivation";
 
 export type RowActions = {
   toggle: (path: string) => void;
@@ -27,6 +28,7 @@ export type EntryRowProps = {
   isDropTarget?: boolean;
   onOpenFile: (path: string, pin?: boolean) => void;
   onSelectPath: (path: string) => void;
+  openOnDoubleClick: boolean;
   gitStatusCode?: GitStatusCode | null;
   gitignored?: boolean;
 };
@@ -45,6 +47,7 @@ function EntryRowImpl(props: EntryRowProps) {
     isDropTarget = false,
     onOpenFile,
     onSelectPath,
+    openOnDoubleClick,
     gitStatusCode,
     gitignored = false,
   } = props;
@@ -70,11 +73,18 @@ function EntryRowImpl(props: EntryRowProps) {
     );
   }
 
+  const activate = (gesture: RowGesture) => {
+    const action = rowActivation(gesture, isDir, openOnDoubleClick);
+    if (action === "toggle") actions.toggle(path);
+    else if (action === "open-preview") onOpenFile(path);
+    else if (action === "open") onOpenFile(path, true);
+    else if (action === "rename") actions.beginRename(path);
+  };
+
   const handleClick = () => {
     if (renameInProgress) return;
     onSelectPath(path);
-    if (isDir) actions.toggle(path);
-    else onOpenFile(path);
+    activate("click");
   };
 
   return (
@@ -82,7 +92,7 @@ function EntryRowImpl(props: EntryRowProps) {
       type="button"
       data-fs-path={path}
       onClick={handleClick}
-      onDoubleClick={() => !isDir && actions.beginRename(path)}
+      onDoubleClick={() => activate("dblclick")}
       className={cn(
         "group flex h-6 w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm px-1.5 text-left text-[13px] transition-colors hover:bg-accent/(--emph-strong)",
         isSelected
@@ -90,7 +100,8 @@ function EntryRowImpl(props: EntryRowProps) {
           : gitignored
             ? "text-muted-foreground/(--emph-strong)"
             : "text-foreground/(--emph-bold)",
-        isDropTarget && "bg-primary/(--emph-faint) ring-1 ring-inset ring-primary/(--emph-strong)",
+        isDropTarget &&
+          "bg-primary/(--emph-faint) ring-1 ring-inset ring-primary/(--emph-strong)",
       )}
       style={{ paddingLeft }}
     >

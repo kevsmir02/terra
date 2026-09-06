@@ -80,6 +80,13 @@ pub struct GitCommitResult {
     pub summary: String,
 }
 
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStashEntry {
+    pub name: String,
+    pub message: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitFileChange {

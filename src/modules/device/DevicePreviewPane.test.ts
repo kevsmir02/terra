@@ -3,7 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ConnectingOverlay, DisconnectedOverlay, PaneFallback } from "./DevicePreviewPane";
+import {
+  ConnectingOverlay,
+  DisconnectedOverlay,
+  PaneFallback,
+} from "./DevicePreviewPane";
 import { NoDevices, ServerFailed, UnauthorizedDevice } from "./emptyStates";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 
@@ -16,9 +20,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 // The empty states are hook-free apart from NoDevices, so their element trees
 // can be walked directly to reach the Refresh / Reconnect button.
-function findButton(node: ReactNode): ReactElement<{ onClick: () => void }> | null {
+function findButton(
+  node: ReactNode,
+): ReactElement<{ onClick: () => void }> | null {
   if (!isValidElement(node)) return null;
-  const el = node as ReactElement<{ onClick?: () => void; children?: ReactNode }>;
+  const el = node as ReactElement<{
+    onClick?: () => void;
+    children?: ReactNode;
+  }>;
   if (el.type === "button" && typeof el.props.onClick === "function") {
     return el as ReactElement<{ onClick: () => void }>;
   }
@@ -41,7 +50,9 @@ function collectText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(collectText).join("");
   if (!isValidElement(node)) return "";
-  return collectText((node as ReactElement<{ children?: ReactNode }>).props.children);
+  return collectText(
+    (node as ReactElement<{ children?: ReactNode }>).props.children,
+  );
 }
 
 let reload: ReturnType<typeof vi.fn>;
@@ -58,7 +69,10 @@ afterEach(() => {
 describe("PaneFallback refresh", () => {
   it("hands the session retry to the no-devices state instead of reloading the window", () => {
     const onRetry = vi.fn();
-    const el = PaneFallback({ status: { kind: "no-devices" }, onRetry }) as ReactElement<{
+    const el = PaneFallback({
+      status: { kind: "no-devices" },
+      onRetry,
+    }) as ReactElement<{
       onRefresh: () => void;
     }>;
 
@@ -102,11 +116,17 @@ describe("PaneFallback refresh", () => {
 
 // The overlay names the device itself, so the test has to hand it one rather
 // than a label string.
-const PIXEL: DeviceEntry = { serial: "emulator-5554", state: "device", model: "Pixel_8" };
+const PIXEL: DeviceEntry = {
+  serial: "emulator-5554",
+  state: "device",
+  model: "Pixel_8",
+};
 
 describe("the connecting overlay", () => {
   it("names what it is connecting to", () => {
-    expect(collectText(ConnectingOverlay({ device: PIXEL }))).toContain("Connecting to Pixel 8");
+    expect(collectText(ConnectingOverlay({ device: PIXEL }))).toContain(
+      "Connecting to Pixel 8",
+    );
   });
 
   // A reviewer asked for this on Task 8: without it a screen reader never
@@ -131,7 +151,9 @@ describe("the disconnected overlay", () => {
       onReconnect: onRetry,
     });
 
-    expect(collectText(tree)).toContain("The mirror server could not be reached");
+    expect(collectText(tree)).toContain(
+      "The mirror server could not be reached",
+    );
     clickButton(tree);
 
     expect(onRetry).toHaveBeenCalledTimes(1);
@@ -155,7 +177,9 @@ describe("SessionPane preflight status", () => {
   // right after a fallback screen's error message.
   it("starts SessionPane in the connecting status, not an idle placeholder", () => {
     const src = readFileSync(path.join(here, "DevicePreviewPane.tsx"), "utf8");
-    expect(src).toMatch(/useState<SessionStatus>\(\{\s*kind:\s*"connecting"\s*\}\)/);
+    expect(src).toMatch(
+      /useState<SessionStatus>\(\{\s*kind:\s*"connecting"\s*\}\)/,
+    );
     expect(src).not.toMatch(/kind:\s*"idle"/);
   });
 });
@@ -164,7 +188,11 @@ describe("the device module never reloads the webview", () => {
   // A reload throws away every terminal and editor's in-memory state; the only
   // thing a device refresh may restart is its own session.
   it("has no location.reload in the pane, its session or the empty states", () => {
-    for (const file of ["DevicePreviewPane.tsx", "deviceSession.ts", "emptyStates.tsx"]) {
+    for (const file of [
+      "DevicePreviewPane.tsx",
+      "deviceSession.ts",
+      "emptyStates.tsx",
+    ]) {
       const src = readFileSync(path.join(here, file), "utf8");
       expect(src, file).not.toMatch(/location\.reload/);
     }

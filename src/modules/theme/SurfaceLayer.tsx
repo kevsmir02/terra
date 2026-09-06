@@ -15,7 +15,13 @@ export const OVERLAY_Z = 2147483646;
 const RESIZE_IDLE_MS = 280;
 const FADE_IN_MS = 200;
 
-export function SurfaceLayer({ theme, mode }: { theme: Theme; mode: ThemeMode }) {
+export function SurfaceLayer({
+  theme,
+  mode,
+}: {
+  theme: Theme;
+  mode: ThemeMode;
+}) {
   const [fastPath] = useState(readBgFastPath);
   const storeActive = usePreferencesStore(
     (s) => s.backgroundKind === "image" && !!s.backgroundImageId,

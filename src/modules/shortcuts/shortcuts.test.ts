@@ -156,4 +156,3 @@ describe("terminal key shortcuts", () => {
     ).toBe(false);
   });
 });
-

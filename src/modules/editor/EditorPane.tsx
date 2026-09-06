@@ -145,7 +145,7 @@ export const EditorPane = memo(
     const [langId, setLangId] = useState<string | null>(null);
 
     // Stabilize save + onSaved via refs so the extensions array never changes
-    // identity — a new identity makes @uiw/react-codemirror reconfigure the
+    // identity, a new identity makes @uiw/react-codemirror reconfigure the
     // whole state, wiping the language compartment.
     const saveRef = useRef(save);
     saveRef.current = save;
@@ -173,8 +173,7 @@ export const EditorPane = memo(
           if (res === "unsupported" && !warnedNoFormatRef.current) {
             warnedNoFormatRef.current = true;
             toast.warning("Format on save skipped", {
-              description:
-                "The active language server has no formatter.",
+              description: "The active language server has no formatter.",
             });
           }
         } else if (!warnedNoLspRef.current) {
@@ -413,7 +412,8 @@ export const EditorPane = memo(
         return <MediaPreview path={path} kind={mediaKind} />;
       }
 
-      const canForce = doc.status === "toolarge" && doc.size <= FORCE_READ_LIMIT;
+      const canForce =
+        doc.status === "toolarge" && doc.size <= FORCE_READ_LIMIT;
       return (
         <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
           <div className="text-sm text-foreground">

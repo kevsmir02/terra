@@ -58,6 +58,9 @@ type Props = {
   onPathRenamed?: (from: string, to: string) => void;
   onPathDeleted?: (path: string) => void;
   onRevealInTerminal?: (path: string) => void;
+  onPastePath?: (path: string) => void;
+  onDropToTerminal?: (leafId: number, path: string) => void;
+  onTerminalHover?: (leafId: number | null) => void;
   gitStatus?: GitStatusSnapshot | null;
 };
 
@@ -84,7 +87,13 @@ type Row =
       gitStatusCode: GitStatusCode | null;
     }
   | { kind: "pending"; key: string; depth: number; pendingKind: "file" | "dir" }
-  | { kind: "status"; key: string; depth: number; tone: "muted" | "error"; message: string };
+  | {
+      kind: "status";
+      key: string;
+      depth: number;
+      tone: "muted" | "error";
+      message: string;
+    };
 
 const ROW_HEIGHT = 24;
 const OVERSCAN = 8;
@@ -188,12 +197,18 @@ export const FileExplorer = memo(
       onPathRenamed,
       onPathDeleted,
       onRevealInTerminal,
+      onPastePath,
+      onDropToTerminal,
+      onTerminalHover,
       gitStatus,
     },
     ref,
   ) {
     const tree = useFileTree(rootPath, { onPathRenamed, onPathDeleted });
     const gitDecorations = usePreferencesStore((s) => s.explorerGitDecorations);
+    const openOnDoubleClick = usePreferencesStore(
+      (s) => s.explorerOpenOnDoubleClick,
+    );
     const { lookup: lookupGitStatus } = useGitStatus(
       rootPath,
       gitDecorations ? gitStatus : null,
@@ -209,7 +224,11 @@ export const FileExplorer = memo(
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: tree identity churns every render; the listed fields are buildRows' real inputs
     const { rows, entryIndexByPath } = useMemo(() => {
-      if (!rootPath) return { rows: [] as Row[], entryIndexByPath: new Map<string, number>() };
+      if (!rootPath)
+        return {
+          rows: [] as Row[],
+          entryIndexByPath: new Map<string, number>(),
+        };
       return buildRows(rootPath, tree, lookupGitStatus);
       // `tree` is intentionally omitted: its identity changes every render, but
       // the listed fields are the only inputs buildRows actually reads.
@@ -263,6 +282,8 @@ export const FileExplorer = memo(
       rootPath: rootPath ?? "",
       isDir: isDirAt,
       onMove: tree.movePath,
+      onDropToTerminal,
+      onTerminalHover,
     });
 
     const fileDrop = useExplorerFileDrop({
@@ -272,7 +293,8 @@ export const FileExplorer = memo(
     });
 
     const dropTargetDir = dnd.dropTargetDir ?? fileDrop.externalTargetDir;
-    const rootIsDropTarget = dropTargetDir != null && dropTargetDir === rootPath;
+    const rootIsDropTarget =
+      dropTargetDir != null && dropTargetDir === rootPath;
     useEffect(() => {
       if (!dropTargetDir || dropTargetDir === rootPath) return;
       if (tree.expanded.has(dropTargetDir)) return;
@@ -305,7 +327,10 @@ export const FileExplorer = memo(
 
     const lastSyncedActivePathRef = useRef<string | null>(null);
     useEffect(() => {
-      if (!activeFilePath || activeFilePath === lastSyncedActivePathRef.current) {
+      if (
+        !activeFilePath ||
+        activeFilePath === lastSyncedActivePathRef.current
+      ) {
         return;
       }
       if (!entryIndexByPath.has(activeFilePath)) return;
@@ -461,6 +486,7 @@ export const FileExplorer = memo(
               isDropTarget={dropTargetDir === row.path}
               onOpenFile={onOpenFile}
               onSelectPath={setSelectedPath}
+              openOnDoubleClick={openOnDoubleClick}
               gitStatusCode={row.gitStatusCode}
               gitignored={gitDecorations && row.gitignored}
             />
@@ -477,7 +503,11 @@ export const FileExplorer = memo(
           );
         case "status":
           return (
-            <StatusRow depth={row.depth} message={row.message} tone={row.tone} />
+            <StatusRow
+              depth={row.depth}
+              message={row.message}
+              tone={row.tone}
+            />
           );
       }
     };
@@ -678,11 +708,19 @@ export const FileExplorer = memo(
                       Open in Terminal
                     </ContextMenuItem>
                   )}
+                  {onPastePath && (
+                    <ContextMenuItem
+                      className={COMPACT_ITEM}
+                      onSelect={() => onPastePath(menuTarget.path)}
+                    >
+                      Paste path into terminal
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem
                     className={COMPACT_ITEM}
                     onSelect={() => void revealInFinder(menuTarget.path)}
                   >
-                    Reveal in Finder
+                    Reveal in file manager
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem
@@ -721,7 +759,9 @@ export const FileExplorer = memo(
                   <ContextMenuItem
                     className={COMPACT_ITEM}
                     onSelect={() =>
-                      void copyToClipboard(relativePath(rootPath, menuTarget.path))
+                      void copyToClipboard(
+                        relativePath(rootPath, menuTarget.path),
+                      )
                     }
                   >
                     Copy Relative Path
@@ -758,7 +798,7 @@ export const FileExplorer = memo(
                     className={COMPACT_ITEM}
                     onSelect={() => void revealInFinder(rootPath)}
                   >
-                    Reveal in Finder
+                    Reveal in file manager
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem

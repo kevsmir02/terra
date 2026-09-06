@@ -7,7 +7,11 @@ import { deviceDisplayName, isReady } from "./device";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 import { BOOT_PHASE_LABEL, useAvds } from "./useAvds";
 
-export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => void }) {
+export function DeviceDropdown({
+  onPick,
+}: {
+  onPick: (device: DeviceEntry) => void;
+}) {
   const [devices, setDevices] = useState<DeviceEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -59,7 +63,11 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
           className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
           title="Refresh device & emulator list"
         >
-          <HugeiconsIcon icon={RefreshIcon} size={13} className={isRefreshing ? "animate-spin" : ""} />
+          <HugeiconsIcon
+            icon={RefreshIcon}
+            size={13}
+            className={isRefreshing ? "animate-spin" : ""}
+          />
           <span>Refresh</span>
         </button>
       </div>
@@ -73,7 +81,9 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
       ) : null}
 
       {!devices ? (
-        <div className="px-3 py-2 text-[11px] text-muted-foreground">Checking…</div>
+        <div className="px-3 py-2 text-[11px] text-muted-foreground">
+          Checking…
+        </div>
       ) : (
         <>
           {devices.length > 0 && (
@@ -85,7 +95,9 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                     disabled={!isReady(d)}
                     onClick={() => onPick(d)}
                     className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/(--emph-medium) disabled:opacity-50"
-                    title={isReady(d) ? "Open device preview" : `state: ${d.state}`}
+                    title={
+                      isReady(d) ? "Open device preview" : `state: ${d.state}`
+                    }
                   >
                     <span className="truncate">{deviceDisplayName(d)}</span>
                     <span className="shrink-0 whitespace-nowrap text-muted-foreground">
@@ -99,27 +111,36 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
 
           {devices.length === 0 && (
             <div className="px-3 py-2 text-[11px] text-muted-foreground">
-              No devices connected. Plug one in via USB, or create an emulator below.
+              No devices connected. Plug one in via USB, or create an emulator
+              below.
             </div>
           )}
 
           {avds && (
             <div className="flex flex-col gap-1 border-t border-border/(--emph-soft) px-3 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-foreground">Emulators</span>
+                <span className="text-[11px] font-medium text-foreground">
+                  Emulators
+                </span>
                 <button
                   type="button"
                   onClick={() => setShowCreate((v) => !v)}
                   disabled={creating}
                   aria-expanded={showCreate}
                   className="rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-accent/(--emph-strong) hover:text-foreground disabled:opacity-50"
-                  title={showCreate ? "Cancel creating an emulator" : "Create a new emulator"}
+                  title={
+                    showCreate
+                      ? "Cancel creating an emulator"
+                      : "Create a new emulator"
+                  }
                 >
                   {showCreate ? "Cancel" : "Create"}
                 </button>
               </div>
               {avds.length === 0 && (
-                <p className="text-[11px] text-muted-foreground">No emulators yet</p>
+                <p className="text-[11px] text-muted-foreground">
+                  No emulators yet
+                </p>
               )}
               {avds.map((avd) => {
                 const booting = boot?.name === avd.name;
@@ -129,7 +150,9 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                 // has no live session, so picking it must be a no-op rather
                 // than a silent dead click.
                 const readyDevice = runningSerial
-                  ? devices?.find((d) => d.serial === runningSerial && isReady(d))
+                  ? devices?.find(
+                      (d) => d.serial === runningSerial && isReady(d),
+                    )
                   : undefined;
                 return (
                   <div key={avd.name} className="flex items-center gap-1">
@@ -137,7 +160,9 @@ export function DeviceDropdown({ onPick }: { onPick: (device: DeviceEntry) => vo
                       type="button"
                       disabled={runningSerial ? !readyDevice : busy}
                       onClick={() =>
-                        readyDevice ? onPick(readyDevice) : void launch(avd.name)
+                        readyDevice
+                          ? onPick(readyDevice)
+                          : void launch(avd.name)
                       }
                       className="flex min-w-0 flex-1 items-center justify-between rounded-md border border-border/(--emph-strong) bg-card px-2.5 py-1 text-left text-xs font-medium text-foreground hover:bg-accent/(--emph-strong) disabled:opacity-50"
                       title={

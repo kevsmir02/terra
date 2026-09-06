@@ -9,7 +9,7 @@ type Props = {
 
 /**
  * Self-focusing single-line input for rename / create flows in the tree.
- * Enter commits, Escape cancels, blur commits (matches VSCode behavior —
+ * Enter commits, Escape cancels, blur commits (matches VSCode behavior,
  * dismissing the input is an implicit commit so a typed name isn't lost).
  */
 export function InlineInput({
@@ -28,7 +28,7 @@ export function InlineInput({
     if (!el) return;
     // Two-tick focus to win against parent click handlers and Radix portal
     // restorations that can steal focus right after mount. Until the second
-    // tick lands we treat the input as "unsettled" — any blur during that
+    // tick lands we treat the input as "unsettled", any blur during that
     // window is the portal teardown stealing focus, not the user dismissing
     // the input, so we refocus instead of committing an empty value.
     //
@@ -37,7 +37,7 @@ export function InlineInput({
     // nudge the parent's scroll position by a fraction of a pixel each
     // cycle. Repeated open/cancel pairs accumulate and walk the tree off
     // the left edge. We're already rendering the input where it should be
-    // visible — there is no scroll-into-view we need from focus().
+    // visible, there is no scroll-into-view we need from focus().
     const focus = () => {
       el.focus({ preventScroll: true });
       const dot = initial.lastIndexOf(".");

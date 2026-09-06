@@ -12,7 +12,12 @@ export type AvdEntry = {
   managed: boolean;
 };
 
-export type BootPhase = "starting" | "waiting-for-device" | "booting" | "ready" | "failed";
+export type BootPhase =
+  | "starting"
+  | "waiting-for-device"
+  | "booting"
+  | "ready"
+  | "failed";
 
 export type AvdBootEvent = {
   name: string;
@@ -62,24 +67,27 @@ export function useAvds(onReady?: (serial: string) => void) {
 
   useEffect(() => {
     void refresh();
-    const unlisten = getCurrentWebviewWindow().listen<AvdBootEvent>(AVD_BOOT_EVENT, (e) => {
-      const payload = e.payload;
-      if (payload.phase === "ready") {
-        setBoot(null);
-        setBusy(false);
-        void refresh();
-        onReadyRef.current?.(payload.serial);
-        return;
-      }
-      if (payload.phase === "failed") {
-        setBoot(null);
-        setBusy(false);
-        setError(payload.message ?? `${payload.name} failed to start`);
-        void refresh();
-        return;
-      }
-      setBoot(payload);
-    });
+    const unlisten = getCurrentWebviewWindow().listen<AvdBootEvent>(
+      AVD_BOOT_EVENT,
+      (e) => {
+        const payload = e.payload;
+        if (payload.phase === "ready") {
+          setBoot(null);
+          setBusy(false);
+          void refresh();
+          onReadyRef.current?.(payload.serial);
+          return;
+        }
+        if (payload.phase === "failed") {
+          setBoot(null);
+          setBusy(false);
+          setError(payload.message ?? `${payload.name} failed to start`);
+          void refresh();
+          return;
+        }
+        setBoot(payload);
+      },
+    );
     return () => {
       void unlisten.then((off) => off());
     };

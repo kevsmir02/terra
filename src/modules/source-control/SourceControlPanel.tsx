@@ -36,12 +36,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { type GitBranchEntry, native } from "@/lib/native";
+import { type GitBranchEntry, type GitStashEntry, native } from "@/lib/native";
 import {
   copyToClipboard,
   revealInFinder,
 } from "@/modules/explorer/lib/contextActions";
-import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
+import {
+  FileIconView,
+  useIconProvider,
+} from "@/modules/explorer/lib/iconProvider";
 import {
   COMPACT_CONTENT,
   COMPACT_ITEM,
@@ -161,13 +164,16 @@ function BranchDropdown({
   repoLabel,
   onNavigateToPath,
   onRefresh,
+  onCreateBranch,
 }: {
   repoRoot: string | null;
   repoLabel: string;
   onNavigateToPath?: (path: string) => void;
   onRefresh: () => void;
+  onCreateBranch?: (name: string) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
+  const [newBranch, setNewBranch] = useState("");
   const [branches, setBranches] = useState<GitBranchEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -253,6 +259,30 @@ function BranchDropdown({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
+        {onCreateBranch && repoRoot ? (
+          <div className="px-1.5 pb-1 pt-1">
+            <input
+              type="text"
+              value={newBranch}
+              placeholder="New branch, Enter to create"
+              disabled={checkingOut}
+              onChange={(event) => setNewBranch(event.target.value)}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key !== "Enter") return;
+                const name = newBranch.trim();
+                if (!name) return;
+                void onCreateBranch(name).then((ok) => {
+                  if (!ok) return;
+                  setNewBranch("");
+                  setOpen(false);
+                  onRefresh();
+                });
+              }}
+              className="h-7 w-full rounded-md border border-border bg-background px-2 text-[11.5px] outline-none placeholder:text-muted-foreground/(--emph-strong) focus:border-foreground/(--emph-soft)"
+            />
+          </div>
+        ) : null}
         {loading ? (
           <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-muted-foreground">
             <Spinner className="size-3" />
@@ -340,6 +370,91 @@ function BranchDropdown({
   );
 }
 
+function StashDropdown({
+  repoRoot,
+  busy,
+  onPush,
+  onPop,
+}: {
+  repoRoot: string | null;
+  busy: boolean;
+  onPush: () => Promise<void>;
+  onPop: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [stashes, setStashes] = useState<GitStashEntry[] | null>(null);
+
+  useEffect(() => {
+    if (!open || !repoRoot) return;
+    let alive = true;
+    setStashes(null);
+    native
+      .gitStashList(repoRoot)
+      .then((list) => {
+        if (alive) setStashes(list);
+      })
+      .catch(() => {
+        if (alive) setStashes([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, repoRoot]);
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={!repoRoot}
+          className="inline-flex shrink-0 cursor-pointer items-center rounded-md bg-foreground/(--emph-faint) px-2 py-1 text-[11.5px] font-medium leading-none text-foreground transition-colors hover:bg-foreground/(--emph-faint) disabled:cursor-default disabled:opacity-70"
+        >
+          Stash
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuItem
+          disabled={busy}
+          onSelect={() => void onPush()}
+          className="cursor-pointer text-[12px]"
+        >
+          Stash working tree changes
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={busy || !stashes || stashes.length === 0}
+          onSelect={() => void onPop()}
+          className="cursor-pointer text-[12px]"
+        >
+          Pop the latest stash
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {stashes === null ? (
+          <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground">
+            <Spinner className="size-3" />
+            Loading stashes…
+          </div>
+        ) : stashes.length === 0 ? (
+          <div className="px-3 py-2 text-[11px] text-muted-foreground">
+            No stashes.
+          </div>
+        ) : (
+          stashes.map((stash) => (
+            <div
+              key={stash.name}
+              className="flex min-w-0 items-baseline gap-2 px-3 py-1 text-[11px]"
+            >
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {stash.name}
+              </span>
+              <span className="truncate">{stash.message}</span>
+            </div>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export const SourceControlPanel = memo(function SourceControlPanel({
   open,
   sourceControl,
@@ -372,14 +487,14 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   const commitShortcut = "Ctrl+Enter";
   const generateShortcut = "Ctrl+G";
   const canCommit =
-    scm.stagedEntries.length > 0 &&
-    scm.commitMessage.trim().length > 0 &&
+    (scm.stagedEntries.length > 0 || scm.amend) &&
+    (scm.commitMessage.trim().length > 0 || scm.amend) &&
     !scm.actionBusy;
   const commitDisabledReason = scm.actionBusy
     ? "Wait for the current Git action to finish."
-    : scm.stagedEntries.length === 0
+    : scm.stagedEntries.length === 0 && !scm.amend
       ? "Stage changes to enable commit."
-      : scm.commitMessage.trim().length === 0
+      : scm.commitMessage.trim().length === 0 && !scm.amend
         ? "Enter a commit message to enable commit."
         : null;
   const commitHint = canCommit
@@ -624,6 +739,13 @@ export const SourceControlPanel = memo(function SourceControlPanel({
               repoLabel={repoLabel}
               onNavigateToPath={onNavigateToPath}
               onRefresh={handleRefresh}
+              onCreateBranch={scm.createBranch}
+            />
+            <StashDropdown
+              repoRoot={scm.repo?.repoRoot ?? null}
+              busy={!!scm.actionBusy}
+              onPush={scm.stashPush}
+              onPop={scm.stashPop}
             />
             {scm.status && (scm.status.ahead > 0 || scm.status.behind > 0) ? (
               <div className="flex shrink-0 items-center gap-0.5 text-[10px] font-semibold tabular-nums leading-none text-muted-foreground">
@@ -848,6 +970,19 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                     ? "Nothing staged"
                     : `${stagedCount} ${stagedCount === 1 ? "file" : "files"} staged`}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => scm.setAmend(!scm.amend)}
+                  title="Rewrite the last commit with the staged changes; an empty message keeps the old one"
+                  className={cn(
+                    "terra-label shrink-0 cursor-pointer rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                    scm.amend
+                      ? "border-primary/(--emph-strong) bg-primary/(--emph-faint) text-foreground"
+                      : "border-border/(--emph-strong) text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Amend
+                </button>
                 <span className="ml-auto shrink-0 truncate text-muted-foreground/(--emph-strong)">
                   {pushStatusLabel}
                 </span>
@@ -862,7 +997,11 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                       disabled={!canCommit}
                       onClick={() => void scm.commit()}
                     >
-                      {scm.actionBusy === "commit" ? "Committing…" : "Commit"}
+                      {scm.actionBusy === "commit"
+                        ? "Committing…"
+                        : scm.amend
+                          ? "Amend"
+                          : "Commit"}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent
@@ -1034,7 +1173,10 @@ function CleanTreeHint({ repoLabel }: { repoLabel: string }) {
         Working tree clean
       </div>
       <div className="text-[10.5px] leading-snug text-muted-foreground">
-        on <span className="font-mono text-foreground/(--emph-bold)">{repoLabel}</span>
+        on{" "}
+        <span className="font-mono text-foreground/(--emph-bold)">
+          {repoLabel}
+        </span>
       </div>
     </div>
   );
@@ -1307,7 +1449,7 @@ const EntryRow = memo(function EntryRow({
           </ContextMenuItem>
         ) : null}
 
-        {/* Reveal in Finder — only for existing files */}
+        {/* Reveal in file manager, only for existing files */}
         {!isDeleted && absolutePath ? (
           <>
             <ContextMenuSeparator />

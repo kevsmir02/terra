@@ -12,7 +12,10 @@ import {
   type GitCommitFileChange,
   type GitLogEntry,
 } from "@/lib/native";
-import { FileIconView, useIconProvider } from "@/modules/explorer/lib/iconProvider";
+import {
+  FileIconView,
+  useIconProvider,
+} from "@/modules/explorer/lib/iconProvider";
 import {
   Copy01Icon,
   File02Icon,
@@ -713,7 +716,9 @@ const CommitRow = memo(function CommitRow({
       onClick={(event) => onClick(commit.sha, event)}
       className={cn(
         "group relative grid h-full w-full cursor-pointer items-center gap-3 border-l-2 border-transparent pr-3 text-left transition-colors",
-        active ? "border-l-primary/70 bg-accent/(--emph-soft)" : "hover:bg-accent/(--emph-subtle)",
+        active
+          ? "border-l-primary/70 bg-accent/(--emph-soft)"
+          : "hover:bg-accent/(--emph-subtle)",
       )}
       style={{ gridTemplateColumns: gridTemplate }}
     >
@@ -1009,14 +1014,10 @@ const FileRow = memo(function FileRow({
         ) : (
           <>
             {file.added > 0 ? (
-              <span className="text-status-added">
-                +{file.added}
-              </span>
+              <span className="text-status-added">+{file.added}</span>
             ) : null}
             {file.removed > 0 ? (
-              <span className="text-status-deleted">
-                −{file.removed}
-              </span>
+              <span className="text-status-deleted">−{file.removed}</span>
             ) : null}
           </>
         )}

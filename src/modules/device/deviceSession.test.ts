@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceControlBridge } from "./controlBridge";
-import { exitMessage, openDeviceSession, splitFrame, type SessionStatus } from "./deviceSession";
+import {
+  exitMessage,
+  openDeviceSession,
+  splitFrame,
+  type SessionStatus,
+} from "./deviceSession";
 import type { DeviceEntry } from "./generated/DeviceEntry";
 
 type FakePlayer = {
@@ -66,7 +71,9 @@ function openChannel() {
 }
 
 function exitChannel() {
-  return channelArg("onExit") as { onmessage: (msg: { reason: string }) => void };
+  return channelArg("onExit") as {
+    onmessage: (msg: { reason: string }) => void;
+  };
 }
 
 function encodeFrame(kind: number, payload: number[]): ArrayBuffer {
@@ -97,7 +104,10 @@ function fakeVideo(videoWidth = 864, videoHeight = 1920): FakeVideo {
   } as unknown as FakeVideo;
 }
 
-type Opened = { onStatus: ReturnType<typeof open>["onStatus"]; video: FakeVideo };
+type Opened = {
+  onStatus: ReturnType<typeof open>["onStatus"];
+  video: FakeVideo;
+};
 
 function open(video: FakeVideo = fakeVideo()) {
   const onStatus = vi.fn<(status: SessionStatus) => void>();
@@ -108,7 +118,9 @@ function open(video: FakeVideo = fakeVideo()) {
 // Waits for the `opens`-th device_open, then decodes a frame, which is the
 // only thing that may promote the session to `streaming`.
 async function awaitStreaming(opened: Opened, opens = 1) {
-  await vi.waitFor(() => expect(calls("device_open")).toHaveLength(opens), { timeout: 2000 });
+  await vi.waitFor(() => expect(calls("device_open")).toHaveLength(opens), {
+    timeout: 2000,
+  });
   opened.video.fire("loadeddata");
   await vi.waitFor(
     () =>
@@ -175,7 +187,9 @@ describe("openDeviceSession pre-flight", () => {
   it("reports no-devices when the serial is not listed and never opens a stream", async () => {
     mockBackend([]);
     const { onStatus } = open();
-    await vi.waitFor(() => expect(onStatus).toHaveBeenCalledWith({ kind: "no-devices" }));
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith({ kind: "no-devices" }),
+    );
     expect(calls("device_open")).toHaveLength(0);
   });
 
@@ -183,14 +197,19 @@ describe("openDeviceSession pre-flight", () => {
     mockBackend([{ serial: SERIAL, state: "unauthorized" }]);
     const { onStatus } = open();
     await vi.waitFor(() =>
-      expect(onStatus).toHaveBeenCalledWith({ kind: "unauthorized", serial: SERIAL }),
+      expect(onStatus).toHaveBeenCalledWith({
+        kind: "unauthorized",
+        serial: SERIAL,
+      }),
     );
   });
 
   it("maps a missing adb to its own state", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("adb not found on PATH"));
     const { onStatus } = open();
-    await vi.waitFor(() => expect(onStatus).toHaveBeenCalledWith({ kind: "adb-missing" }));
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenCalledWith({ kind: "adb-missing" }),
+    );
   });
 });
 
@@ -202,11 +221,17 @@ describe("openDeviceSession streaming", () => {
     // The bridge exists only once device_open resolved, so the session is
     // fully open here and still must not claim to be streaming.
     await vi.waitFor(() => expect(session.bridge).not.toBeNull());
-    expect(onStatus).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "streaming" }));
+    expect(onStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "streaming" }),
+    );
 
     video.fire("loadeddata");
 
-    expect(onStatus).toHaveBeenLastCalledWith({ kind: "streaming", devW: 864, devH: 1920 });
+    expect(onStatus).toHaveBeenLastCalledWith({
+      kind: "streaming",
+      devW: 864,
+      devH: 1920,
+    });
     session.close();
   });
 
@@ -216,14 +241,23 @@ describe("openDeviceSession streaming", () => {
     await vi.waitFor(() => expect(session.bridge).not.toBeNull());
 
     video.fire("resize");
-    expect(onStatus).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "streaming" }));
+    expect(onStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "streaming" }),
+    );
 
-    const sized = video as unknown as { videoWidth: number; videoHeight: number };
+    const sized = video as unknown as {
+      videoWidth: number;
+      videoHeight: number;
+    };
     sized.videoWidth = 1080;
     sized.videoHeight = 2400;
     video.fire("resize");
 
-    expect(onStatus).toHaveBeenLastCalledWith({ kind: "streaming", devW: 1080, devH: 2400 });
+    expect(onStatus).toHaveBeenLastCalledWith({
+      kind: "streaming",
+      devW: 1080,
+      devH: 2400,
+    });
     session.close();
   });
 
@@ -234,7 +268,10 @@ describe("openDeviceSession streaming", () => {
 
     expect(players).toHaveLength(1);
     expect(players[0].pushData).toHaveBeenCalledTimes(1);
-    const [kind, payload] = players[0].pushData.mock.calls[0] as [number, Uint8Array];
+    const [kind, payload] = players[0].pushData.mock.calls[0] as [
+      number,
+      Uint8Array,
+    ];
     expect(kind).toBe(1);
     expect(Array.from(payload)).toEqual([1, 2, 3]);
     expect(session.bridge).toBeInstanceOf(DeviceControlBridge);
@@ -246,7 +283,9 @@ describe("openDeviceSession streaming", () => {
 
     session.close();
 
-    expect(calls("device_close")).toEqual([["device_close", { handle: HANDLE }]]);
+    expect(calls("device_close")).toEqual([
+      ["device_close", { handle: HANDLE }],
+    ]);
     expect(players[0].dispose).toHaveBeenCalledTimes(1);
     expect(session.bridge).toBeNull();
     openChannel().onmessage(encodeFrame(1, [1]));
@@ -256,7 +295,10 @@ describe("openDeviceSession streaming", () => {
 
   it("closes a handle that arrives after close was requested", async () => {
     let resolveOpen: (handle: number) => void = () => {};
-    mockBackend([{ serial: SERIAL, state: "device" }], () => new Promise((r) => (resolveOpen = r)));
+    mockBackend(
+      [{ serial: SERIAL, state: "device" }],
+      () => new Promise((r) => (resolveOpen = r)),
+    );
     const { onStatus, session } = open();
     await vi.waitFor(() => expect(calls("device_open")).toHaveLength(1));
 
@@ -265,14 +307,18 @@ describe("openDeviceSession streaming", () => {
     await vi.waitFor(() => expect(calls("device_close")).toHaveLength(1));
 
     expect(calls("device_close")[0][1]).toEqual({ handle: HANDLE });
-    expect(onStatus).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "streaming" }));
+    expect(onStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "streaming" }),
+    );
   });
 });
 
 describe("exitMessage", () => {
   it("turns each backend reason into a line a user can read", () => {
     expect(exitMessage("stream-ended")).toBe("The device stopped streaming");
-    expect(exitMessage("server-unreachable")).toBe("The mirror server could not be reached");
+    expect(exitMessage("server-unreachable")).toBe(
+      "The mirror server could not be reached",
+    );
     expect(exitMessage("stream-corrupt")).toBe("The stream was corrupted");
   });
 
@@ -283,7 +329,9 @@ describe("exitMessage", () => {
   });
 
   it("falls back to the generic line rather than showing an internal token", () => {
-    expect(exitMessage("some-reason-added-later")).toBe("The device stopped streaming");
+    expect(exitMessage("some-reason-added-later")).toBe(
+      "The device stopped streaming",
+    );
   });
 });
 
@@ -297,7 +345,9 @@ describe("openDeviceSession session death", () => {
       kind: "disconnected",
       message: "The mirror server could not be reached",
     });
-    expect(calls("device_close")).toEqual([["device_close", { handle: HANDLE }]]);
+    expect(calls("device_close")).toEqual([
+      ["device_close", { handle: HANDLE }],
+    ]);
     expect(players[0].dispose).toHaveBeenCalledTimes(1);
     expect(session.bridge).toBeNull();
   });
@@ -322,7 +372,9 @@ describe("openDeviceSession player failure", () => {
 
     onError?.("Video buffer is full");
 
-    expect(calls("device_close")).toEqual([["device_close", { handle: HANDLE }]]);
+    expect(calls("device_close")).toEqual([
+      ["device_close", { handle: HANDLE }],
+    ]);
     expect(players[0].dispose).toHaveBeenCalledTimes(1);
     expect(session.bridge).toBeNull();
     expect(onStatus).toHaveBeenLastCalledWith({
@@ -333,7 +385,9 @@ describe("openDeviceSession player failure", () => {
     onError?.("Video buffer is full");
     session.close();
     expect(calls("device_close")).toHaveLength(1);
-    expect(onStatus.mock.calls.filter((c) => c[0].kind === "disconnected")).toHaveLength(1);
+    expect(
+      onStatus.mock.calls.filter((c) => c[0].kind === "disconnected"),
+    ).toHaveLength(1);
   });
 });
 
@@ -341,7 +395,9 @@ describe("openDeviceSession reopen", () => {
   it("re-runs the device_list pre-flight and connects once the device shows up", async () => {
     mockBackend([]);
     const first = open();
-    await vi.waitFor(() => expect(first.onStatus).toHaveBeenCalledWith({ kind: "no-devices" }));
+    await vi.waitFor(() =>
+      expect(first.onStatus).toHaveBeenCalledWith({ kind: "no-devices" }),
+    );
     first.session.close();
 
     mockBackend([{ serial: SERIAL, state: "device" }]);
@@ -388,7 +444,8 @@ describe("openDeviceSession reopen while the previous close is still in flight",
       if (cmd === "device_list") return [{ serial: SERIAL, state: "device" }];
       if (cmd === "device_open") {
         openAttempts++;
-        if (openAttempts === 1) throw new Error(`device ${SERIAL} is already open`);
+        if (openAttempts === 1)
+          throw new Error(`device ${SERIAL} is already open`);
         return HANDLE;
       }
       return undefined;
@@ -403,7 +460,8 @@ describe("openDeviceSession reopen while the previous close is still in flight",
   it("surfaces an error when device_open keeps rejecting as already open", async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "device_list") return [{ serial: SERIAL, state: "device" }];
-      if (cmd === "device_open") throw new Error(`device ${SERIAL} is already open`);
+      if (cmd === "device_open")
+        throw new Error(`device ${SERIAL} is already open`);
       return undefined;
     });
 
@@ -411,7 +469,10 @@ describe("openDeviceSession reopen while the previous close is still in flight",
     await vi.waitFor(
       () =>
         expect(onStatus).toHaveBeenLastCalledWith(
-          expect.objectContaining({ kind: "error", message: expect.stringContaining("already open") }),
+          expect.objectContaining({
+            kind: "error",
+            message: expect.stringContaining("already open"),
+          }),
         ),
       { timeout: 2000 },
     );
