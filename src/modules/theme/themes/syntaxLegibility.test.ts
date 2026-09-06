@@ -30,10 +30,9 @@ type Case = {
   value: (cssVar: string) => string | undefined;
 };
 
-// terra-default authors no variant colors: it is the globals.css baseline, and
-// ThemeProvider clears the variables for it rather than applying any, so there
-// is no resolved --background to measure against. Every builtin that does
-// author colors has to be covered, in both modes.
+// Every builtin authors colors today, but the filter stays: a theme that
+// authors none has no resolved --background to measure against, and without a
+// count to compare against, this file would silently pass on zero cases.
 const MEASURABLE = listBuiltinThemes().filter(
   (t) => t.variants.light?.colors || t.variants.dark?.colors,
 );

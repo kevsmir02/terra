@@ -294,7 +294,7 @@ A theme owns how fast the chrome moves and on what curve. `motion.speed` scales
 every duration (`instant` 0, `snappy` 0.72, `smooth` 1, `relaxed` 1.35) and
 `motion.easing` picks the curve (`mechanical` linear, `standard`, `expressive`).
 Nothing runs snappy and mechanical because its identity is a machine; the
-default runs smooth and expressive.
+default runs snappy and expressive, quick travel on a curve that still eases.
 
 The three durations chrome animates on are `--dur-fast` (110ms, hovers,
 overlays, list rows), `--dur-base` (170ms, panel switches, anything that
