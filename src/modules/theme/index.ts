@@ -5,4 +5,4 @@ export {
   type EditorThemeResolution,
 } from "./resolveEditorTheme";
 export { DEFAULT_THEME_ID } from "./types";
-export { OVERLAY_Z } from "./SurfaceLayer";
+export { PREVIEW_Z, WASH_Z } from "./layers";

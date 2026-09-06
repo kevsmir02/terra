@@ -6,7 +6,7 @@ import { MarkdownStack } from "@/modules/markdown";
 import { PreviewStack } from "@/modules/preview";
 import type { Tab } from "@/modules/tabs";
 import { TerminalStack } from "@/modules/terminal";
-import { OVERLAY_Z } from "@/modules/theme";
+import { PREVIEW_Z } from "@/modules/theme";
 
 type TerminalStackProps = ComponentProps<typeof TerminalStack>;
 type EditorStackProps = ComponentProps<typeof EditorStack>;
@@ -103,12 +103,10 @@ export function WorkspaceSurface({
           "absolute inset-0 px-3 pt-2 pb-2",
           !isPreviewTab && "invisible pointer-events-none",
         )}
-        // The wallpaper wash (SurfaceLayer) paints above the whole app at
-        // OVERLAY_Z so it's visible through translucent chrome everywhere -
-        // except here. A live preview iframe renders real external content
-        // and must stay pixel-accurate, so it paints one level above the
-        // wash instead of underneath it.
-        style={{ zIndex: OVERLAY_Z + 1 }}
+        // A live preview iframe renders real external content and must stay
+        // pixel-accurate, so it paints above the wallpaper wash instead of
+        // underneath it. Both stay below the overlay layer (see layers.ts).
+        style={{ zIndex: PREVIEW_Z }}
         aria-hidden={!isPreviewTab}
       >
         <PreviewStack
