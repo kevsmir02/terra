@@ -5,7 +5,6 @@ import {
   type EditorThemePref,
 } from "@/modules/settings/store";
 import { resolveVariant } from "./resolveVariant";
-import { getBuiltinTheme, getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
 
 const FALLBACK: Record<"light" | "dark", EditorThemeId> = {
@@ -24,15 +23,10 @@ export type EditorThemeResolution =
  */
 export function resolveEditorTheme(
   pref: EditorThemePref,
-  themeId: string,
-  customThemes: Theme[],
+  theme: Theme,
   mode: "light" | "dark",
 ): EditorThemeResolution {
   if (pref !== EDITOR_THEME_AUTO) return { kind: "preset", id: pref };
-  const theme =
-    customThemes.find((t) => t.id === themeId) ??
-    getBuiltinTheme(themeId) ??
-    getDefaultTheme();
   const resolved = resolveVariant(theme, mode);
   if (resolved) {
     const { variant } = resolved;

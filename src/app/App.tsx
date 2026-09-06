@@ -81,7 +81,7 @@ import {
   type TerminalPaneHandle,
   useTerminalFileDrop,
 } from "@/modules/terminal";
-import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
+import { ThemeProvider } from "@/modules/theme";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -293,7 +293,6 @@ export default function App() {
   const isGitHistoryTab = activeTab?.kind === "git-history";
 
   useEditorFileSync({ tabs, tabsRef, editorRefs });
-  useThemeFileEditing({ tabsRef, openFileTab });
 
   const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
     activeTab,

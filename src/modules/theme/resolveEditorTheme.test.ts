@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveEditorTheme } from "./resolveEditorTheme";
+import { getDefaultTheme } from "./themes";
 import type { Theme } from "./types";
 
 const ansi = Array.from({ length: 16 }, (_, i) =>
@@ -43,18 +44,18 @@ const asymmetricPairing: Theme = {
 
 describe("resolveEditorTheme", () => {
   it("returns an explicit pref as a preset, ignoring the app theme", () => {
-    expect(resolveEditorTheme("nord", "with-ansi", [withAnsi], "dark")).toEqual({
+    expect(resolveEditorTheme("nord", withAnsi, "dark")).toEqual({
       kind: "preset",
       id: "nord",
     });
   });
 
   it("derives when the theme has an ansi palette, outranking editorTheme", () => {
-    expect(resolveEditorTheme("auto", "with-ansi", [withAnsi], "dark")).toEqual({
+    expect(resolveEditorTheme("auto", withAnsi, "dark")).toEqual({
       kind: "derived",
       mode: "dark",
     });
-    expect(resolveEditorTheme("auto", "with-ansi", [withAnsi], "light")).toEqual({
+    expect(resolveEditorTheme("auto", withAnsi, "light")).toEqual({
       kind: "derived",
       mode: "light",
     });
@@ -63,7 +64,7 @@ describe("resolveEditorTheme", () => {
   // The variant that supplied the colours decides the frame, so a dark-only
   // theme in light mode must not mount a light editor over dark syntax.
   it("reports the winning variant mode for a single-variant theme", () => {
-    expect(resolveEditorTheme("auto", "dark-only", [darkOnly], "light")).toEqual({
+    expect(resolveEditorTheme("auto", darkOnly, "light")).toEqual({
       kind: "derived",
       mode: "dark",
     });
@@ -73,16 +74,16 @@ describe("resolveEditorTheme", () => {
   // to `theme.editorTheme?.[mode]` passes every other test in this file.
   it("falls back across modes within the editorTheme pairing", () => {
     expect(
-      resolveEditorTheme("auto", "asymmetric-pairing", [asymmetricPairing], "light"),
+      resolveEditorTheme("auto", asymmetricPairing, "light"),
     ).toEqual({ kind: "preset", id: "dracula" });
   });
 
   it("falls through to the editorTheme pairing without an ansi palette", () => {
-    expect(resolveEditorTheme("auto", "no-ansi", [noAnsi], "dark")).toEqual({
+    expect(resolveEditorTheme("auto", noAnsi, "dark")).toEqual({
       kind: "preset",
       id: "dracula",
     });
-    expect(resolveEditorTheme("auto", "no-ansi", [noAnsi], "light")).toEqual({
+    expect(resolveEditorTheme("auto", noAnsi, "light")).toEqual({
       kind: "preset",
       id: "github-light",
     });
@@ -92,20 +93,13 @@ describe("resolveEditorTheme", () => {
   // atomone pairing it still declares as a fallback. Before it did, the default
   // theme was the one case where the editor came from an unrelated preset.
   it("derives terra-default from its own ansi palette", () => {
-    expect(resolveEditorTheme("auto", "terra-default", [], "dark")).toEqual({
+    expect(resolveEditorTheme("auto", getDefaultTheme(), "dark")).toEqual({
       kind: "derived",
       mode: "dark",
     });
-    expect(resolveEditorTheme("auto", "terra-default", [], "light")).toEqual({
+    expect(resolveEditorTheme("auto", getDefaultTheme(), "light")).toEqual({
       kind: "derived",
       mode: "light",
-    });
-  });
-
-  it("uses the default theme resolution for an unknown app theme", () => {
-    expect(resolveEditorTheme("auto", "does-not-exist", [], "dark")).toEqual({
-      kind: "derived",
-      mode: "dark",
     });
   });
 
@@ -116,11 +110,11 @@ describe("resolveEditorTheme", () => {
       editorTheme: { dark: "not-a-real-theme" },
       variants: { dark: {} },
     };
-    expect(resolveEditorTheme("auto", "bad", [bad], "dark")).toEqual({
+    expect(resolveEditorTheme("auto", bad, "dark")).toEqual({
       kind: "preset",
       id: "atomone",
     });
-    expect(resolveEditorTheme("auto", "bad", [bad], "light")).toEqual({
+    expect(resolveEditorTheme("auto", bad, "light")).toEqual({
       kind: "preset",
       id: "github-light",
     });

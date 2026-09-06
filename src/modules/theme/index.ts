@@ -3,7 +3,6 @@ export {
   resolveTerminalFont,
   type TerminalFont,
 } from "./resolveTerminalFont";
-export { useThemeFileEditing } from "./useThemeFileEditing";
 export { listBuiltinThemes } from "./themes";
 export {
   resolveEditorTheme,

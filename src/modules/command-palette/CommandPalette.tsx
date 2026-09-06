@@ -59,7 +59,7 @@ export function CommandPalette({
   const [value, setValue] = useState("");
   const [page, setPage] = useState<"root" | "themes">("root");
   const userShortcuts = usePreferencesStore((s) => s.shortcuts);
-  const { themeId, customThemes, setThemeId, previewThemeId } = useTheme();
+  const { themeId, setThemeId, previewThemeId } = useTheme();
 
   const parsed = parseQuery(query);
   const inThemes = page === "themes";
@@ -80,7 +80,7 @@ export function CommandPalette({
 
   const themes = useMemo(() => {
     if (!inThemes) return [];
-    const all = [...listBuiltinThemes(), ...customThemes];
+    const all = listBuiltinThemes();
     const q = themeFilter.toLowerCase();
     if (!q) return all;
     return all
@@ -88,7 +88,7 @@ export function CommandPalette({
       .filter((x) => x.s !== null)
       .sort((a, b) => (b.s ?? 0) - (a.s ?? 0))
       .map((x) => x.t);
-  }, [inThemes, themeFilter, customThemes]);
+  }, [inThemes, themeFilter]);
 
   const resetPalette = useCallback(() => {
     setQuery("");

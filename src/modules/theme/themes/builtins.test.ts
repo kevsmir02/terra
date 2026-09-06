@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { validateTheme } from "../validateTheme";
 import { getBuiltinTheme, listBuiltinThemes } from "./index";
 
 const builtins = listBuiltinThemes();
 
 describe("built-in themes", () => {
   it.each(builtins.map((t) => [t.id, t] as const))(
-    "%s round-trips through validateTheme",
+    "%s has a kebab-case id and a name",
     (_id, theme) => {
-      const result = validateTheme(theme);
-      expect(result.ok ? null : result.diagnostics).toBeNull();
+      expect(theme.id).toMatch(/^[a-z0-9][a-z0-9-]{1,63}$/);
+      expect(theme.name.trim().length).toBeGreaterThan(0);
     },
   );
 
