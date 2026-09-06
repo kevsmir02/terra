@@ -62,10 +62,23 @@ type FocusableExplorer = {
   isFocused: () => boolean;
 };
 
+const PANEL_IN = "terra-panel-in";
+
+/** Replays the panel entrance on a node that stayed mounted: switching views
+ * remounts and animates for free, a collapse does not, so the class has to come
+ * off and back on around a forced reflow. */
+function replayReveal(el: HTMLElement | null): void {
+  if (!el) return;
+  el.classList.remove(PANEL_IN);
+  void el.offsetWidth;
+  el.classList.add(PANEL_IN);
+}
+
 export function useSidebarPanel(
   explorerRef: RefObject<FocusableExplorer | null>,
 ) {
   const sidebarRef = useRef<PanelImperativeHandle | null>(null);
+  const sidebarBodyRef = useRef<HTMLDivElement | null>(null);
   const sidebarWidthRef = useRef(readSidebarWidth());
   const sidebarWidthWriteTimerRef = useRef(0);
   const explorerReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -73,6 +86,11 @@ export function useSidebarPanel(
     useState<SidebarViewId>(readSidebarView);
   const [initialSidebarCollapsed] = useState(readSidebarCollapsed);
   const collapsedRef = useRef(initialSidebarCollapsed);
+  // Frozen at mount: the panel re-registers whenever `defaultSize` changes
+  // identity, and re-registering mid-drag drops the drag on its first pixel.
+  const [initialSidebarSize] = useState(() =>
+    initialSidebarCollapsed ? "0px" : `${sidebarWidthRef.current}px`,
+  );
 
   const persistSidebarView = useCallback((view: SidebarViewId) => {
     setSidebarViewState(view);
@@ -86,6 +104,7 @@ export function useSidebarPanel(
   const persistSidebarCollapsed = useCallback((collapsed: boolean) => {
     if (collapsedRef.current === collapsed) return;
     collapsedRef.current = collapsed;
+    if (!collapsed) replayReveal(sidebarBodyRef.current);
     try {
       window.localStorage.setItem(
         SIDEBAR_COLLAPSED_STORAGE_KEY,
@@ -178,9 +197,9 @@ export function useSidebarPanel(
 
   return {
     sidebarRef,
-    sidebarWidthRef,
+    sidebarBodyRef,
     sidebarView,
-    initialSidebarCollapsed,
+    initialSidebarSize,
     persistSidebarView,
     persistSidebarCollapsed,
     toggleSidebar,

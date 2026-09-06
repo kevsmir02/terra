@@ -257,9 +257,9 @@ export default function App() {
 
   const {
     sidebarRef,
-    sidebarWidthRef,
+    sidebarBodyRef,
     sidebarView,
-    initialSidebarCollapsed,
+    initialSidebarSize,
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
@@ -1118,11 +1118,7 @@ export default function App() {
               <ResizablePanel
                 id="sidebar"
                 panelRef={sidebarRef}
-                defaultSize={
-                  initialSidebarCollapsed
-                    ? "0px"
-                    : `${sidebarWidthRef.current}px`
-                }
+                defaultSize={initialSidebarSize}
                 minSize={`${SIDEBAR_MIN_WIDTH}px`}
                 maxSize={`${SIDEBAR_MAX_WIDTH}px`}
                 collapsible
@@ -1140,6 +1136,7 @@ export default function App() {
                 <div className="flex h-full min-h-0 flex-col border-r border-border/(--emph-strong) bg-card">
                   <div
                     key={sidebarView}
+                    ref={sidebarBodyRef}
                     className="min-h-0 flex-1 terra-panel-in"
                   >
                     {sidebarView === "explorer" ? (
