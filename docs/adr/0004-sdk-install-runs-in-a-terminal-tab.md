@@ -1,6 +1,9 @@
 # 0004. Installing an Android system image runs in a terminal tab
 
-Status: accepted
+Status: accepted. The "Bootstrapping the cmdline-tools too" alternative below is
+superseded by [0005](0005-terra-bootstraps-the-standalone-android-sdk.md), which
+found its stated costs to be costs of downloading in Rust rather than of the
+bootstrap itself. The decision recorded here is unchanged.
 
 ## Context
 

@@ -77,7 +77,7 @@ export function DeviceDropdown({
 
       {shown?.includes("adb not found") ? (
         <div className="px-3 py-2 text-[11px] text-destructive">
-          adb not found. Install Android Platform Tools, or set ANDROID_HOME.
+          No Android SDK on this machine, or ANDROID_HOME points elsewhere.
         </div>
       ) : shown ? (
         <div className="px-3 py-2 text-[11px] text-destructive">{shown}</div>

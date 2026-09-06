@@ -56,13 +56,29 @@ function Shell({
   );
 }
 
-export function AdbMissing({ narrow }: { narrow?: boolean }) {
+/**
+ * The first-run state, and until this offered anything the only one with no way
+ * forward: with no SDK at all `adb` never resolves, so the panel that knows how
+ * to install one was three levels down a path this state never reached.
+ */
+export function AdbMissing({
+  narrow,
+  onRefresh,
+  runInTerminal,
+}: {
+  narrow?: boolean;
+  onRefresh: () => void;
+  runInTerminal?: (command: string) => void;
+}) {
+  const { create } = useAvds(() => onRefresh());
+
   return (
-    <Shell title="adb not found" icon={Download01Icon} narrow={narrow}>
-      Install Android Platform Tools (<code>sudo apt install adb</code>,{" "}
-      <code>brew install --cask android-platform-tools</code>, or{" "}
-      <code>winget install Google.PlatformTools</code>). Terra shells out to{" "}
-      <code>adb</code> but does not bundle it.
+    <Shell title="No Android SDK" icon={Download01Icon} narrow={narrow}>
+      <p>
+        Terra shells out to <code>adb</code> and the emulator but bundles
+        neither, and neither is on this machine.
+      </p>
+      <CreateAvd runInTerminal={runInTerminal} onCreate={create} />
     </Shell>
   );
 }

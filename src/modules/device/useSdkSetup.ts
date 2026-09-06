@@ -2,15 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SystemImage } from "./useAvds";
 
-export type SdkSetup = {
-  canInstall: boolean;
-  /** Why not, when `canInstall` is false. */
-  reason?: string;
-  candidates: SystemImage[];
-  /** Packages the install pulls in alongside the image, because they are
-   *  missing too. */
-  extraPackages: string[];
-};
+/**
+ * How far from a running emulator this machine is. `bootstrap` is the first-run
+ * case: no command-line tools at all, so the offer is the whole standalone SDK
+ * rather than one package.
+ */
+export type SdkSetup =
+  | { stage: "bootstrap"; candidates: SystemImage[]; sdkRoot: string }
+  | { stage: "image"; candidates: SystemImage[]; extraPackages: string[] }
+  | { stage: "blocked"; reason: string };
 
 /**
  * `device_list_system_images` is a directory walk, not a network call, and this
@@ -28,6 +28,10 @@ const INSTALL_POLL_MS = 10_000;
  * happen in front of the user (`docs/adr/0004-sdk-install-runs-in-a-terminal-tab.md`).
  * That leaves no exit code to observe from here, so completion is the image
  * appearing on disk.
+ *
+ * The line is sdkmanager alone, or on a machine with no SDK at all the
+ * bootstrap that fetches the command-line tools first and ends in the same
+ * sdkmanager call. Both land the same image, so this hook never asks which.
  */
 export function useSdkSetup({
   runInTerminal,
@@ -52,12 +56,7 @@ export function useSdkSetup({
       })
       .catch((e) => {
         if (cancelled) return;
-        setSetup({
-          canInstall: false,
-          reason: String(e),
-          candidates: [],
-          extraPackages: [],
-        });
+        setSetup({ stage: "blocked", reason: String(e) });
       });
     return () => {
       cancelled = true;

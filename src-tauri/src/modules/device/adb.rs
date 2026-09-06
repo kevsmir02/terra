@@ -73,19 +73,9 @@ pub struct SystemImage {
     pub abi: String,
 }
 
-/// SDK tools carry `.exe` on Windows. `which` applies PATHEXT for us, but the
-/// explicit SDK-directory probes below have to spell it out.
-fn exe(name: &str) -> String {
-    if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_string()
-    }
-}
-
 /// Every plausible SDK root, in probe order. Android Studio does not add
-/// platform-tools to PATH on any platform, so for a stock install these
-/// directories are the only way the tools are ever found.
+/// platform-tools to PATH, so for a stock install these directories are the
+/// only way the tools are ever found.
 pub fn sdk_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     for var in ["ANDROID_HOME", "ANDROID_SDK_ROOT"] {
@@ -96,25 +86,22 @@ pub fn sdk_roots() -> Vec<PathBuf> {
         }
     }
     if let Some(home) = dirs::home_dir() {
-        // macOS default, note the lowercase `sdk`, which differs from Linux.
-        roots.push(home.join("Library").join("Android").join("sdk"));
-        // Linux default.
         roots.push(home.join("Android").join("Sdk"));
-    }
-    if cfg!(windows) {
-        if let Ok(local) = std::env::var("LOCALAPPDATA") {
-            roots.push(PathBuf::from(local).join("Android").join("Sdk"));
-        }
     }
     roots.dedup();
     roots
 }
 
+/// Where a bootstrap install writes. A declared root outranks the default, so
+/// a user who set ANDROID_HOME gets the SDK where they asked for it.
+pub fn default_sdk_root() -> Option<PathBuf> {
+    sdk_roots().into_iter().next()
+}
+
 fn find_in_sdk(subdir: &str, tool: &str) -> Option<PathBuf> {
-    let file = exe(tool);
     sdk_roots()
         .into_iter()
-        .map(|root| root.join(subdir).join(&file))
+        .map(|root| root.join(subdir).join(tool))
         .find(|p| p.is_file())
 }
 
@@ -142,21 +129,21 @@ pub fn resolve_emulator_path() -> Result<PathBuf, String> {
 }
 
 /// cmdline-tools binaries live in a versioned dir and, on older SDKs, in the
-/// legacy `tools/bin`. They are `.bat` on Windows rather than `.exe`.
-fn resolve_cmdline_tool(tool: &str, file: &str, missing: &str) -> Result<PathBuf, String> {
+/// legacy `tools/bin`.
+fn resolve_cmdline_tool(tool: &str, missing: &str) -> Result<PathBuf, String> {
     if let Ok(path) = which::which(tool) {
         return Ok(path);
     }
     for root in sdk_roots() {
         let cmdline = root.join("cmdline-tools");
         // `latest` is the conventional name; otherwise take any versioned dir.
-        let mut candidates = vec![cmdline.join("latest").join("bin").join(file)];
+        let mut candidates = vec![cmdline.join("latest").join("bin").join(tool)];
         if let Ok(entries) = std::fs::read_dir(&cmdline) {
             for entry in entries.flatten() {
-                candidates.push(entry.path().join("bin").join(file));
+                candidates.push(entry.path().join("bin").join(tool));
             }
         }
-        candidates.push(root.join("tools").join("bin").join(file));
+        candidates.push(root.join("tools").join("bin").join(tool));
         if let Some(found) = candidates.into_iter().find(|p| p.is_file()) {
             return Ok(found);
         }
@@ -165,27 +152,15 @@ fn resolve_cmdline_tool(tool: &str, file: &str, missing: &str) -> Result<PathBuf
 }
 
 pub fn resolve_avdmanager_path() -> Result<PathBuf, String> {
-    let file = if cfg!(windows) {
-        "avdmanager.bat"
-    } else {
-        "avdmanager"
-    };
     resolve_cmdline_tool(
         "avdmanager",
-        file,
         "avdmanager not found. Install the Android SDK Command-line Tools",
     )
 }
 
 pub fn resolve_sdkmanager_path() -> Result<PathBuf, String> {
-    let file = if cfg!(windows) {
-        "sdkmanager.bat"
-    } else {
-        "sdkmanager"
-    };
     resolve_cmdline_tool(
         "sdkmanager",
-        file,
         "sdkmanager not found. Install the Android SDK Command-line Tools",
     )
 }
@@ -532,13 +507,8 @@ pub fn build_sdk_install_command(
     if packages.is_empty() {
         return Err("no packages to install".to_string());
     }
-    let catalog = install_catalog();
     for package in packages {
-        let offered = CATALOG_TOOLS.contains(&package.as_str())
-            || catalog.iter().any(|image| &image.package == package);
-        if !offered {
-            return Err(format!("package not offered by Terra: {package}"));
-        }
+        ensure_offered(package)?;
     }
     let mut line = vec![
         shell_path(sdkmanager)?,
@@ -546,6 +516,117 @@ pub fn build_sdk_install_command(
     ];
     line.extend(packages.iter().map(|package| shell_quote(package)));
     Ok(line.join(" "))
+}
+
+/// A package id arriving over IPC may only ever be one Terra itself offered.
+fn ensure_offered(package: &str) -> Result<(), String> {
+    let offered = CATALOG_TOOLS.contains(&package)
+        || install_catalog().iter().any(|image| image.package == package);
+    if offered {
+        Ok(())
+    } else {
+        Err(format!("package not offered by Terra: {package}"))
+    }
+}
+
+/// The cmdline-tools build the bootstrap fetches, and the digest it must hash
+/// to. Google's repository manifest publishes only sha1, so this sha256 is
+/// derived from the artifact once, after checking it against that published
+/// sha1; bumping the build means re-deriving it the same way. A stale pin
+/// costs only an older bootstrap tool, since sdkmanager updates itself and old
+/// cmdline-tools install current packages.
+const CMDLINE_TOOLS_BUILD: &str = "16111833";
+const CMDLINE_TOOLS_SHA256: &str =
+    "0877a1d048fe4a24efe2eff536ca4223f7adeb58648bb81909d33c446918cfa8";
+
+/// What the bootstrap line calls beyond coreutils. `java` is here because
+/// sdkmanager and avdmanager are Java programs; absence is worth naming before
+/// a button is offered rather than after it fails.
+const BOOTSTRAP_TOOLS: &[&str] = &["curl", "unzip", "sha256sum", "java"];
+
+pub fn missing_bootstrap_tools() -> Vec<&'static str> {
+    BOOTSTRAP_TOOLS
+        .iter()
+        .copied()
+        .filter(|tool| which::which(tool).is_err())
+        .collect()
+}
+
+/// Where the bootstrap stages its download. A fixed directory under the SDK
+/// root rather than `mktemp -d`, because the line has to read identically in
+/// fish, which has no `d=$(...)` assignment.
+fn staging_dir(sdk_root: &Path) -> PathBuf {
+    sdk_root.join(".terra-bootstrap")
+}
+
+/// The one-line path from a machine with no Android SDK at all to a system
+/// image on disk: fetch the cmdline-tools, verify them, unpack them, then hand
+/// over to `sdkmanager` for the tools and the image.
+///
+/// Terra downloads nothing itself; this runs in a terminal tab like every other
+/// SDK install (`docs/adr/0005-terra-bootstraps-the-standalone-android-sdk.md`),
+/// which is what keeps the bytes, Google's licence prompts and the cancel key
+/// in front of the user.
+///
+/// Three constraints shape it. No variables and no command substitution, so
+/// zsh, bash and fish read it identically. `&&` throughout, so a failed digest
+/// never reaches the unzip. And no recursive delete: after the `mv` the staging
+/// directory holds one file, so `rm -f` on it and `rmdir` (which refuses a
+/// non-empty directory) are enough.
+pub fn build_sdk_bootstrap_command(sdk_root: &Path, package: &str) -> Result<String, String> {
+    ensure_offered(package)?;
+    if CMDLINE_TOOLS_BUILD.is_empty() || !CMDLINE_TOOLS_BUILD.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("cmdline-tools build is not a number".to_string());
+    }
+    if CMDLINE_TOOLS_SHA256.len() != 64
+        || !CMDLINE_TOOLS_SHA256.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return Err("cmdline-tools digest is not a sha256".to_string());
+    }
+
+    let cmdline = sdk_root.join("cmdline-tools");
+    let latest = cmdline.join("latest");
+    // A half-finished install is the one case where `mv` would nest rather than
+    // land, so refuse it instead of writing into someone else's directory.
+    if latest.exists() {
+        return Err(format!(
+            "{} already exists but holds no usable sdkmanager; move it aside and try again",
+            latest.display()
+        ));
+    }
+
+    let stage = staging_dir(sdk_root);
+    let zip = shell_path(&stage.join("cmdline-tools.zip"))?;
+    let stage_q = shell_path(&stage)?;
+    let url = format!(
+        "https://dl.google.com/android/repository/commandlinetools-linux-{CMDLINE_TOOLS_BUILD}_latest.zip"
+    );
+
+    let sdkmanager = latest.join("bin").join("sdkmanager");
+    let mut packages: Vec<String> = CATALOG_TOOLS.iter().map(|t| (*t).to_string()).collect();
+    packages.push(package.to_string());
+
+    Ok([
+        format!("mkdir -p {} {stage_q}", shell_path(&cmdline)?),
+        format!(
+            "curl -fL --proto '=https' --tlsv1.2 -o {zip} {}",
+            shell_quote(&url)
+        ),
+        format!(
+            "printf '%s  %s\\n' {} {zip} | sha256sum -c -",
+            shell_quote(CMDLINE_TOOLS_SHA256)
+        ),
+        format!("unzip -q {zip} -d {stage_q}"),
+        format!(
+            "mv {} {}",
+            shell_path(&stage.join("cmdline-tools"))?,
+            shell_path(&latest)?
+        ),
+        format!("rm -f {zip}"),
+        format!("rmdir {stage_q}"),
+        build_sdk_install_command(&sdkmanager, sdk_root, &packages)?,
+    ]
+    .join(" && "))
 }
 
 /// Create an AVD from an already-installed system image. Installing one is
@@ -865,20 +946,21 @@ emulator-5554   device\n";
     }
 
     #[test]
-    fn sdk_roots_include_platform_defaults() {
-        // Guards against the regression this replaced: only ~/Android/Sdk was
-        // probed, so stock macOS and Windows installs were never found.
+    fn sdk_roots_probe_the_linux_default_and_nothing_else() {
         let roots = sdk_roots();
         if dirs::home_dir().is_some() {
-            assert!(roots.iter().any(|r| r.ends_with("Library/Android/sdk")
-                || r.ends_with("Library\\Android\\sdk")));
-            assert!(roots.iter().any(|r| r.ends_with("Android/Sdk") || r.ends_with("Android\\Sdk")));
+            assert!(roots.iter().any(|r| r.ends_with("Android/Sdk")));
         }
+        // ADR 0002: no foreign-platform probes survive here.
+        assert!(!roots.iter().any(|r| r.ends_with("Library/Android/sdk")));
     }
 
     #[test]
-    fn exe_suffix_matches_platform() {
-        assert_eq!(exe("adb"), if cfg!(windows) { "adb.exe" } else { "adb" });
+    fn default_sdk_root_prefers_a_declared_root() {
+        // ANDROID_HOME is read at call time, so this only asserts the ordering
+        // rule the function encodes rather than mutating the process env.
+        let roots = sdk_roots();
+        assert_eq!(default_sdk_root(), roots.into_iter().next());
     }
 
     #[test]
@@ -966,6 +1048,170 @@ emulator-5554   device\n";
             assert!(image.package.starts_with("system-images;"));
             build_sdk_install_command(&tool, &root, &[image.package]).expect("installable");
         }
+    }
+
+    /// A root that is awkward in every way the quoting has to survive.
+    fn awkward_root() -> PathBuf {
+        PathBuf::from("/an sdk/it's here")
+    }
+
+    #[cfg(unix)]
+    fn argv_of(step: &str) -> Vec<String> {
+        let out = Command::new("sh")
+            .arg("-c")
+            .arg(format!("set -- {step}; for a; do printf '%s\\n' \"$a\"; done"))
+            .output()
+            .expect("sh");
+        assert!(out.status.success(), "sh rejected: {step}");
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn bootstrap_command_refuses_a_package_terra_does_not_offer() {
+        for package in [
+            "system-images;android-36;google_apis_playstore;x86_64",
+            "--uninstall",
+            "emulator; rm -rf /",
+            "",
+        ] {
+            assert!(
+                build_sdk_bootstrap_command(&awkward_root(), package).is_err(),
+                "accepted {package}"
+            );
+        }
+    }
+
+    #[test]
+    fn bootstrap_command_refuses_a_root_that_would_end_the_line() {
+        let package = install_catalog()[0].package.clone();
+        for root in ["/sdk\n", "/sdk\r"] {
+            assert!(build_sdk_bootstrap_command(Path::new(root), &package).is_err());
+        }
+    }
+
+    /// `mv` into an existing directory nests rather than lands, so a half
+    /// finished install has to be refused rather than written into.
+    #[test]
+    fn bootstrap_command_refuses_an_existing_cmdline_tools_latest() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().join("Sdk");
+        std::fs::create_dir_all(root.join("cmdline-tools").join("latest")).expect("layout");
+        let package = install_catalog()[0].package.clone();
+        assert!(build_sdk_bootstrap_command(&root, &package).is_err());
+        std::fs::remove_dir_all(root.join("cmdline-tools").join("latest")).expect("clear");
+        build_sdk_bootstrap_command(&root, &package).expect("a command once it is gone");
+    }
+
+    /// The line has to read the same in fish, which has neither `x=$(...)`
+    /// assignment nor `$(...)` where bash would take it. No `$` and no backtick
+    /// anywhere is the blunt form of that, and the one that cannot rot.
+    #[test]
+    fn bootstrap_line_is_free_of_variables_and_substitution() {
+        let package = install_catalog()[0].package.clone();
+        let line = build_sdk_bootstrap_command(&awkward_root(), &package).expect("a command");
+        assert!(!line.contains('$'), "a variable survived in: {line}");
+        assert!(!line.contains('`'), "a substitution survived in: {line}");
+    }
+
+    /// Terra never composes a recursive delete: after the `mv` the staging
+    /// directory holds one file, so `rm -f` plus `rmdir` is the whole cleanup.
+    #[test]
+    fn bootstrap_line_never_deletes_recursively() {
+        let package = install_catalog()[0].package.clone();
+        let line = build_sdk_bootstrap_command(&awkward_root(), &package).expect("a command");
+        assert!(!line.contains("rm -r"));
+        assert!(!line.contains("rm -f -r"));
+        assert!(line.contains("rmdir "));
+    }
+
+    /// The real invariant, step by step: whatever the shell parses out of each
+    /// stage is exactly the argv we meant, with the space and the quote in the
+    /// root and the `;` in the package id intact.
+    #[test]
+    #[cfg(unix)]
+    fn shell_parses_the_bootstrap_line_back_into_the_argv() {
+        let root = awkward_root();
+        let package = install_catalog()[0].package.clone();
+        let line = build_sdk_bootstrap_command(&root, &package).expect("a command");
+
+        let steps: Vec<&str> = line.split(" && ").collect();
+        assert_eq!(steps.len(), 8, "unexpected stage count in: {line}");
+
+        let r = root.display().to_string();
+        let stage = format!("{r}/.terra-bootstrap");
+        let zip = format!("{stage}/cmdline-tools.zip");
+        let latest = format!("{r}/cmdline-tools/latest");
+        let owned = |args: &[&str]| args.iter().map(|a| (*a).to_string()).collect::<Vec<String>>();
+
+        assert_eq!(
+            argv_of(steps[0]),
+            owned(&["mkdir", "-p", &format!("{r}/cmdline-tools"), &stage])
+        );
+        let curl = argv_of(steps[1]);
+        assert_eq!(curl[0], "curl");
+        assert_eq!(curl[curl.len() - 2], zip);
+        assert_eq!(
+            curl[curl.len() - 1],
+            format!(
+                "https://dl.google.com/android/repository/commandlinetools-linux-{CMDLINE_TOOLS_BUILD}_latest.zip"
+            )
+        );
+
+        let (left, right) = steps[2].split_once(" | ").expect("a digest check");
+        assert_eq!(
+            argv_of(left),
+            owned(&["printf", "%s  %s\\n", CMDLINE_TOOLS_SHA256, &zip])
+        );
+        assert_eq!(argv_of(right), owned(&["sha256sum", "-c", "-"]));
+
+        assert_eq!(argv_of(steps[3]), owned(&["unzip", "-q", &zip, "-d", &stage]));
+        assert_eq!(
+            argv_of(steps[4]),
+            owned(&["mv", &format!("{stage}/cmdline-tools"), &latest])
+        );
+        assert_eq!(argv_of(steps[5]), owned(&["rm", "-f", &zip]));
+        assert_eq!(argv_of(steps[6]), owned(&["rmdir", &stage]));
+        assert_eq!(
+            argv_of(steps[7]),
+            owned(&[
+                &format!("{latest}/bin/sdkmanager"),
+                &format!("--sdk_root={r}"),
+                "emulator",
+                "platform-tools",
+                &package,
+            ])
+        );
+    }
+
+    /// `sha256sum -c` parses a line format of its own, and a path carrying a
+    /// space or a quote has to survive that parse as well as the shell's.
+    #[test]
+    #[cfg(unix)]
+    fn sha256sum_verifies_a_file_under_an_awkward_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().join("an sdk").join("it's here");
+        std::fs::create_dir_all(&root).expect("layout");
+        let file = root.join("cmdline-tools.zip");
+        std::fs::write(&file, b"terra").expect("write");
+        let digest = "9c1431eeb94d267d98b1b11898232ef7095e72b4ea3b269ad458e5a317c81ae8";
+        let check = format!(
+            "printf '%s  %s\\n' {} {} | sha256sum -c -",
+            shell_quote(digest),
+            shell_path(&file).expect("quotable")
+        );
+        let out = Command::new("sh")
+            .arg("-c")
+            .arg(&check)
+            .output()
+            .expect("sh");
+        assert!(
+            out.status.success(),
+            "sha256sum rejected the check line: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 
     #[test]

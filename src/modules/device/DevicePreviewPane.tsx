@@ -37,7 +37,10 @@ export function PaneFallback({
   onRetry: () => void;
   runInTerminal?: (command: string) => void;
 }) {
-  if (status.kind === "adb-missing") return <AdbMissing narrow />;
+  if (status.kind === "adb-missing")
+    return (
+      <AdbMissing narrow onRefresh={onRetry} runInTerminal={runInTerminal} />
+    );
   if (status.kind === "no-devices")
     return (
       <NoDevices narrow onRefresh={onRetry} runInTerminal={runInTerminal} />
