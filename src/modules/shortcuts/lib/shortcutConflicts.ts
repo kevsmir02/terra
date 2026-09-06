@@ -5,7 +5,7 @@ const BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]));
 export type UserShortcuts = Partial<Record<ShortcutId, KeyBinding[]>>;
 
 /** Chord equality. The recorder stores `e.key` verbatim ("C", "Enter") while
- * the table is authored lowercase, and an absent modifier means false — so a
+ * the table is authored lowercase, and an absent modifier means false, so a
  * plain deep-equal would miss the most common clash. */
 export function sameBinding(a: KeyBinding, b: KeyBinding): boolean {
   return (
@@ -29,7 +29,7 @@ export function activeBindings(
 
 /** `tab.selectByIndex` is authored as Mod+1, but matchBinding special-cases it
  * to swallow Mod+1 through Mod+9. It therefore claims eight chords that no row
- * displays — and the row is filtered out of the Settings list entirely. */
+ * displays, and the row is filtered out of the Settings list entirely. */
 function claimsBinding(
   id: ShortcutId,
   binding: KeyBinding,

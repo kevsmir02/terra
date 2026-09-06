@@ -66,7 +66,7 @@ export function setLeafCwd(
  * Insert a new leaf next to `targetId` in direction `dir`.
  *
  * If the target's enclosing split already runs in `dir`, the new leaf is
- * appended as a sibling there (avoids nested same-direction splits — keeps
+ * appended as a sibling there (avoids nested same-direction splits, keeps
  * the tree shallow and the resize handles aligned).
  */
 export function splitLeaf(
@@ -142,7 +142,7 @@ export function nextLeafId(
   return ids[(idx + delta + ids.length) % ids.length];
 }
 
-// Closest neighbor of `leafId` within its enclosing split — prefer the
+// Closest neighbor of `leafId` within its enclosing split, prefer the
 // next sibling, fall back to the previous. Used to pick the new focus
 // when a pane closes (so focus stays in the same neighborhood instead of
 // snapping to the first pane in the tree).

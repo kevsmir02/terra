@@ -110,7 +110,7 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
           )}
           {status.kind === "binary" && (
             <p className="text-[12px] text-muted-foreground">
-              Binary file — cannot render as markdown.
+              Binary file: cannot render as markdown.
             </p>
           )}
           {status.kind === "toolarge" && (

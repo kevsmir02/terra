@@ -255,7 +255,7 @@ async function writePref<T>(key: string, value: T): Promise<void> {
 }
 
 export async function loadPreferences(): Promise<Preferences> {
-  // Single IPC roundtrip — fetching keys individually fans out to one
+  // Single IPC roundtrip, fetching keys individually fans out to one
   // `plugin:store|get` per setting and is the dominant boot cost.
   const entries = await store.entries();
   const map = new Map<string, unknown>(entries);
@@ -384,7 +384,7 @@ export async function setThemeId(value: string): Promise<void> {
 }
 
 /** Slider stores 0..1. Actual rendered opacity is halved in SurfaceLayer
- *  so the image never exceeds 50% — keeps UI/terminal readable at any setting. */
+ *  so the image never exceeds 50%, keeps UI/terminal readable at any setting. */
 export const BG_OPACITY_RENDER_FACTOR = 0.5;
 
 function clampBgOpacity(v: number): number {

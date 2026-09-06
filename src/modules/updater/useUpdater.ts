@@ -134,7 +134,7 @@ export function useUpdater() {
       await invoke("updater_install", { fileName });
       await relaunch();
     } catch (err) {
-      // Any install failure — cancelled, unauthorized, or otherwise — keeps
+      // Any install failure, cancelled, unauthorized, or otherwise, keeps
       // the staged package, so a retry never costs a re-download.
       setStatus({ kind: "staged", info, fileName, message: String(err) });
     }

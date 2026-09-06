@@ -310,8 +310,8 @@ function Recorder({
       e.stopPropagation();
 
       // Bare Enter applies the captured chord. Safe to claim because the
-      // capture guard below rejects it as a binding, while Shift+Enter — the
-      // default for terminal.newline — still records normally.
+      // capture guard below rejects it as a binding, while Shift+Enter, the
+      // default for terminal.newline, still records normally.
       const held = pendingRef.current;
       if (
         held &&
@@ -333,7 +333,7 @@ function Recorder({
       if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
 
       // Require at least one primary modifier (Ctrl, Alt, Meta).
-      // Reject Shift-only shortcuts that would insert a character — this is
+      // Reject Shift-only shortcuts that would insert a character, this is
       // what blocks Shift+2 ("@") and Shift+, ("<") on many layouts.
       const hasPrimaryModifier = e.ctrlKey || e.altKey || e.metaKey;
       const isCharacterKey = e.key.length === 1;

@@ -20,7 +20,7 @@ describe("MarkdownPreviewPane Streamdown configuration", () => {
 
 // globals.css hides every native scrollbar app-wide, so a bare `overflow-auto`
 // region scrolls with no visible affordance. Scrollable panes must use
-// <ScrollArea>, which draws its own bar — see GitDiffPane and CommandPalette.
+// <ScrollArea>, which draws its own bar, see GitDiffPane and CommandPalette.
 describe("MarkdownPreviewPane scroll affordance", () => {
   it("scrolls the document inside a ScrollArea", () => {
     expect(src).toMatch(/<ScrollArea\b/);

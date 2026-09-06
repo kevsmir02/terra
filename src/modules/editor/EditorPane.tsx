@@ -145,7 +145,7 @@ export const EditorPane = memo(
     const [langId, setLangId] = useState<string | null>(null);
 
     // Stabilize save + onSaved via refs so the extensions array never changes
-    // identity — a new identity makes @uiw/react-codemirror reconfigure the
+    // identity, a new identity makes @uiw/react-codemirror reconfigure the
     // whole state, wiping the language compartment.
     const saveRef = useRef(save);
     saveRef.current = save;

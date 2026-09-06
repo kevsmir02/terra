@@ -151,7 +151,7 @@ export function leafCwd(leafId: number): string | null {
 
 /**
  * Clear the scrollback and screen of the currently focused terminal, keeping
- * the active prompt line — macOS Terminal's ⌘K behaviour. Returns false when no
+ * the active prompt line, macOS Terminal's ⌘K behaviour. Returns false when no
  * focused terminal slot is bound (e.g. focus is in the editor or AI panel).
  */
 export function clearFocusedTerminal(): boolean {
@@ -457,7 +457,7 @@ function bindLeafToSlot(leafId: number, s: Session): void {
     cols: s.cols,
     rows: s.rows,
     registerOsc: (term) => {
-      // Shared in-command flag — see osc-handlers.ts. The prompt tracker
+      // Shared in-command flag, see osc-handlers.ts. The prompt tracker
       // flips it on OSC 133 B/C/D/A; the cwd handler reads it to ignore OSC
       // 7 emitted by untrusted command output (remote SSH, `cat` of an
       // attacker file, etc.).

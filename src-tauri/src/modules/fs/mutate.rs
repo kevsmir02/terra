@@ -27,7 +27,7 @@ pub fn create_file(
 }
 
 /// Creates a new directory. Fails if the directory already exists.
-/// Parents are created as needed — matches the common "new folder" UX
+/// Parents are created as needed, matches the common "new folder" UX
 /// where typing "a/b/c" creates the full chain.
 #[tauri::command]
 pub fn fs_create_dir(

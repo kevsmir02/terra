@@ -1062,7 +1062,7 @@ fn push_worktree(
     let name = if let Some(ref b) = branch {
         b.clone()
     } else if let Some(ref sha) = head_sha {
-        // if detached HEAD with no branch — show shortened SHA as name
+        // if detached HEAD with no branch, show shortened SHA as name
         let short = if sha.len() >= 7 { &sha[..7] } else { sha.as_str() };
         format!("(detached @ {})", short)
     } else {

@@ -266,7 +266,7 @@ function createSlot(): Slot {
   term.attachCustomKeyEventHandler((event) => {
     // During IME composition the browser is assembling a multi-keystroke
     // character (Chinese pinyin → hanzi, Korean jamo → syllable, etc.).
-    // Raw keydown events — including the Enter that commits a candidate —
+    // Raw keydown events, including the Enter that commits a candidate,
     // must NOT be forwarded to the PTY; xterm will receive the final
     // composed string through its own compositionend handler instead.
     // keyCode 229 ("Process") is what Chromium reports for every key
@@ -295,7 +295,7 @@ function createSlot(): Slot {
     }
     if (action === "copy") {
       // Swallowed even with nothing selected. Falling through would hand the
-      // chord to xterm, which can emit \x03 and SIGINT a running job — worse
+      // chord to xterm, which can emit \x03 and SIGINT a running job, worse
       // than doing nothing.
       if (event.type === "keydown" && slot.term.hasSelection()) {
         const sel = slot.term.getSelection();

@@ -17,7 +17,7 @@ import {
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Matches the renderer slot pool size — over this we'd evict an active leaf.
+// Matches the renderer slot pool size, over this we'd evict an active leaf.
 export const MAX_PANES_PER_TAB = 4;
 
 type TabBase = {
@@ -48,7 +48,7 @@ export type EditorTab = TabBase & {
   path: string;
   dirty: boolean;
   /**
-   * True while the tab is in the transient "preview" state — opened by a
+   * True while the tab is in the transient "preview" state, opened by a
    * single-click in the explorer and not yet pinned by the user. A preview tab
    * is replaced by the next single-click rather than accumulating.
    */
@@ -432,10 +432,10 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   /**
    * Opens a file in an editor tab.
    *
-   * - `pin = true` (default) — opens or activates a **persistent** tab.
+   * - `pin = true` (default), opens or activates a **persistent** tab.
    *   If the path is currently in the preview slot it is promoted in-place.
    *   Use this for programmatic opens (AI diff, New File dialog, etc.).
-   * - `pin = false` — VSCode-style **preview** tab. A single shared slot is
+   * - `pin = false`, VSCode-style **preview** tab. A single shared slot is
    *   reused: if a persistent tab for the path already exists it is activated;
    *   otherwise the current preview slot is replaced with the new path.
    */
@@ -844,7 +844,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   );
 
   /** Update a leaf's cwd; mirror to the tab's `cwd` when the leaf is active.
-   * Bails out without setTabs when nothing actually changed — shell integration
+   * Bails out without setTabs when nothing actually changed, shell integration
    * re-emits OSC 7 on every prompt, including empty Enters, so this fires at
    * keystroke rate. Always-setTabs there cascades a paneTree re-render across
    * every open tab. */

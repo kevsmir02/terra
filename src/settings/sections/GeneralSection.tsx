@@ -244,7 +244,7 @@ export function GeneralSection() {
                     xterm's WebGL renderer caches glyphs in a GPU texture atlas.
                     On some macOS setups (especially with Nerd Fonts), the atlas
                     corrupts and terminal text becomes unreadable. Turn this off
-                    as a fallback — performance dips slightly, but text renders
+                    as a fallback; performance dips slightly, but text renders
                     correctly via the DOM renderer.
                   </TooltipContent>
                 </Tooltip>
@@ -269,7 +269,7 @@ export function GeneralSection() {
         </SettingRow>
         <SettingRow
           title="Copy on selection"
-          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents — Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
+          description="Copies selected text to the clipboard when you finish dragging. This replaces the clipboard's current contents; Terra cannot use the Linux primary selection, which is what makes this non-destructive in other terminals."
         >
           <Switch
             checked={terminalCopyOnSelect}

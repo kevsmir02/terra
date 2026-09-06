@@ -12,7 +12,7 @@
 }
 
 # Re-source guard within a single shell (e.g. user runs `source ~/.zshrc`).
-# This is NOT exported, so each nested zsh installs its own hooks — desired,
+# This is NOT exported, so each nested zsh installs its own hooks, desired,
 # since every interactive shell needs its own prompt integration.
 if [[ -z "$__TERRA_HOOKS_LOADED" ]]; then
   __TERRA_HOOKS_LOADED=1
@@ -59,7 +59,7 @@ if [[ -z "$__TERRA_HOOKS_LOADED" ]]; then
   # Option+Right) overshoots to the START of the next word; `emacs-forward-word`
   # stops at the END of the current word, which is what nearly every other shell
   # and GUI editor does. Only rebind when the binding is still the stock zsh
-  # default — respects any explicit remap in the user's .zshrc.
+  # default, respects any explicit remap in the user's .zshrc.
   if (( $+widgets[emacs-forward-word] )) \
      && [[ "$(bindkey '\ef')" == '"^[f" forward-word' ]]; then
     bindkey '\ef' emacs-forward-word

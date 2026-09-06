@@ -116,7 +116,7 @@ pub fn pty_write(
             log::warn!("pty_write: unknown id={id}");
             "no session".to_string()
         })?;
-    // Bind to a local so the MutexGuard temporary drops before `session` —
+    // Bind to a local so the MutexGuard temporary drops before `session`,
     // see rustc note on tail-expression temporary drop order.
     let result = session
         .writer

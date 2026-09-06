@@ -9,7 +9,7 @@ import {
 
 // git-bash path mapping is Windows-only; exercise that branch.
 /**
- * Minimal in-memory fake of the xterm `Terminal` surface we touch — just
+ * Minimal in-memory fake of the xterm `Terminal` surface we touch, just
  * enough to register OSC handlers and invoke them with crafted payloads.
  * The OSC handler signature is `(data: string) => boolean | Promise<boolean>`.
  */
@@ -33,7 +33,7 @@ async function flushClipboardQueue() {
   await Promise.resolve();
 }
 
-describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
+describe("OSC 7 cwd handler: gated by OSC 133 in-command state", () => {
   it("accepts OSC 7 when no command is running", () => {
     const { term, handlers } = makeFakeTerm();
     const state = createShellIntegrationState();
@@ -41,7 +41,7 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
     registerPromptTracker(term, state);
     registerCwdHandler(term, onCwd, state);
 
-    // OSC 133 A means "new prompt is about to be drawn" — we're between
+    // OSC 133 A means "new prompt is about to be drawn", we're between
     // commands and OSC 7 from the shell is legitimate here.
     handlers.get(133)?.("A");
     handlers.get(7)?.("file://host/home/me/project");
@@ -83,7 +83,7 @@ describe("OSC 7 cwd handler — gated by OSC 133 in-command state", () => {
   });
 
   it("works without state for backwards compatibility (legacy callers)", () => {
-    // The state parameter is optional — when omitted, OSC 7 is always
+    // The state parameter is optional, when omitted, OSC 7 is always
     // honored (legacy behavior). Tests must confirm we didn't break this.
     const { term, handlers } = makeFakeTerm();
     const onCwd = vi.fn();

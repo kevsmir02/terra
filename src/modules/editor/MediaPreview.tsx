@@ -37,7 +37,7 @@ type Props = {
 /**
  * Renders a binary preview over `asset://`. The asset scope is empty by
  * default, so access is granted for this one file first and the URL is only
- * built once that succeeds — a file outside the workspace never gets a URL.
+ * built once that succeeds, a file outside the workspace never gets a URL.
  */
 export function MediaPreview({ path, kind }: Props) {
   const [state, setState] = useState<

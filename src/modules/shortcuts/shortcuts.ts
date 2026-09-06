@@ -341,7 +341,7 @@ export const SHORTCUTS: Shortcut[] = [
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface
-  // them — they don't have App-level handlers, so `useGlobalShortcuts` falls
+  // them, they don't have App-level handlers, so `useGlobalShortcuts` falls
   // through without `preventDefault`, leaving CodeMirror to handle the event.
   // Also excluded from the customization UI in ShortcutsSection.
   {

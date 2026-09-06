@@ -289,7 +289,7 @@ html[data-chrome="borderless"] #settings-root {
 }
 
 /*
- * xterm.js overrides — kept outside @layer so they win against the addon's
+ * xterm.js overrides, kept outside @layer so they win against the addon's
  * own stylesheet (which is not in any layer and would otherwise override).
  *
  * Newer xterm renders scrollbars as real <div class="scrollbar vertical|horizontal">
@@ -395,7 +395,7 @@ textarea,
   display: none !important;
 }
 
-/* Kill native scrollbars everywhere by default — Linux/Windows ship chunky
+/* Kill native scrollbars everywhere by default, Linux/Windows ship chunky
  * Chromium bars that break the chrome, and macOS WKWebView flashes its overlay
  * scrollbar briefly during layout transitions (AI panel open, pane split,
  * window resize) which looks like a glitch. Visible scroll affordances are

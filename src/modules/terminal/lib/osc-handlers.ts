@@ -8,7 +8,7 @@ const MAX_OSC52_CLIPBOARD_BYTES = 1024 * 1024;
  * command (between OSC 133 B and the next OSC 133 D / A), so the cwd handler
  * can ignore OSC 7 updates emitted by *command output* (e.g. a remote SSH
  * server, a `cat` of an attacker-controlled file). Only OSC 7 issued by the
- * local shell — which fires between commands — should be honored.
+ * local shell, which fires between commands, should be honored.
  */
 export type ShellIntegrationState = {
   inCommand: boolean;
@@ -59,7 +59,7 @@ export function registerPromptTracker(
   let outputStart: IMarker | null = null;
   let outputEnd: IMarker | null = null;
   const d = term.parser.registerOscHandler(133, (data) => {
-    // OSC 133 A — start of new prompt (between commands).
+    // OSC 133 A: start of new prompt (between commands).
     if (data.startsWith("A")) {
       if (state) state.inCommand = false;
       onCommandState?.(false);
@@ -67,11 +67,11 @@ export function registerPromptTracker(
       if (marker) prompts.push(marker);
       if (prompts.length > MAX_PROMPT_MARKERS) prompts.shift()?.dispose();
     } else if (data.startsWith("B")) {
-      // OSC 133 B — command begins. From here on, treat all output as
+      // OSC 133 B: command begins. From here on, treat all output as
       // untrusted until we see D (command exit) or the next A (new prompt).
       if (state) state.inCommand = true;
     } else if (data.startsWith("C")) {
-      // OSC 133 C — command pre-execution marker; still inside command.
+      // OSC 133 C: command pre-execution marker; still inside command.
       if (state) state.inCommand = true;
       onCommandState?.(true);
       outputStart?.dispose();
@@ -79,7 +79,7 @@ export function registerPromptTracker(
       outputEnd = null;
       outputStart = term.registerMarker(0) ?? null;
     } else if (data.startsWith("D")) {
-      // OSC 133 D — command ends.
+      // OSC 133 D: command ends.
       if (state) state.inCommand = false;
       onCommandState?.(false);
       outputEnd?.dispose();

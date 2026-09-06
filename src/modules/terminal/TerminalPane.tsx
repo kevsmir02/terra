@@ -37,7 +37,7 @@ type Props = {
   leafId: number;
   /** Tab containing this pane is on screen. */
   visible: boolean;
-  /** This leaf is the active pane within its tab — receives auto-focus. */
+  /** This leaf is the active pane within its tab, receives auto-focus. */
   focused?: boolean;
   initialCwd?: string;
   onSearchReady?: (leafId: number, addon: SearchAddon) => void;
@@ -98,7 +98,7 @@ export const TerminalPane = memo(
             void writeTerminalClipboard(text).then((ok) => {
               // A stable id makes a repeat selection replace the existing
               // toast instead of stacking one per drag. Only on a confirmed
-              // write — claiming success on a silently failed one is how the
+              // write, claiming success on a silently failed one is how the
               // clipboard path stayed invisible before.
               if (ok) {
                 toast.success("Copied selection", { id: COPY_TOAST_ID });

@@ -169,7 +169,7 @@ export default function App() {
   useTerminalFileDrop({ cwdForLeaf });
   const explorerRef = useRef<FileExplorerHandle>(null);
 
-  // Drives session disposal off the pane tree, not React lifecycles —
+  // Drives session disposal off the pane tree, not React lifecycles,
   // split/unsplit re-mount components but the leaf is still live.
   const liveLeavesRef = useRef<Set<number>>(new Set());
 
@@ -184,7 +184,7 @@ export default function App() {
   // onPreferencesChange, which is how a write in the separate settings window
   // reaches this one. It used to be called only from useSpacesBoot's first-run
   // branch, so returning users ran on DEFAULT_PREFERENCES and never saw a
-  // setting change take effect. Idempotent — useSpacesBoot may still call it.
+  // setting change take effect. Idempotent, useSpacesBoot may still call it.
   useEffect(() => {
     void usePreferencesStore
       .getState()

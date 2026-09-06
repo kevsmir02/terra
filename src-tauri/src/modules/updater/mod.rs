@@ -64,8 +64,8 @@ fn verify_response_hosts(resp: &ureq::http::Response<ureq::Body>) -> Result<(), 
 }
 
 /// No published Terra package is anywhere near this size. A response
-/// reporting more via `Content-Length` — or one that just keeps sending data
-/// regardless of what it reported — is refused outright rather than trusted
+/// reporting more via `Content-Length`, or one that just keeps sending data
+/// regardless of what it reported, is refused outright rather than trusted
 /// to allocate however much memory it likes.
 const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -125,7 +125,7 @@ fn safe_staged_path(dir: &Path, file_name: &str) -> Result<PathBuf, String> {
 
 /// Appends `.sig` to the whole file name. `Path::with_extension` would
 /// *replace* the extension, turning `Terra-0.8.6-1.x86_64.rpm` into
-/// `Terra-0.8.6-1.x86_64.sig` — which is not the name the release publishes.
+/// `Terra-0.8.6-1.x86_64.sig`, which is not the name the release publishes.
 fn sig_path(pkg: &Path) -> PathBuf {
     let mut name = pkg.as_os_str().to_os_string();
     name.push(".sig");
@@ -310,7 +310,7 @@ pub async fn updater_install(app: AppHandle, file_name: String) -> Result<(), St
         let current = env!("CARGO_PKG_VERSION");
         if !is_newer(&version, current) {
             return Err(format!(
-                "refusing to install {version} over {current} — updates must move forward"
+                "refusing to install {version} over {current}, updates must move forward"
             ));
         }
 
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn sig_path_appends_rather_than_replacing_the_extension() {
-        // The release publishes Terra-0.8.6-1.x86_64.rpm.sig — NOT
+        // The release publishes Terra-0.8.6-1.x86_64.rpm.sig, NOT
         // Terra-0.8.6-1.x86_64.sig, which is what with_extension would give.
         assert_eq!(
             sig_path(Path::new("/tmp/stage/Terra-0.8.6-1.x86_64.rpm")),

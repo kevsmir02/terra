@@ -9,7 +9,7 @@ import {
 
 /** Offers the dev-server URL detected in this pane's output. Anchored to the
  * pane rather than the window so multiple panes can each hold their own offer.
- * Persists until dismissed, clicked, or superseded — no auto-expiry, since a
+ * Persists until dismissed, clicked, or superseded, no auto-expiry, since a
  * chip that vanishes on a timer is one the user misses while reading. */
 export function DevServerChip({ leafId }: { leafId: number }) {
   const url = useDevServerStore((s) => s.byLeaf[leafId]?.candidate ?? null);
