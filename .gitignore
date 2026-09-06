@@ -35,3 +35,6 @@ stats.html
 # Isolated worktrees and subagent-driven-development scratch.
 .worktrees/
 .superpowers/
+
+# Design canvas working files: artboards plus the seeded page they publish to.
+.design/
