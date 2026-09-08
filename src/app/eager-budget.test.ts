@@ -15,6 +15,8 @@ const HEAVY = [
   "@codemirror",
   "@uiw",
   "@iconify-json/catppuccin",
+  "mermaid",
+  "@streamdown/mermaid",
 ];
 
 function heavyEagerHits(entry: string): string[] {
@@ -29,5 +31,18 @@ describe("startup bundle budget", () => {
 
   it("settings window does not eagerly pull editor/AI/markdown stacks", () => {
     expect(heavyEagerHits("src/settings/main.tsx")).toEqual([]);
+  });
+});
+
+// Mermaid is the largest dependency in the tree and only a document with a
+// mermaid fence needs it, so even the lazy markdown stack must not import it
+// statically: useMermaid loads the plugin behind a dynamic import.
+describe("mermaid stays behind the fence check", () => {
+  it("markdown stack does not statically import mermaid", () => {
+    const { hits } = traceEager("src/modules/markdown/MarkdownStack.tsx", [
+      "mermaid",
+      "@streamdown/mermaid",
+    ]);
+    expect([...hits.keys()]).toEqual([]);
   });
 });

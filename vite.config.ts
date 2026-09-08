@@ -109,6 +109,10 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
             id.includes("@replit/codemirror")
           )
             return "codemirror";
+          // The diagram plugin imports mermaid statically. Glued into the
+          // streamdown chunk it would load with every markdown tab; left to
+          // the bundler it stays behind useMermaid's dynamic import.
+          if (id.includes("@streamdown/mermaid")) return null;
           if (id.includes("/streamdown/") || id.includes("@streamdown/"))
             return "streamdown";
           if (

@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
+import { useMermaid } from "./lib/useMermaid";
 import { MarkdownViewToggle } from "./MarkdownViewToggle";
 
 type ReadResult =
@@ -34,6 +35,7 @@ type Props = {
 
 export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "loading" });
+  const mermaid = useMermaid(status.kind === "ready" ? status.content : null);
 
   // Follows the disk while mounted: an agent rewriting the document is the
   // normal case. Bursts of writes coalesce, and a re-read keeps the rendered
@@ -123,6 +125,8 @@ export function MarkdownPreviewPane({ path, visible, onSetView }: Props) {
               className="select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
               mode="static"
               parseIncompleteMarkdown={false}
+              plugins={mermaid.plugin ? { mermaid: mermaid.plugin } : undefined}
+              mermaid={mermaid.config ? { config: mermaid.config } : undefined}
             >
               {status.content}
             </Streamdown>
