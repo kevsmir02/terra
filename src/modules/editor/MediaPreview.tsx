@@ -1,6 +1,7 @@
 import { native } from "@/lib/native";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { PDF_FRAME_SANDBOX } from "./lib/pdfFrame";
 
 export type MediaKind = "image" | "video" | "audio" | "pdf";
 
@@ -120,11 +121,7 @@ export function MediaPreview({ path, kind }: Props) {
           src={state.url}
           className="h-full w-full border-none"
           title={name}
-          // A PDF viewer needs scripts, but nothing else. Withholding
-          // `allow-same-origin` keeps the frame in an opaque origin, and
-          // omitting `allow-top-navigation*` stops a crafted PDF from
-          // navigating the parent webview, which would expose Tauri IPC.
-          sandbox="allow-scripts"
+          sandbox={PDF_FRAME_SANDBOX}
           referrerPolicy="no-referrer"
         />
       )}
