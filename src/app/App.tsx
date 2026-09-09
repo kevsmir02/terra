@@ -880,6 +880,11 @@ export default function App() {
     [updateTab],
   );
 
+  const handleColorTab = useCallback(
+    (id: number, color: number | null) => updateTab(id, { color }),
+    [updateTab],
+  );
+
   const searchTarget = useMemo<SearchTarget>(() => {
     if (isTerminalTab && activeLeafId !== null && activeSearchAddon)
       return {
@@ -1116,6 +1121,7 @@ export default function App() {
               onClose={handleClose}
               onPin={pinTab}
               onRename={handleRenameTab}
+              onColor={handleColorTab}
               onReorder={reorderTabByGap}
               spaceSwitcher={spaceSwitcher}
               searchTarget={searchTarget}

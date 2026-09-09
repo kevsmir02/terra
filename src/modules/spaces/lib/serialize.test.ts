@@ -71,6 +71,23 @@ describe("serializeTabs", () => {
     expect(out.map((t) => t.kind)).toEqual(["terminal", "editor"]);
   });
 
+  it("round-trips a tab accent and drops one the palette cannot render", () => {
+    const [kept] = hydrateTabs(
+      serializeTabs([term({ color: 3 })]),
+      "s",
+      counter(),
+    );
+    expect(kept.kind === "terminal" && kept.color).toBe(3);
+
+    const stale: SerializedTab[] = [
+      { kind: "terminal", tree: { kind: "leaf", cwd: "/a" }, color: 99 },
+      { kind: "terminal", tree: { kind: "leaf", cwd: "/a" }, color: -1 },
+    ];
+    for (const restored of hydrateTabs(stale, "s", counter())) {
+      expect(restored.kind === "terminal" && "color" in restored).toBe(false);
+    }
+  });
+
   it("marks the active leaf in a split tree", () => {
     const tree: PaneNode = {
       kind: "split",

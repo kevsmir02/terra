@@ -16,6 +16,7 @@ import {
 } from "@/modules/terminal/lib/panes";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isTabColor } from "./tabColor";
 
 // Matches the renderer slot pool size, over this we'd evict an active leaf.
 export const MAX_PANES_PER_TAB = 4;
@@ -37,6 +38,8 @@ export type TerminalTab = TabBase & {
   private?: boolean;
   /** User-set label that overrides the cwd-derived name. Survives cd. */
   customTitle?: string;
+  /** Opt-in accent, index into TAB_COLORS. Undefined = uncoloured. */
+  color?: number;
   /** Terminal auto-created to run a space startup command; never serialized. */
   startupCommand?: string;
 };
@@ -116,6 +119,8 @@ export type TabPatch = Partial<{
   url: string;
   /** Empty string resets a terminal tab to its cwd-derived name. */
   customTitle: string;
+  /** Null clears a terminal tab's accent. */
+  color: number | null;
   overrideLanguage: string | null;
 }>;
 
@@ -798,6 +803,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
             ...(patch.customTitle !== undefined && {
               customTitle:
                 patch.customTitle === "" ? undefined : patch.customTitle,
+            }),
+            ...(patch.color !== undefined && {
+              color: isTabColor(patch.color) ? patch.color : undefined,
             }),
           };
         }

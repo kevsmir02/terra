@@ -3,6 +3,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
@@ -54,6 +55,7 @@ import {
   useState,
 } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { TAB_COLOR_NAMES, TAB_COLORS, tabAccent } from "./lib/tabColor";
 import { labelFor } from "./lib/tabLabel";
 import type { EditorTab, Tab } from "./lib/useTabs";
 
@@ -71,6 +73,8 @@ type Props = {
   onPin: (id: number) => void;
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
+  /** Set a terminal tab's accent; null clears it. */
+  onColor: (id: number, color: number | null) => void;
   /** Move a dragged tab to a new position (insertion gap index 0..tabs.length). */
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
@@ -89,6 +93,7 @@ export function TabBar({
   onClose,
   onPin,
   onRename,
+  onColor,
   onReorder,
   onOverrideLanguage,
   compact,
@@ -236,6 +241,7 @@ export function TabBar({
               const isPreview = t.kind === "editor" && (t as EditorTab).preview;
               const isActive = t.id === activeId;
               const isNew = !firstRender && !seen.has(t.id);
+              const accent = t.kind === "terminal" ? tabAccent(t) : null;
 
               const srcIndex = tabs.findIndex((x) => x.id === draggingId);
               const showGap = (gap: number) =>
@@ -254,10 +260,11 @@ export function TabBar({
                     <div
                       data-tab-id={t.id}
                       className={cn(
-                        "flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-accent text-xs text-foreground",
+                        "relative isolate flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-accent text-xs text-foreground",
                         compact ? "px-1.5" : "px-2",
                       )}
                     >
+                      {accent && <TabAccentWash accent={accent} active />}
                       <TabIcon tab={t} />
                       <TabRenameInput
                         initial={labelFor(t)}
@@ -350,6 +357,9 @@ export function TabBar({
                         : "ps-2! pe-1!",
                   )}
                 >
+                  {accent && (
+                    <TabAccentWash accent={accent} active={isActive} />
+                  )}
                   <span
                     className={cn(
                       "flex min-w-0 items-center gap-1.5",
@@ -514,6 +524,38 @@ export function TabBar({
                         />
                         <span className="flex-1">Rename</span>
                       </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuLabel className="px-2.5 pt-1 pb-0.5 text-[10px] terra-label text-muted-foreground/(--emph-strong)">
+                        Color
+                      </ContextMenuLabel>
+                      <div className="flex items-center gap-1 px-2 py-1">
+                        <ContextMenuItem
+                          aria-label="No color"
+                          onSelect={() => onColor(t.id, null)}
+                          className={cn(
+                            "size-5 justify-center rounded-circle p-0 ring-1 ring-inset",
+                            t.color == null
+                              ? "ring-foreground/(--emph-bold)"
+                              : "ring-border focus:ring-foreground/(--emph-soft)",
+                          )}
+                        >
+                          <span className="size-2 rounded-circle bg-foreground/(--emph-soft)" />
+                        </ContextMenuItem>
+                        {TAB_COLORS.map((c, i) => (
+                          <ContextMenuItem
+                            key={c}
+                            aria-label={TAB_COLOR_NAMES[i]}
+                            onSelect={() => onColor(t.id, i)}
+                            className={cn(
+                              "size-5 rounded-circle p-0 ring-1 ring-inset",
+                              t.color === i
+                                ? "ring-foreground/(--emph-bold)"
+                                : "ring-transparent focus:ring-foreground/(--emph-soft)",
+                            )}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
                       {tabs.length > 1 && (
                         <>
                           <ContextMenuSeparator />
@@ -645,6 +687,27 @@ function ptyIdsForTab(tab: Tab): readonly number[] {
   return ptyIds;
 }
 
+// The wash sits inside the trigger, above the shared active pill, so it steps
+// up on the active tab to keep that state readable through the tint.
+function TabAccentWash({
+  accent,
+  active,
+}: {
+  accent: string;
+  active: boolean;
+}) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0 -z-10 rounded-md"
+      style={{
+        backgroundColor: `color-mix(in oklch, ${accent} ${active ? 18 : 9}%, transparent)`,
+        boxShadow: `inset 0 0 0 1px color-mix(in oklch, ${accent} ${active ? 40 : 22}%, transparent)`,
+      }}
+    />
+  );
+}
+
 // A tab's agent state is a bar under the pill, not a swapped icon: an icon can
 // only say one thing at a time, and it already says what kind of tab this is.
 const STATE_BAR: Record<NonNullable<AgentTabStatus["state"]>, string> = {
@@ -698,13 +761,15 @@ export function TabIcon({ tab }: { tab: Tab }) {
       />
     );
   }
-  if (tab.kind === "terminal" && tab.private) {
+  if (tab.kind === "terminal") {
+    const accent = tabAccent(tab);
     return (
       <HugeiconsIcon
-        icon={IncognitoIcon}
+        icon={tab.private ? IncognitoIcon : ComputerTerminal02Icon}
         size={14}
         strokeWidth={2}
         className="shrink-0"
+        style={accent ? { color: accent } : undefined}
       />
     );
   }

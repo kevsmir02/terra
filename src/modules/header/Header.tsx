@@ -28,6 +28,8 @@ type Props = {
   onPin: (id: number) => void;
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
+  /** Set a terminal tab's accent; null clears it. */
+  onColor: (id: number, color: number | null) => void;
   /** Move a dragged tab to a new position (insertion gap index). */
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
@@ -50,6 +52,7 @@ export function Header({
   onClose,
   onPin,
   onRename,
+  onColor,
   onReorder,
   onOverrideLanguage,
   spaceSwitcher,
@@ -94,6 +97,7 @@ export function Header({
           onClose={onClose}
           onPin={onPin}
           onRename={onRename}
+          onColor={onColor}
           onReorder={onReorder}
           onOverrideLanguage={onOverrideLanguage}
           compact={compact}

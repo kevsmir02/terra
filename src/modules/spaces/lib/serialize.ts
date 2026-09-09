@@ -3,6 +3,7 @@ import {
   type PaneNode,
   type SplitDir,
 } from "@/modules/terminal/lib/panes";
+import { isTabColor } from "@/modules/tabs/lib/tabColor";
 import type {
   EditorTab,
   MarkdownTab,
@@ -20,6 +21,7 @@ export type SerializedTab =
       kind: "terminal";
       tree: SerializedNode;
       customTitle?: string;
+      color?: number;
     }
   | { kind: "editor"; path: string }
   | { kind: "preview"; url: string }
@@ -90,6 +92,7 @@ function serializeTab(
         kind: "terminal",
         tree: serializeNode(tab.paneTree, tab.activeLeafId, scrollbackFor),
         ...(tab.customTitle !== undefined && { customTitle: tab.customTitle }),
+        ...(tab.color !== undefined && { color: tab.color }),
       };
     case "editor":
       return { kind: "editor", path: tab.path };
@@ -188,6 +191,7 @@ function hydrateTab(
         paneTree: tree,
         activeLeafId,
         ...(s.customTitle !== undefined && { customTitle: s.customTitle }),
+        ...(isTabColor(s.color) && { color: s.color }),
       } satisfies TerminalTab;
     }
     case "editor":
