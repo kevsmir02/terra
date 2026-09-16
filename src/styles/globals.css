@@ -212,6 +212,10 @@
   --terminal-cursor: var(--foreground);
   --terminal-cursor-accent: var(--background);
   --terminal-selection: var(--accent);
+  /* One selection colour per theme. The terminal token is the only one a theme
+   * tunes with an alpha picked for this surface, so the editor and the markdown
+   * preview read it rather than wearing the platform highlight. */
+  --selection: var(--terminal-selection);
   --terminal-ansi-black: #d3cfc8;
   --terminal-ansi-red: #a8372e;
   --terminal-ansi-green: #326d36;
@@ -358,6 +362,10 @@ textarea,
 .select-text * {
   -webkit-user-select: text;
   user-select: text;
+}
+
+::selection {
+  background-color: var(--selection);
 }
 
 .cm-color-swatch {

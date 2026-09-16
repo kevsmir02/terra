@@ -10,7 +10,9 @@ type Palette = {
   bg: string;
   fg: string;
   caret: string;
-  selection: string;
+  /** Derived palettes omit it: the uiw rule that reads it carries !important
+   * and would outrank the shared editor rule that owns the surface. */
+  selection?: string;
   lineHighlight: string;
   gutterFg: string;
   comment: string;
@@ -126,7 +128,6 @@ function varPalette(mode: "light" | "dark"): Palette {
     // buildSharedExtensions() owns the editor surface, so these stay inert.
     bg: "transparent",
     caret: "transparent",
-    selection: "transparent",
     lineHighlight: "transparent",
     fg: "var(--foreground)",
     gutterFg: "var(--syntax-gutter-fg)",

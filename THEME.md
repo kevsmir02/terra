@@ -164,7 +164,7 @@ today. Regenerate this block with `pnpm theme:sync-tokens`;
 | `terminal.foreground` | `--terminal-foreground` |  | Terminal foreground. |
 | `terminal.cursor` | `--terminal-cursor` |  | Terminal cursor. |
 | `terminal.cursorAccent` | `--terminal-cursor-accent` |  | Terminal cursor accent. |
-| `terminal.selection` | `--terminal-selection` |  | Terminal selection. |
+| `terminal.selection` | `--terminal-selection` |  | Selected text, shared by the terminal, the editor, and the markdown preview. |
 | `terminal.ansiBlack` | `--terminal-ansi-black` |  | ANSI Black. |
 | `terminal.ansiRed` | `--terminal-ansi-red` |  | ANSI Red. |
 | `terminal.ansiGreen` | `--terminal-ansi-green` |  | ANSI Green. |

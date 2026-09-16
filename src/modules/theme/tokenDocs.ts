@@ -52,7 +52,8 @@ export const TOKEN_DOCS: Readonly<Record<string, string>> = {
   "terminal.foreground": "Terminal foreground.",
   "terminal.cursor": "Terminal cursor.",
   "terminal.cursorAccent": "Terminal cursor accent.",
-  "terminal.selection": "Terminal selection.",
+  "terminal.selection":
+    "Selected text, shared by the terminal, the editor, and the markdown preview.",
   "terminal.ansiBlack": "ANSI Black.",
   "terminal.ansiRed": "ANSI Red.",
   "terminal.ansiGreen": "ANSI Green.",
