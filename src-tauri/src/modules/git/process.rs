@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 
 use shared_child::SharedChild;
 
+use crate::modules::sync::MutexExt;
+
 use crate::modules::git::errors::{GitError, Result};
 use crate::modules::git::types::{
     GitOutput, TextSource, DEFAULT_TIMEOUT_SECS, MAX_FILE_BYTES, MAX_OUTPUT_BYTES,
@@ -37,8 +39,7 @@ fn availability_cell() -> &'static Mutex<Option<AvailabilityCache>> {
 
 pub fn ensure_git_available() -> Result<()> {
     let cached = availability_cell()
-        .lock()
-        .expect("git availability poisoned")
+        .lock_or_recover()
         .as_ref()
         .filter(|entry| entry.checked_at.elapsed() < AVAILABILITY_TTL)
         .map(|entry| entry.value.clone());
@@ -46,9 +47,7 @@ pub fn ensure_git_available() -> Result<()> {
         Some(v) => v,
         None => {
             let fresh = check_git_availability();
-            *availability_cell()
-                .lock()
-                .expect("git availability poisoned") = Some(AvailabilityCache {
+            *availability_cell().lock_or_recover() = Some(AvailabilityCache {
                 value: fresh.clone(),
                 checked_at: Instant::now(),
             });

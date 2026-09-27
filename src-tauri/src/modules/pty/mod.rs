@@ -73,17 +73,13 @@ pub async fn pty_open(
     // so the pseudoconsole isn't stranded.
     let exited = state
         .sessions
-        .read()
-        .unwrap()
+        .read_or_recover()
         .get(&id)
         .map(|s| s.exited.load(Ordering::Acquire))
         .unwrap_or(false);
     if exited {
         if let Some(s) = state.take(id) {
-            thread::Builder::new()
-                .name(format!("terra-pty-drop-{id}"))
-                .spawn(move || session::drop_session(s))
-                .expect("spawn pty drop thread");
+            drop_detached(id, s);
         }
     }
     log::info!("pty opened id={id} cols={cols} rows={rows}");
@@ -108,8 +104,7 @@ pub fn pty_write(
     };
     let session = state
         .sessions
-        .read()
-        .unwrap()
+        .read_or_recover()
         .get(&id)
         .cloned()
         .ok_or_else(|| {
@@ -120,8 +115,7 @@ pub fn pty_write(
     // see rustc note on tail-expression temporary drop order.
     let result = session
         .writer
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .write_all(bytes)
         .map_err(|e| {
             // EPIPE is expected if the child already exited.
@@ -140,8 +134,7 @@ pub fn pty_resize(
 ) -> Result<(), String> {
     let session = state
         .sessions
-        .read()
-        .unwrap()
+        .read_or_recover()
         .get(&id)
         .cloned()
         .ok_or_else(|| {
@@ -150,8 +143,7 @@ pub fn pty_resize(
         })?;
     let result = session
         .master
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .resize(PtySize {
             rows,
             cols,
@@ -175,19 +167,7 @@ pub fn pty_close(state: tauri::State<PtyState>, id: u32) -> Result<(), String> {
             log::debug!("pty_close: kill id={id} returned {e}");
         }
         log::info!("pty closed id={id}");
-        // Detached: on Windows `ClosePseudoConsole` can block until conhost
-        // drains, which would freeze this Tauri worker thread and stall IPC.
-        thread::Builder::new()
-            .name(format!("terra-pty-drop-{id}"))
-            .spawn(move || {
-                let t0 = std::time::Instant::now();
-                session::drop_session(s);
-                log::info!(
-                    "pty session id={id} dropped in {}ms",
-                    t0.elapsed().as_millis()
-                );
-            })
-            .expect("spawn pty drop thread");
+        drop_detached(id, s);
     } else {
         log::debug!("pty_close: unknown id={id}");
     }
@@ -248,15 +228,27 @@ pub fn pty_close_all(state: tauri::State<PtyState>) -> Result<usize, String> {
         if let Err(e) = s.killer.lock_or_recover().kill() {
             log::debug!("pty_close_all: kill id={id} returned {e}");
         }
-        thread::Builder::new()
-            .name(format!("terra-pty-drop-{id}"))
-            .spawn(move || session::drop_session(s))
-            .expect("spawn pty drop thread");
+        drop_detached(id, s);
     }
     if count > 0 {
         log::info!("pty_close_all: reaped {count} orphaned session(s)");
     }
     Ok(count)
+}
+
+// Detached so a slow teardown never holds the IPC thread. If the OS refuses a
+// thread, the closure (and the session in it) is dropped right here instead.
+fn drop_detached(id: u32, s: Arc<Session>) {
+    let spawned = thread::Builder::new()
+        .name(format!("terra-pty-drop-{id}"))
+        .spawn(move || {
+            let t0 = std::time::Instant::now();
+            session::drop_session(s);
+            log::debug!("pty session id={id} dropped in {}ms", t0.elapsed().as_millis());
+        });
+    if let Err(e) = spawned {
+        log::warn!("pty id={id}: no drop thread ({e}); dropped inline");
+    }
 }
 
 #[tauri::command]

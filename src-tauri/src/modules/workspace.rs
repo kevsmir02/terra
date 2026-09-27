@@ -46,10 +46,7 @@ impl WorkspaceRegistry {
     pub fn canonicalize_cached<P: AsRef<Path>>(&self, path: P) -> std::io::Result<PathBuf> {
         let key = path.as_ref().to_path_buf();
         {
-            let cache = self
-                .canonical_cache
-                .lock()
-                .expect("canonical cache poisoned");
+            let cache = self.canonical_cache.lock_or_recover();
             if let Some(entry) = cache.get(&key) {
                 if entry.inserted_at.elapsed() < CANONICAL_TTL {
                     return Ok(entry.canonical.clone());
@@ -57,10 +54,7 @@ impl WorkspaceRegistry {
             }
         }
         let canonical = std::fs::canonicalize(&key)?;
-        let mut cache = self
-            .canonical_cache
-            .lock()
-            .expect("canonical cache poisoned");
+        let mut cache = self.canonical_cache.lock_or_recover();
         if cache.len() >= CANONICAL_CACHE_CAP {
             cache.retain(|_, entry| entry.inserted_at.elapsed() < CANONICAL_TTL);
             if cache.len() >= CANONICAL_CACHE_CAP {
