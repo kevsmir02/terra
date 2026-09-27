@@ -607,3 +607,43 @@ fn list_branches_keeps_current_branch_local_and_surfaces_worktrees() {
     assert!(!feature[0].is_head);
     assert!(feature[0].worktree_path.is_some());
 }
+
+// Past the 2 MiB content cap with room to spare.
+const OVER_CAP: usize = 3 * 1024 * 1024;
+
+fn big_text(fill: char) -> String {
+    let line: String = std::iter::repeat_n(fill, 79).chain(['\n']).collect();
+    line.repeat(OVER_CAP / 80)
+}
+
+#[test]
+fn a_worktree_file_over_the_cap_falls_back_to_the_patch() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    commit(&fx, "big.txt", "small\n", "small", 1);
+    fx.write_file("big.txt", &big_text('a'));
+    let res = operations::diff_content(&fx.registry, &fx.repo_str(), "big.txt", false, None).unwrap();
+    assert!(res.too_large);
+    assert!(res.original_content.is_empty() && res.modified_content.is_empty());
+    assert!(!res.fallback_patch.is_empty());
+}
+
+#[test]
+fn a_head_blob_over_the_cap_is_never_rendered_truncated() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    commit(&fx, "big.txt", &big_text('b'), "big", 1);
+    fx.write_file("big.txt", "tiny\n");
+    fx.run_git(&["add", "--", "big.txt"]);
+    let res = operations::diff_content(&fx.registry, &fx.repo_str(), "big.txt", true, None).unwrap();
+    assert!(res.too_large);
+    assert!(
+        res.original_content.is_empty(),
+        "a partial blob would read as a huge deletion"
+    );
+    assert!(res.modified_content.is_empty());
+}

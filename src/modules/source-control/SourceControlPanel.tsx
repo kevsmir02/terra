@@ -111,6 +111,7 @@ const ROW_HEIGHTS = {
 
 type RowDescriptor =
   | { kind: "banner-diverged"; key: string }
+  | { kind: "banner-truncated"; key: string }
   | { kind: "list-header"; key: string; count: number }
   | { kind: "entry"; key: string; entry: SourceControlFileEntry };
 
@@ -510,6 +511,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   const hasUpstream = !!scm.status?.upstream;
   const isDiverged =
     !!scm.status && scm.status.ahead > 0 && scm.status.behind > 0;
+  const statusTruncated = !!scm.status?.truncated;
 
   const canPull =
     hasUpstream &&
@@ -576,6 +578,9 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     if (isDiverged) {
       result.push({ kind: "banner-diverged", key: "banner-diverged" });
     }
+    if (statusTruncated) {
+      result.push({ kind: "banner-truncated", key: "banner-truncated" });
+    }
     if (changedCount > 0) {
       result.push({
         kind: "list-header",
@@ -587,7 +592,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
       }
     }
     return result;
-  }, [changedCount, isDiverged, scm.fileEntries]);
+  }, [changedCount, isDiverged, statusTruncated, scm.fileEntries]);
 
   const rowKeyToIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -618,6 +623,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
       if (!row) return ROW_HEIGHTS.entry;
       switch (row.kind) {
         case "banner-diverged":
+        case "banner-truncated":
           return ROW_HEIGHTS.banner;
         case "list-header":
           return ROW_HEIGHTS.header;
@@ -1202,6 +1208,8 @@ const RowRenderer = memo(function RowRenderer(props: RowRendererProps) {
   switch (row.kind) {
     case "banner-diverged":
       return <DivergedBanner />;
+    case "banner-truncated":
+      return <TruncatedBanner />;
     case "list-header":
       return <ListHeader {...props} row={row} />;
     case "entry":
@@ -1223,6 +1231,29 @@ function DivergedBanner() {
           Diverged from upstream
         </span>
         <span className="ml-1 opacity-75">- resolve in terminal</span>
+      </span>
+    </div>
+  );
+}
+
+function TruncatedBanner() {
+  return (
+    <div
+      role="status"
+      title="Status output passed the 2 MiB cap. Run status in the terminal for the full list."
+      className="mx-2 mt-1 flex h-7 items-center gap-1.5 rounded-md border border-border/(--emph-strong) bg-foreground/[0.04] px-2 text-[10.5px] leading-none text-muted-foreground"
+    >
+      <HugeiconsIcon
+        icon={Alert02Icon}
+        size={11}
+        strokeWidth={1.9}
+        className="shrink-0"
+      />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium text-foreground/(--emph-bold)">
+          List incomplete
+        </span>
+        <span className="ml-1 opacity-75">- status output was cut short</span>
       </span>
     </div>
   );

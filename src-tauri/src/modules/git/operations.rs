@@ -236,16 +236,34 @@ pub fn diff_content(
         read_text_file(&worktree_path)?
     };
     let patch = diff_inner(&repo_root, Some(&rel_path), staged)?;
+    Ok(content_result(original, modified, patch.diff_text, patch.truncated))
+}
+
+fn content_result(
+    original: TextSource,
+    modified: TextSource,
+    fallback_patch: String,
+    truncated: bool,
+) -> GitDiffContentResult {
     let is_binary =
         matches!(original, TextSource::Binary) || matches!(modified, TextSource::Binary);
-
-    Ok(GitDiffContentResult {
-        original_content: original.into_text(),
-        modified_content: modified.into_text(),
+    let too_large =
+        matches!(original, TextSource::TooLarge) || matches!(modified, TextSource::TooLarge);
+    // Both sides go together: showing one side's content against an empty
+    // other would render as a whole-file add or delete.
+    let (original_content, modified_content) = if too_large || is_binary {
+        (String::new(), String::new())
+    } else {
+        (original.into_text(), modified.into_text())
+    };
+    GitDiffContentResult {
+        original_content,
+        modified_content,
         is_binary,
-        fallback_patch: patch.diff_text,
-        truncated: patch.truncated,
-    })
+        fallback_patch,
+        truncated,
+        too_large,
+    }
 }
 
 pub fn stage(
@@ -875,16 +893,12 @@ pub fn commit_file_diff(
         Err(e) => String::from_utf8_lossy(&e.into_bytes()).into_owned(),
     };
 
-    let is_binary =
-        matches!(original, TextSource::Binary) || matches!(modified, TextSource::Binary);
-
-    Ok(GitDiffContentResult {
-        original_content: original.into_text(),
-        modified_content: modified.into_text(),
-        is_binary,
-        fallback_patch: patch_text,
-        truncated: patch_output.truncated,
-    })
+    Ok(content_result(
+        original,
+        modified,
+        patch_text,
+        patch_output.truncated,
+    ))
 }
 
 pub fn remote_url(

@@ -1,11 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import type { GitDiffContentResult } from "@/lib/native";
 import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   commitDiffKey,
   fetchCommitDiff,
@@ -94,10 +97,7 @@ type LoadState =
   | { kind: "loading" }
   | {
       kind: "loaded";
-      originalContent: string;
-      modifiedContent: string;
-      isBinary: boolean;
-      fallbackPatch: string;
+      diff: GitDiffContentResult;
       /** Resolved before mount: a late compartment reconfigure would leave
        * the merge view's deleted-chunk widgets unhighlighted. */
       langExt: Extension | null;
@@ -115,10 +115,7 @@ function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
   if (!hit) return { kind: "idle" };
   return {
     kind: "loaded",
-    originalContent: hit.originalContent,
-    modifiedContent: hit.modifiedContent,
-    isBinary: hit.isBinary,
-    fallbackPatch: hit.fallbackPatch,
+    diff: hit,
     langExt: resolveLanguageSync(source.path)?.ext ?? null,
   };
 }
@@ -159,14 +156,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
     Promise.all([promise, resolveLanguage(source.path).catch(() => null)])
       .then(([res, lang]) => {
         if (cancelled) return;
-        setState({
-          kind: "loaded",
-          originalContent: res.originalContent,
-          modifiedContent: res.modifiedContent,
-          isBinary: res.isBinary,
-          fallbackPatch: res.fallbackPatch,
-          langExt: lang?.ext ?? null,
-        });
+        setState({ kind: "loaded", diff: res, langExt: lang?.ext ?? null });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -187,12 +177,14 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
   const repoRoot = source.repoRoot;
   const mode = source.kind === "working" ? source.mode : "+";
   const loaded = state.kind === "loaded" ? state : null;
-  const originalContent = loaded?.originalContent ?? "";
-  const modifiedContent = loaded?.modifiedContent ?? "";
-  const isBinary = loaded?.isBinary ?? false;
-  const fallbackPatch = loaded?.fallbackPatch ?? "";
+  const originalContent = loaded?.diff.originalContent ?? "";
+  const modifiedContent = loaded?.diff.modifiedContent ?? "";
+  const isBinary = loaded?.diff.isBinary ?? false;
+  const fallbackPatch = loaded?.diff.fallbackPatch ?? "";
+  const patchTruncated = loaded?.diff.truncated ?? false;
 
   const isTooLarge =
+    (loaded?.diff.tooLarge ?? false) ||
     originalContent.length > LARGE_FILE_THRESHOLD ||
     modifiedContent.length > LARGE_FILE_THRESHOLD;
   const useFallback = isBinary || isTooLarge;
@@ -232,8 +224,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
   }, [useFallback, path, state]);
 
   const stats = useMemo(
-    () =>
-      useFallback ? patchStats(fallbackPatch) : { added: 0, removed: 0 },
+    () => (useFallback ? patchStats(fallbackPatch) : { added: 0, removed: 0 }),
     [useFallback, fallbackPatch],
   );
 
@@ -282,11 +273,22 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
             {state.message}
           </div>
         ) : useFallback ? (
-          <ScrollArea className="h-full">
-            <pre className="min-h-full whitespace-pre-wrap wrap-break-word p-4 font-mono text-[12px] leading-relaxed text-muted-foreground">
-              {fallbackPatch || "Diff preview is not available for this file."}
-            </pre>
-          </ScrollArea>
+          <div className="flex h-full min-h-0 flex-col">
+            {patchTruncated ? (
+              <DiffNotice>
+                The patch is over 2 MiB and was cut short; the counts and the
+                text below cover only its start.
+              </DiffNotice>
+            ) : null}
+            <ScrollArea className="min-h-0 flex-1">
+              <pre className="min-h-full whitespace-pre-wrap wrap-break-word p-4 font-mono text-[12px] leading-relaxed text-muted-foreground">
+                {fallbackPatch ||
+                  (isTooLarge
+                    ? "This file is too large to diff here, and no patch was produced for it."
+                    : "Diff preview is not available for this file.")}
+              </pre>
+            </ScrollArea>
+          </div>
         ) : (
           <CodeMirror
             ref={cmRef}
@@ -306,6 +308,23 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function DiffNotice({ children }: { children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b border-border/(--emph-soft) bg-foreground/[0.04] px-3 py-1.5 text-[10.5px] leading-snug text-muted-foreground"
+    >
+      <HugeiconsIcon
+        icon={Alert02Icon}
+        size={11}
+        strokeWidth={1.9}
+        className="shrink-0"
+      />
+      <span className="min-w-0">{children}</span>
     </div>
   );
 }

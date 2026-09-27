@@ -42,6 +42,7 @@ pub struct GitStatusSnapshot {
     pub changed_files: Vec<GitChangedFile>,
 }
 
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitPanelSnapshot {
@@ -71,6 +72,9 @@ pub struct GitDiffContentResult {
     pub is_binary: bool,
     pub fallback_patch: String,
     pub truncated: bool,
+    /// A side exceeded the content cap, so both contents are empty and the
+    /// patch is the only view.
+    pub too_large: bool,
 }
 
 #[derive(Serialize)]
@@ -149,6 +153,8 @@ pub(crate) struct GitOutput {
 pub(crate) enum TextSource {
     Missing,
     Binary,
+    /// Over the content cap; never carries a partial blob.
+    TooLarge,
     Text(String),
 }
 
@@ -156,7 +162,7 @@ impl TextSource {
     pub(crate) fn into_text(self) -> String {
         match self {
             TextSource::Text(text) => text,
-            TextSource::Missing | TextSource::Binary => String::new(),
+            TextSource::Missing | TextSource::Binary | TextSource::TooLarge => String::new(),
         }
     }
 }

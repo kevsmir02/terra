@@ -68,7 +68,10 @@ export type GitDiffContentResult = {
   modifiedContent: string;
   isBinary: boolean;
   fallbackPatch: string;
+  /** The patch hit the output cap and is only its start. */
   truncated: boolean;
+  /** A side is over the content cap: both contents are empty, use the patch. */
+  tooLarge: boolean;
 };
 
 export type GitCommitResult = {
