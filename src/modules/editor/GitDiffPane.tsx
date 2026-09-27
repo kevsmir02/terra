@@ -19,6 +19,7 @@ import {
   languageCompartment,
 } from "./lib/extensions";
 import { resolveLanguage, resolveLanguageSync } from "./lib/languageResolver";
+import { patchStats } from "./lib/patchStats";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
 type WorkingSource = {
@@ -87,20 +88,6 @@ const DIFF_THEME = EditorView.theme({
     opacity: 0.7,
   },
 });
-
-function countDiffLines(patch: string): { added: number; removed: number } {
-  let added = 0;
-  let removed = 0;
-  for (let i = 0; i < patch.length; i++) {
-    if (i > 0 && patch.charCodeAt(i - 1) !== 10) continue;
-    const c = patch.charCodeAt(i);
-    if (c === 43 && patch.charCodeAt(i + 1) !== 43) added++;
-    else if (c === 45 && patch.charCodeAt(i + 1) !== 45) removed++;
-  }
-  if (patch.length > 0 && patch.charCodeAt(0) === 43) added++;
-  else if (patch.length > 0 && patch.charCodeAt(0) === 45) removed++;
-  return { added, removed };
-}
 
 type LoadState =
   | { kind: "idle" }
@@ -246,7 +233,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
 
   const stats = useMemo(
     () =>
-      useFallback ? countDiffLines(fallbackPatch) : { added: 0, removed: 0 },
+      useFallback ? patchStats(fallbackPatch) : { added: 0, removed: 0 },
     [useFallback, fallbackPatch],
   );
 
