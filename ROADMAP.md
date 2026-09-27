@@ -14,7 +14,7 @@ Terra is developed, used, and released on Linux (Fedora day to day). The macOS a
 
 ## Maybe, later
 
-- Release automation: changelog generation and version bump. Tag-triggered build and publish already ships in `release.yml`.
+- One-step releases: `pnpm version:bump`, `pnpm changelog` and the gated, draft-then-publish `release.yml` exist; what is left is a single command that bumps, commits and tags.
 - Selective TypeScript to Rust migration where the profiler shows wins.
 
 ## Out of scope
