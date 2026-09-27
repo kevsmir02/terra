@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -9,10 +10,12 @@ use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::agent_detect::AgentDetector;
+use super::cwd_detect::CwdDetector;
 use super::da_filter::DaFilter;
 use super::shell_init;
 use super::url_detect::{DevServerSignal, UrlDetector};
 use crate::modules::sync::MutexExt;
+use crate::modules::workspace::{grant_shell_cwd, proc_cwd, WorkspaceRegistry};
 
 const AGENT_EVENT: &str = "terra:agent-signal";
 const DEV_SERVER_EVENT: &str = "terra:dev-server";
@@ -59,6 +62,19 @@ impl Drop for Session {
 
 pub(super) fn drop_session(session: Arc<Session>) {
     drop(session);
+}
+
+// The shell's cwd, plus the foreground job's: a nested shell reports its own.
+fn live_cwds(shell_pid: u32, session: &std::sync::Weak<Session>) -> Vec<PathBuf> {
+    let foreground = session
+        .upgrade()
+        .and_then(|s| s.master.lock_or_recover().process_group_leader())
+        .and_then(|pid| u32::try_from(pid).ok());
+    [Some(shell_pid).filter(|&p| p != 0), foreground]
+        .into_iter()
+        .flatten()
+        .filter_map(proc_cwd)
+        .collect()
 }
 
 struct ChildKillGuard {
@@ -142,12 +158,16 @@ pub fn spawn(
     let writer_for_da = writer.clone();
     let app_reader = app.clone();
     let first_byte_r = first_byte;
+    // Weak: a strong handle here would keep the session (and its kill-on-drop)
+    // alive for as long as the reader it is meant to stop.
+    let session_r = Arc::downgrade(&session);
     let reader_thread = spawn_thread("terra-pty-reader", move || {
         let mut buf = [0u8; READ_BUF];
         let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
         let mut da_filter = DaFilter::new();
         let mut agent_detect = AgentDetector::new();
         let mut url_detect = UrlDetector::new();
+        let mut cwd_detect = CwdDetector::new();
         let mut dropped_bytes: u64 = 0;
         loop {
             match reader.read(&mut buf) {
@@ -168,6 +188,13 @@ pub fn spawn(
                                 url: url.to_string(),
                             },
                         );
+                    });
+                    // Granted here, before the bytes reach the webview, so the
+                    // explorer's first read of the new cwd already passes.
+                    cwd_detect.process(&buf[..n], |path| {
+                        if let Some(registry) = app_reader.try_state::<WorkspaceRegistry>() {
+                            grant_shell_cwd(&registry, &path, || live_cwds(shell_pid, &session_r));
+                        }
                     });
                     filtered.clear();
                     da_filter.process(&buf[..n], &mut filtered, |reply| {

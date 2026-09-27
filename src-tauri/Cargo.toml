@@ -46,6 +46,9 @@ tokio = "1"
 minisign-verify = "0.2"
 base64 = "0.23"
 libc = "0.2"
+# Native consent prompt for a workspace root the webview asks for (ADR 0006);
+# already linked through tauri, so this adds no code, only the import.
+gtk = "0.18"
 # WebKitGTK can't read external clipboard copies.
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-autostart = "2"

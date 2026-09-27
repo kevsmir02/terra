@@ -14,7 +14,7 @@ import {
   Settings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   space: SpaceMeta;
@@ -33,6 +33,9 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
   const [root, setRootField] = useState(space.root ?? "");
   const [cmds, setCmds] = useState<string[]>(space.startupCommands ?? []);
   const [draft, setDraft] = useState("");
+  const [rootError, setRootError] = useState<string | null>(null);
+  // Enter commits and then blurs, which commits again: one prompt per path.
+  const granting = useRef<string | null>(null);
 
   // Re-sync local fields when the popover opens (space may have been edited elsewhere).
   useEffect(() => {
@@ -41,6 +44,7 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
     setRootField(space.root ?? "");
     setCmds(space.startupCommands ?? []);
     setDraft("");
+    setRootError(null);
   }, [open, space.name, space.root, space.startupCommands]);
 
   const commitName = (v: string) => {
@@ -48,16 +52,30 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
     if (trimmed && trimmed !== space.name) rename(space.id, trimmed);
     else setName(space.name);
   };
-  const commitRoot = (v: string) => {
+  const commitRoot = async (v: string) => {
     const next = v.trim() || null;
-    if (next === space.root) {
-      setRootField(space.root ?? "");
+    if (next === space.root || (next && granting.current === next)) {
+      if (next === space.root) setRootField(space.root ?? "");
       return;
     }
-    // Typing a root is the user gesture that authorizes it; the fs commands are
-    // gated on the registry, so without this a root outside home reads as empty.
-    if (next) void native.workspaceAuthorize(next).catch(() => {});
-    setRoot(space.id, next);
+    if (!next) {
+      setRootError(null);
+      setRoot(space.id, null);
+      return;
+    }
+    // The fs commands are gated on the registry; a root outside it is granted
+    // only once the user confirms Rust's native prompt (docs/adr/0006).
+    granting.current = next;
+    try {
+      const canonical = await native.workspaceGrantRoot(next);
+      setRootError(null);
+      setRootField(canonical);
+      setRoot(space.id, canonical);
+    } catch (e) {
+      setRootError(String(e));
+    } finally {
+      granting.current = null;
+    }
   };
   const addCommand = () => {
     const v = draft.trim();
@@ -118,18 +136,34 @@ export function SpaceSettingsPopover({ space, trigger }: Props) {
               aria-label="Space root directory"
               defaultValue={root}
               value={root}
-              onChange={(e) => setRootField(e.target.value)}
+              aria-invalid={rootError != null}
+              aria-describedby={
+                rootError ? `space-root-error-${space.id}` : undefined
+              }
+              onChange={(e) => {
+                setRootField(e.target.value);
+                setRootError(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  commitRoot(e.currentTarget.value);
+                  void commitRoot(e.currentTarget.value);
                   (e.currentTarget as HTMLInputElement).blur();
                 }
               }}
-              onBlur={(e) => commitRoot(e.currentTarget.value)}
+              onBlur={(e) => void commitRoot(e.currentTarget.value)}
               placeholder={space.root ?? "/path/to/project"}
               className="w-full rounded-md bg-background px-2 py-1 font-mono text-[11px] ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-ring"
             />
+            {rootError && (
+              <span
+                id={`space-root-error-${space.id}`}
+                role="alert"
+                className="break-words text-[10.5px] text-destructive"
+              >
+                {rootError}
+              </span>
+            )}
           </label>
 
           <div className="flex flex-col gap-1">

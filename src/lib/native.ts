@@ -134,9 +134,15 @@ export type GitStashEntry = {
 
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
-  workspaceAuthorize: (path: string) =>
-    invoke<string>("workspace_authorize", {
+  /** Grants a typed space root, asking the user natively when it is new. */
+  workspaceGrantRoot: (path: string) =>
+    invoke<string>("workspace_grant_root", {
       path,
+    }),
+  /** Boot only: re-grants saved roots once per process, then refuses. */
+  workspaceRestoreRoots: (paths: string[]) =>
+    invoke<string[]>("workspace_restore_roots", {
+      paths,
     }),
   /** Grants `asset://` access to one file and returns its canonical path. */
   allowAsset: (path: string) =>

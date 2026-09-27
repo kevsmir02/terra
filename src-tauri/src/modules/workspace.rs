@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -16,10 +17,14 @@ struct CanonicalEntry {
     inserted_at: Instant,
 }
 
+// Saved spaces restore at most this many roots; a real session has a handful.
+const MAX_RESTORED_ROOTS: usize = 256;
+
 #[derive(Default)]
 pub struct WorkspaceRegistry {
     roots: Mutex<HashSet<PathBuf>>,
     canonical_cache: Mutex<HashMap<PathBuf, CanonicalEntry>>,
+    restore_spent: AtomicBool,
 }
 
 impl WorkspaceRegistry {
@@ -96,32 +101,14 @@ pub fn authorize_spawn_cwd(
     Ok(Some(canonical))
 }
 
-// User-initiated terminal spawn: canonicalize, require a real dir, and register
-// it as a root instead of rejecting paths outside existing roots.
-pub fn authorize_user_spawn_cwd(
-    registry: &WorkspaceRegistry,
-    cwd: Option<&str>,
-) -> Result<Option<PathBuf>, String> {
-    let Some(cwd) = cwd.map(str::trim).filter(|s| !s.is_empty()) else {
-        return Ok(None);
-    };
-    let resolved = PathBuf::from(cwd);
-    let canonical =
-        std::fs::canonicalize(&resolved).map_err(|e| format!("cwd not accessible: {e}"))?;
-    if !canonical.is_dir() {
-        return Err(format!("cwd is not a directory: {}", canonical.display()));
-    }
-    registry.authorize(&canonical).map_err(|e| e.to_string())?;
-    Ok(Some(canonical))
-}
-
-// A saved cwd can be stale; the terminal must still open, so fall back to home.
+// A spawn never grants: the cwd comes from the webview, so one outside every
+// root (stale, or invented) opens the terminal in home instead.
 pub fn user_spawn_cwd_or_home(
     registry: &WorkspaceRegistry,
     cwd: Option<&str>,
 ) -> Option<String> {
     let cwd = cwd.map(str::trim).filter(|s| !s.is_empty())?;
-    match authorize_user_spawn_cwd(registry, Some(cwd)) {
+    match authorize_spawn_cwd(registry, Some(cwd)) {
         Ok(_) => Some(cwd.to_owned()),
         Err(e) => {
             log::warn!("pty cwd {cwd:?} unusable ({e}); opening home");
@@ -137,23 +124,175 @@ pub fn bootstrap_registry(registry: &WorkspaceRegistry) {
     }
 }
 
-#[tauri::command]
-pub async fn workspace_authorize(
-    path: String,
-    registry: tauri::State<'_, WorkspaceRegistry>,
-) -> Result<String, String> {
-    let resolved = PathBuf::from(&path);
-    let canonical = registry.authorize(&resolved).map_err(|e| e.to_string())?;
-    Ok(crate::modules::fs::to_canon(&canonical))
+fn existing_dir(path: &str) -> Result<PathBuf, String> {
+    let path = path.trim();
+    if !Path::new(path).is_absolute() {
+        return Err(format!("not an absolute path: {path:?}"));
+    }
+    let canonical = std::fs::canonicalize(path).map_err(|e| format!("{path}: {e}"))?;
+    if !canonical.is_dir() {
+        return Err(format!("not a directory: {}", canonical.display()));
+    }
+    Ok(canonical)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RootGrant {
+    Covered(PathBuf),
+    NeedsConsent(PathBuf),
+}
+
+/// What a space root typed in Settings needs. The webview cannot tell a typed
+/// path from an invented one, so a root outside every existing one is granted
+/// only after the user confirms it in a native dialog the webview cannot drive.
+pub fn plan_root_grant(registry: &WorkspaceRegistry, path: &str) -> Result<RootGrant, String> {
+    let canonical = existing_dir(path)?;
+    Ok(if registry.is_authorized(&canonical) {
+        RootGrant::Covered(canonical)
+    } else {
+        RootGrant::NeedsConsent(canonical)
+    })
+}
+
+/// Re-grants the roots saved spaces were using, once per process. Boot calls
+/// it before any untrusted content renders; after that the window is shut, so
+/// script in the webview cannot use it to grant itself a path later.
+pub fn restore_roots(registry: &WorkspaceRegistry, paths: &[String]) -> Result<Vec<PathBuf>, String> {
+    if registry.restore_spent.swap(true, Ordering::AcqRel) {
+        return Err("workspace roots were already restored this session".into());
+    }
+    if paths.len() > MAX_RESTORED_ROOTS {
+        return Err(format!("too many roots to restore: {}", paths.len()));
+    }
+    let mut granted = Vec::new();
+    for path in paths {
+        match existing_dir(path).and_then(|p| registry.authorize(p).map_err(|e| e.to_string())) {
+            Ok(canonical) => granted.push(canonical),
+            Err(e) => log::debug!("restore root {path:?} skipped: {e}"),
+        }
+    }
+    Ok(granted)
+}
+
+/// Follows a `cd` the shell reported over OSC 7. The report is bytes any
+/// program in the terminal could print, so a path outside the roots is granted
+/// only when it is the live cwd of the shell or its foreground job.
+pub fn grant_shell_cwd(
+    registry: &WorkspaceRegistry,
+    reported: &Path,
+    live_cwds: impl FnOnce() -> Vec<PathBuf>,
+) -> bool {
+    let Ok(canonical) = std::fs::canonicalize(reported) else {
+        return false;
+    };
+    if !canonical.is_dir() {
+        return false;
+    }
+    if registry.is_authorized(&canonical) {
+        return true;
+    }
+    if !live_cwds().contains(&canonical) {
+        log::debug!("osc 7 {} is no live cwd; not granted", canonical.display());
+        return false;
+    }
+    registry.authorize(&canonical).is_ok()
+}
+
+/// The kernel's view of a process's cwd, already canonical.
+pub fn proc_cwd(pid: u32) -> Option<PathBuf> {
+    std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
 }
 
 #[tauri::command]
-pub async fn workspace_current_dir(
-    registry: tauri::State<'_, WorkspaceRegistry>,
+pub async fn workspace_current_dir(app: tauri::AppHandle) -> Result<String, String> {
+    crate::modules::blocking::on_registry(app, |registry| {
+        let canonical = registry
+            .authorize(resolve_launch_dir())
+            .map_err(|e| e.to_string())?;
+        Ok(crate::modules::fs::to_canon(&canonical))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn workspace_restore_roots(
+    paths: Vec<String>,
+    app: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let granted =
+        crate::modules::blocking::on_registry(app, move |r| restore_roots(r, &paths)).await?;
+    Ok(granted.iter().map(crate::modules::fs::to_canon).collect())
+}
+
+#[tauri::command]
+pub async fn workspace_grant_root(
+    path: String,
+    window: tauri::WebviewWindow,
 ) -> Result<String, String> {
-    let launch = resolve_launch_dir();
-    let canonical = registry.authorize(&launch).map_err(|e| e.to_string())?;
+    use tauri::Manager;
+    let app = window.app_handle().clone();
+    let plan = crate::modules::blocking::on_registry(app.clone(), move |r| {
+        plan_root_grant(r, &path)
+    })
+    .await?;
+    let canonical = match plan {
+        RootGrant::Covered(p) => p,
+        RootGrant::NeedsConsent(p) => {
+            if !ask_consent(&window, &p).await {
+                return Err(format!("access to {} was not granted", p.display()));
+            }
+            app.state::<WorkspaceRegistry>()
+                .authorize(&p)
+                .map_err(|e| e.to_string())?
+        }
+    };
     Ok(crate::modules::fs::to_canon(&canonical))
+}
+
+async fn ask_consent(window: &tauri::WebviewWindow, path: &Path) -> bool {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let parent = window.clone();
+    let path = path.display().to_string();
+    let shown = window.run_on_main_thread(move || {
+        let Ok(parent) = parent.gtk_window() else {
+            return;
+        };
+        show_consent_dialog(&parent, &path, tx);
+    });
+    if shown.is_err() {
+        return false;
+    }
+    tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(false))
+        .await
+        .unwrap_or(false)
+}
+
+fn show_consent_dialog(
+    parent: &gtk::ApplicationWindow,
+    path: &str,
+    answer: std::sync::mpsc::Sender<bool>,
+) {
+    use gtk::prelude::*;
+    let dialog = gtk::MessageDialog::new(
+        Some(parent),
+        gtk::DialogFlags::MODAL | gtk::DialogFlags::DESTROY_WITH_PARENT,
+        gtk::MessageType::Question,
+        gtk::ButtonsType::None,
+        "Give Terra access to this folder?",
+    );
+    dialog.set_secondary_text(Some(&format!(
+        "{path}\n\nThe explorer, editor, source control and terminals will be able to \
+         read and change files inside it until Terra quits."
+    )));
+    dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+    dialog.add_button("Allow access", gtk::ResponseType::Accept);
+    dialog.set_default_response(gtk::ResponseType::Cancel);
+    dialog.connect_response(move |d, response| {
+        let _ = answer.send(response == gtk::ResponseType::Accept);
+        // SAFETY: the dialog is ours, and nothing touches it after this reply.
+        unsafe { d.destroy() };
+    });
+    dialog.show_all();
 }
 
 // Snapshotted once at app startup so the live `current_dir()` drifting later
@@ -428,40 +567,122 @@ mod auth_tests {
         assert!(err.contains("cwd not accessible"), "got: {err}");
     }
 
+    // pty_open takes its cwd from the webview, so a spawn must never be the
+    // way a path outside every root becomes one.
     #[test]
-    fn authorize_user_spawn_cwd_registers_unauthorized_path() {
-        let dir = tempdir("userspawn");
+    fn a_spawn_outside_every_root_opens_home_and_grants_nothing() {
+        let allowed = tempdir("spawn-allowed");
+        let foreign = tempdir("spawn-foreign");
         let reg = WorkspaceRegistry::default();
-        let s = dir.to_string_lossy().into_owned();
-        assert!(!reg.is_authorized(&dir));
-        let resolved = authorize_user_spawn_cwd(&reg, Some(&s))
-            .expect("user spawn allowed anywhere")
-            .expect("returned canonical");
-        assert_eq!(resolved, dir);
-        assert!(reg.is_authorized(&dir));
+        reg.authorize(&allowed).unwrap();
+        let s = foreign.to_string_lossy().into_owned();
+        assert_eq!(user_spawn_cwd_or_home(&reg, Some(&s)), None);
+        assert!(!reg.is_authorized(&foreign));
+        assert!(!reg.is_authorized(Path::new("/")));
     }
 
     #[test]
-    fn authorize_user_spawn_cwd_rejects_missing_path() {
-        let mut missing = env::temp_dir();
-        missing.push(format!("terra-user-missing-{}", std::process::id()));
-        let reg = WorkspaceRegistry::default();
-        let s = missing.to_string_lossy().into_owned();
-        let err = authorize_user_spawn_cwd(&reg, Some(&s))
-            .expect_err("missing path must fail");
-        assert!(err.contains("cwd not accessible"), "got: {err}");
-    }
-
-    #[test]
-    fn user_spawn_cwd_or_home_keeps_accessible_dir() {
+    fn user_spawn_cwd_or_home_keeps_an_authorized_dir() {
         let dir = tempdir("orhome-ok");
         let reg = WorkspaceRegistry::default();
+        reg.authorize(&dir).unwrap();
         let s = dir.to_string_lossy().into_owned();
+        assert_eq!(user_spawn_cwd_or_home(&reg, Some(&s)), Some(s));
+    }
+
+    #[test]
+    fn a_root_outside_every_root_needs_consent_and_is_not_granted_by_planning() {
+        let allowed = tempdir("plan-allowed");
+        let foreign = tempdir("plan-foreign");
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(&allowed).unwrap();
+
+        let inner = allowed.join("inner");
+        fs::create_dir(&inner).unwrap();
         assert_eq!(
-            user_spawn_cwd_or_home(&reg, Some(&s)),
-            Some(s)
+            plan_root_grant(&reg, &inner.to_string_lossy()),
+            Ok(RootGrant::Covered(inner.clone()))
         );
+        assert_eq!(
+            plan_root_grant(&reg, &foreign.to_string_lossy()),
+            Ok(RootGrant::NeedsConsent(foreign.clone()))
+        );
+        assert_eq!(plan_root_grant(&reg, "/"), Ok(RootGrant::NeedsConsent("/".into())));
+        assert!(!reg.is_authorized(&foreign));
+        assert!(!reg.is_authorized(Path::new("/")));
+    }
+
+    #[test]
+    fn a_root_must_be_an_existing_absolute_directory() {
+        let dir = tempdir("plan-shape");
+        let file = dir.join("f.txt");
+        fs::write(&file, b"x").unwrap();
+        let reg = WorkspaceRegistry::default();
+        assert!(plan_root_grant(&reg, "relative/dir").is_err());
+        assert!(plan_root_grant(&reg, &file.to_string_lossy()).is_err());
+        assert!(plan_root_grant(&reg, &dir.join("missing").to_string_lossy()).is_err());
+    }
+
+    #[test]
+    fn restoring_roots_works_once_per_process() {
+        let saved = tempdir("restore-saved");
+        let later = tempdir("restore-later");
+        let reg = WorkspaceRegistry::default();
+
+        let granted = restore_roots(
+            &reg,
+            &[saved.to_string_lossy().into_owned(), "/no/such/terra/dir".into()],
+        )
+        .expect("the boot restore");
+        assert_eq!(granted, std::slice::from_ref(&saved));
+        assert!(reg.is_authorized(&saved));
+
+        assert!(restore_roots(&reg, &[later.to_string_lossy().into_owned()]).is_err());
+        assert!(restore_roots(&reg, &["/".into()]).is_err());
+        assert!(!reg.is_authorized(&later));
+        assert!(!reg.is_authorized(Path::new("/")));
+    }
+
+    #[test]
+    fn restoring_refuses_an_unbounded_list() {
+        let reg = WorkspaceRegistry::default();
+        let many = vec!["/tmp".to_string(); MAX_RESTORED_ROOTS + 1];
+        assert!(restore_roots(&reg, &many).is_err());
+        assert!(!reg.is_authorized(Path::new("/tmp")));
+    }
+
+    #[test]
+    fn a_shell_cd_grants_its_live_cwd() {
+        let dir = tempdir("osc7-live");
+        let reg = WorkspaceRegistry::default();
+        assert!(grant_shell_cwd(&reg, &dir, || vec![dir.clone()]));
         assert!(reg.is_authorized(&dir));
+    }
+
+    // Any program can print an OSC 7; only the shell's real cwd counts.
+    #[test]
+    fn a_reported_cwd_that_no_process_is_in_is_refused() {
+        let spoofed = tempdir("osc7-spoofed");
+        let real = tempdir("osc7-real");
+        let reg = WorkspaceRegistry::default();
+        assert!(!grant_shell_cwd(&reg, &spoofed, || vec![real.clone()]));
+        assert!(!grant_shell_cwd(&reg, Path::new("/"), || vec![real.clone()]));
+        assert!(!reg.is_authorized(&spoofed));
+        assert!(!reg.is_authorized(Path::new("/")));
+    }
+
+    #[test]
+    fn a_covered_report_skips_the_proc_lookup() {
+        let dir = tempdir("osc7-covered");
+        let reg = WorkspaceRegistry::default();
+        reg.authorize(&dir).unwrap();
+        assert!(grant_shell_cwd(&reg, &dir, || panic!("no lookup needed")));
+    }
+
+    #[test]
+    fn proc_cwd_reports_this_process() {
+        let here = fs::canonicalize(env::current_dir().unwrap()).unwrap();
+        assert_eq!(proc_cwd(std::process::id()), Some(here));
     }
 
     #[test]
