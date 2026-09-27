@@ -10,7 +10,7 @@ The pool lives in `src/modules/terminal/lib/rendererPool.ts`.
 
 ## Slot lifecycle
 
-- `POOL_SOFT_CAP` is 5 and `POOL_HARD_CAP` is 8 (`rendererPool.ts`). Each slot owns one xterm `Terminal`, `FitAddon`, `SearchAddon`, `SerializeAddon`, and optionally a `WebglAddon`.
+- `POOL_SOFT_CAP` is 5 and `POOL_HARD_CAP` is 8 (`rendererPool.ts`). Each slot owns one xterm `Terminal`, `FitAddon`, `SerializeAddon`, a lazy search (`lazySearch.ts`, which fetches the `SearchAddon` on the slot's first query), and optionally a `WebglAddon`.
 - A slot is created on demand and assigned to a leaf on bind.
 - `releaseSlot` detaches a slot from a leaf. If the leaf is idle, the slot is parked with `display:none` so xterm stops rendering but keeps parsing PTY bytes.
 - After a grace period, idle slots may be reaped to keep the pool size down.

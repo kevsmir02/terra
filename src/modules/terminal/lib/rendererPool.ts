@@ -3,9 +3,9 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
-import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { createLazySearch, type TerminalSearch } from "./lazySearch";
 import { lazyPathLinkProvider } from "./linkDeps";
 import {
   capScrollback,
@@ -58,7 +58,7 @@ export type Slot = {
   readonly id: number;
   readonly term: Terminal;
   readonly fitAddon: FitAddon;
-  readonly searchAddon: SearchAddon;
+  readonly searchAddon: TerminalSearch;
   readonly serializeAddon: SerializeAddon;
   readonly host: HTMLDivElement;
   webglAddon: WebglAddon | null;
@@ -223,10 +223,8 @@ export function applyBackgroundActive(active: boolean): void {
 function createSlot(): Slot {
   const term = new Terminal(termOptions());
   const fitAddon = new FitAddon();
-  const searchAddon = new SearchAddon();
   const serializeAddon = new SerializeAddon();
   term.loadAddon(fitAddon);
-  term.loadAddon(searchAddon);
   term.loadAddon(serializeAddon);
   term.loadAddon(
     new WebLinksAddon((_e, uri) => openUrl(uri).catch(console.error)),
@@ -242,7 +240,7 @@ function createSlot(): Slot {
     id: slots.length,
     term,
     fitAddon,
-    searchAddon,
+    searchAddon: createLazySearch(term),
     serializeAddon,
     host,
     webglAddon: null,
@@ -402,7 +400,7 @@ export type AcquireParams = {
   cols: number;
   rows: number;
   registerOsc: (term: Terminal) => (() => void)[];
-  onSearchReady: (addon: SearchAddon) => void;
+  onSearchReady: (search: TerminalSearch) => void;
 };
 
 export function acquireSlot(params: AcquireParams): Slot {

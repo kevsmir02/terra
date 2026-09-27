@@ -3,7 +3,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import type { SearchAddon } from "@xterm/addon-search";
+import type { TerminalSearch } from "./lib/lazySearch";
 import { Fragment } from "react";
 import { DevServerChip } from "@/modules/preview/DevServerChip";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
 type LeafBundle = {
   setRef: (h: TerminalPaneHandle | null) => void;
-  onSearchReady: (leafId: number, addon: SearchAddon) => void;
+  onSearchReady: (leafId: number, addon: TerminalSearch) => void;
   onCwd: (leafId: number, cwd: string) => void;
   onExit: (leafId: number, code: number) => void;
 };

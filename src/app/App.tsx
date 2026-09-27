@@ -88,6 +88,7 @@ import {
   persistedScrollback,
   submitToNewTab,
   type TerminalPaneHandle,
+  type TerminalSearch,
   useTerminalDropStore,
   useTerminalFileDrop,
 } from "@/modules/terminal";
@@ -95,7 +96,6 @@ import { ThemeProvider } from "@/modules/theme";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
@@ -160,9 +160,9 @@ export default function App() {
   }, [tabs, activeId]);
   const activeLeafId = activeTerminalTab?.activeLeafId ?? null;
 
-  const searchAddons = useRef<Map<number, SearchAddon>>(new Map());
+  const searchAddons = useRef<Map<number, TerminalSearch>>(new Map());
   const [activeSearchAddon, setActiveSearchAddon] =
-    useState<SearchAddon | null>(null);
+    useState<TerminalSearch | null>(null);
   const searchInlineRef = useRef<SearchInlineHandle | null>(null);
   const terminalRefs = useRef<Map<number, TerminalPaneHandle>>(new Map());
   const editorRefs = useRef<Map<number, EditorPaneHandle>>(new Map());
@@ -346,7 +346,7 @@ export default function App() {
   }, [activeId, activeLeafId]);
 
   const handleSearchReady = useCallback(
-    (leafId: number, addon: SearchAddon) => {
+    (leafId: number, addon: TerminalSearch) => {
       searchAddons.current.set(leafId, addon);
       if (leafId === activeLeafId) setActiveSearchAddon(addon);
     },

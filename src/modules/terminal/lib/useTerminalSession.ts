@@ -1,7 +1,6 @@
 import { ensureTerminalFontLoaded, resolveTerminalFont } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
-import type { SearchAddon } from "@xterm/addon-search";
 import {
   useCallback,
   useEffect,
@@ -18,6 +17,7 @@ import {
   takeRestoredScrollback,
 } from "./scrollbackPersist";
 import { DormantRing } from "./dormantRing";
+import type { TerminalSearch } from "./lazySearch";
 import {
   createShellIntegrationState,
   registerCwdHandler,
@@ -58,7 +58,7 @@ import {
 import { useTerminalFont } from "./useTerminalFont";
 
 type Callbacks = {
-  onSearchReady?: (addon: SearchAddon) => void;
+  onSearchReady?: (search: TerminalSearch) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
 };
@@ -726,7 +726,7 @@ type Options = {
   visible: boolean;
   focused?: boolean;
   initialCwd?: string;
-  onSearchReady?: (addon: SearchAddon) => void;
+  onSearchReady?: (search: TerminalSearch) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
 };

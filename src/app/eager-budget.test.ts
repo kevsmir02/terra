@@ -17,6 +17,8 @@ const HEAVY = [
   "@iconify-json/catppuccin",
   "mermaid",
   "@streamdown/mermaid",
+  // Fetched on the first terminal search by lazySearch.ts.
+  "@xterm/addon-search",
 ];
 
 function heavyEagerHits(entry: string): string[] {
@@ -47,12 +49,18 @@ describe("mermaid stays behind the fence check", () => {
   });
 });
 
-// Broadcast input is a dialog opened by one shortcut: only its lazy wrapper may
-// sit in the startup graph, never the dialog itself.
-describe("broadcast input stays lazy", () => {
-  it("main window reaches the wrapper but not the dialog", () => {
-    const { files } = traceEager("src/main.tsx", []);
+// Surfaces a user opens with one gesture: only the shell that offers them may
+// sit in the startup graph, never the surface itself.
+describe("on-demand panels stay lazy", () => {
+  const { files } = traceEager("src/main.tsx", []);
+
+  it("reaches the broadcast wrapper but not the dialog", () => {
     expect(files).toContain("src/modules/terminal/BroadcastInputLazy.tsx");
     expect(files).not.toContain("src/modules/terminal/BroadcastInput.tsx");
+  });
+
+  it("reaches the search button but not the open panel", () => {
+    expect(files).toContain("src/modules/header/SearchInline.tsx");
+    expect(files).not.toContain("src/modules/header/SearchPanel.tsx");
   });
 });

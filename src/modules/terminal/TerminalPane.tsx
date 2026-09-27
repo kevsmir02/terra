@@ -1,6 +1,6 @@
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { useTheme } from "@/modules/theme";
-import type { SearchAddon } from "@xterm/addon-search";
+import type { TerminalSearch } from "./lib/lazySearch";
 import { toast } from "sonner";
 import {
   forwardRef,
@@ -36,7 +36,7 @@ type Props = {
   /** This leaf is the active pane within its tab, receives auto-focus. */
   focused?: boolean;
   initialCwd?: string;
-  onSearchReady?: (leafId: number, addon: SearchAddon) => void;
+  onSearchReady?: (leafId: number, addon: TerminalSearch) => void;
   onExit?: (leafId: number, code: number) => void;
   onCwd?: (leafId: number, cwd: string) => void;
 };

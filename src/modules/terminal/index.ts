@@ -18,6 +18,7 @@ export {
   tabAgentStatus,
   useAgentActivityStore,
 } from "./lib/agentActivity";
+export type { TerminalSearch } from "./lib/lazySearch";
 export { useTerminalFileDrop } from "./lib/useTerminalFileDrop";
 export { useTerminalDropStore } from "./lib/dropStore";
 export { pasteIntoLeaf } from "./lib/rendererPool";
