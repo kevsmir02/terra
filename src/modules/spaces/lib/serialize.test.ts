@@ -240,3 +240,68 @@ describe("scrollback round trip", () => {
     expect(tab.paneTree).not.toHaveProperty("scrollback");
   });
 });
+
+describe("split sizes", () => {
+  const sizedTree = (sizes?: number[]): PaneNode => ({
+    kind: "split",
+    id: 10,
+    dir: "row",
+    children: [
+      { kind: "leaf", id: 11, cwd: "/a" },
+      { kind: "leaf", id: 12, cwd: "/b" },
+    ],
+    ...(sizes && { sizes }),
+  });
+
+  const restoreWith = (sizes: unknown) => {
+    const serialized: SerializedTab[] = [
+      {
+        kind: "terminal",
+        tree: {
+          kind: "split",
+          dir: "row",
+          children: [{ kind: "leaf" }, { kind: "leaf" }],
+          sizes: sizes as number[],
+        },
+      },
+    ];
+    const [tab] = hydrateTabs(serialized, "s", counter());
+    if (tab.kind !== "terminal" || tab.paneTree.kind !== "split")
+      throw new Error("shape");
+    return tab.paneTree;
+  };
+
+  it("round-trips dragged sizes", () => {
+    const serialized = serializeTabs([
+      term({ paneTree: sizedTree([30, 70]), activeLeafId: 11 }),
+    ]);
+    const [restored] = hydrateTabs(serialized, "s", counter());
+    if (restored.kind !== "terminal" || restored.paneTree.kind !== "split")
+      throw new Error("shape");
+    expect(restored.paneTree.sizes).toEqual([30, 70]);
+  });
+
+  it("writes no sizes for an untouched split", () => {
+    const [tab] = serializeTabs([
+      term({ paneTree: sizedTree(), activeLeafId: 11 }),
+    ]);
+    if (tab.kind !== "terminal") throw new Error("shape");
+    expect(tab.tree).not.toHaveProperty("sizes");
+  });
+
+  it("drops stored sizes that do not fit, restoring an equal split", () => {
+    for (const bad of [
+      [100],
+      [30, 30, 40],
+      [-20, 120],
+      [0, 100],
+      [50, "50"],
+      [10, 10],
+      "50,50",
+      { 0: 50, 1: 50 },
+      null,
+    ]) {
+      expect(restoreWith(bad)).not.toHaveProperty("sizes");
+    }
+  });
+});

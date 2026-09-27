@@ -15,6 +15,7 @@ type Props = {
   onCwd: (leafId: number, cwd: string) => void;
   onExit: (leafId: number, code: number) => void;
   onFocusLeaf: (tabId: number, leafId: number) => void;
+  onResizeSplit: (tabId: number, splitId: number, sizes: number[]) => void;
 };
 
 type Bundle = {
@@ -32,6 +33,7 @@ export function TerminalStack({
   onCwd,
   onExit,
   onFocusLeaf,
+  onResizeSplit,
 }: Props) {
   const terminals = useMemo(() => selectLiveTerminals(tabs), [tabs]);
 
@@ -97,6 +99,9 @@ export function TerminalStack({
               activeLeafId={t.activeLeafId}
               split={leafIds(t.paneTree).length > 1}
               onFocusLeaf={(leafId) => onFocusLeaf(t.id, leafId)}
+              onResizeSplit={(splitId, sizes) =>
+                onResizeSplit(t.id, splitId, sizes)
+              }
               getBundle={getBundle}
             />
           </div>

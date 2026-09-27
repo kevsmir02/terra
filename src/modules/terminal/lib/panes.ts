@@ -17,7 +17,77 @@ export type PaneNode =
       id: PaneId;
       dir: SplitDir;
       children: PaneNode[];
+      /** Percent share per child, summing to 100. Absent means equal. */
+      sizes?: number[];
     };
+
+type SplitNode = Extract<PaneNode, { kind: "split" }>;
+
+const SIZE_SUM_TOLERANCE = 1;
+const SIZE_CHANGE_EPSILON = 0.1;
+
+export function equalSizes(count: number): number[] {
+  return Array.from({ length: count }, () => 100 / count);
+}
+
+/**
+ * `sizes` rescaled to sum to exactly 100, or null when it cannot describe
+ * `count` children: wrong length, a non-finite or non-positive share, or a
+ * total that is not already 100 (a hand-edited or corrupted store).
+ */
+export function validSizes(sizes: unknown, count: number): number[] | null {
+  if (!Array.isArray(sizes) || count < 2 || sizes.length !== count) return null;
+  let sum = 0;
+  for (const v of sizes) {
+    if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return null;
+    sum += v;
+  }
+  if (Math.abs(sum - 100) > SIZE_SUM_TOLERANCE) return null;
+  return sizes.map((v: number) => (v * 100) / sum);
+}
+
+export function splitSizes(node: SplitNode): number[] {
+  return (
+    validSizes(node.sizes, node.children.length) ??
+    equalSizes(node.children.length)
+  );
+}
+
+function rescale(sizes: number[]): number[] {
+  const sum = sizes.reduce((a, b) => a + b, 0);
+  return sizes.map((v) => (v * 100) / sum);
+}
+
+function sameSizes(a: number[], b: number[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((v, i) => Math.abs(v - b[i]) < SIZE_CHANGE_EPSILON)
+  );
+}
+
+/**
+ * Record the shares the user dragged a split to. Returns the same tree when
+ * nothing moved or the sizes are unusable, so a no-op never re-renders.
+ */
+export function setSplitSizes(
+  tree: PaneNode,
+  splitId: PaneId,
+  sizes: number[],
+): PaneNode {
+  if (isLeaf(tree)) return tree;
+  if (tree.id === splitId) {
+    const next = validSizes(sizes, tree.children.length);
+    if (!next || sameSizes(next, splitSizes(tree))) return tree;
+    return { ...tree, sizes: next };
+  }
+  let changed = false;
+  const children = tree.children.map((c) => {
+    const u = setSplitSizes(c, splitId, sizes);
+    if (u !== c) changed = true;
+    return u;
+  });
+  return changed ? { ...tree, children } : tree;
+}
 
 export function isLeaf(n: PaneNode): n is Extract<PaneNode, { kind: "leaf" }> {
   return n.kind === "leaf";
@@ -77,8 +147,19 @@ export function splitLeaf(
     );
     if (idx >= 0) {
       const newLeaf: PaneNode = { kind: "leaf", id: newLeafId, cwd: newCwd };
+      // The new pane takes half of the one it split, leaving the rest as sized.
+      const shares = splitSizes(tree);
+      const half = shares[idx] / 2;
       return {
         ...tree,
+        ...(tree.sizes !== undefined && {
+          sizes: [
+            ...shares.slice(0, idx),
+            half,
+            half,
+            ...shares.slice(idx + 1),
+          ],
+        }),
         children: [
           ...tree.children.slice(0, idx + 1),
           newLeaf,
@@ -111,14 +192,21 @@ export function splitLeaf(
  */
 export function removeLeaf(tree: PaneNode, targetId: PaneId): PaneNode | null {
   if (isLeaf(tree)) return tree.id === targetId ? null : tree;
+  const shares = splitSizes(tree);
   const newChildren: PaneNode[] = [];
-  for (const c of tree.children) {
+  const newShares: number[] = [];
+  tree.children.forEach((c, i) => {
     const r = removeLeaf(c, targetId);
-    if (r !== null) newChildren.push(r);
-  }
+    if (r === null) return;
+    newChildren.push(r);
+    newShares.push(shares[i]);
+  });
   if (newChildren.length === 0) return null;
   if (newChildren.length === 1) return newChildren[0];
-  return { ...tree, children: newChildren };
+  if (tree.sizes === undefined || newChildren.length === tree.children.length)
+    return { ...tree, children: newChildren };
+  // Survivors keep their proportions to one another.
+  return { ...tree, children: newChildren, sizes: rescale(newShares) };
 }
 
 export function nextLeafId(
@@ -176,18 +264,16 @@ function paneRects(
   height = 1,
 ): PaneRect[] {
   if (isLeaf(node)) return [{ id: node.id, x, y, width, height }];
-  const count = node.children.length;
-  return node.children.flatMap((child, index) =>
-    node.dir === "row"
-      ? paneRects(child, x + (width * index) / count, y, width / count, height)
-      : paneRects(
-          child,
-          x,
-          y + (height * index) / count,
-          width,
-          height / count,
-        ),
-  );
+  const shares = splitSizes(node);
+  let offset = 0;
+  return node.children.flatMap((child, index) => {
+    const start = offset / 100;
+    const share = shares[index] / 100;
+    offset += shares[index];
+    return node.dir === "row"
+      ? paneRects(child, x + width * start, y, width * share, height)
+      : paneRects(child, x, y + height * start, width, height * share);
+  });
 }
 
 function directionalTarget(

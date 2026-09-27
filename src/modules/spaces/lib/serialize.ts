@@ -2,6 +2,7 @@ import {
   isLeaf,
   type PaneNode,
   type SplitDir,
+  validSizes,
 } from "@/modules/terminal/lib/panes";
 import { isTabColor } from "@/modules/tabs/lib/tabColor";
 import type {
@@ -14,7 +15,12 @@ import type {
 
 export type SerializedNode =
   | { kind: "leaf"; cwd?: string; active?: boolean; scrollback?: string }
-  | { kind: "split"; dir: SplitDir; children: SerializedNode[] };
+  | {
+      kind: "split";
+      dir: SplitDir;
+      children: SerializedNode[];
+      sizes?: number[];
+    };
 
 export type SerializedTab =
   | {
@@ -65,6 +71,7 @@ function serializeNode(
     children: node.children.map((c) =>
       serializeNode(c, activeLeafId, scrollbackFor),
     ),
+    ...(node.sizes !== undefined && { sizes: node.sizes }),
   };
 }
 
@@ -144,7 +151,15 @@ function hydrateNode(
   );
   if (children.length === 0) return { kind: "leaf", id: allocId() };
   if (children.length === 1) return children[0];
-  return { kind: "split", id: allocId(), dir: node.dir, children };
+  // Stored sizes are untrusted: anything that does not fit falls back to equal.
+  const sizes = validSizes(node.sizes, children.length);
+  return {
+    kind: "split",
+    id: allocId(),
+    dir: node.dir,
+    children,
+    ...(sizes && { sizes }),
+  };
 }
 
 function hydrateTree(

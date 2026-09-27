@@ -132,6 +132,7 @@ export default function App() {
     focusPane,
     focusNextPaneInTab,
     swapActivePaneInDirection,
+    resizeSplit,
     splitActivePane,
     closeActivePane,
     closePaneByLeaf,
@@ -1219,6 +1220,7 @@ export default function App() {
                       onCwd={handleTerminalCwd}
                       onExit={handleLeafExit}
                       onFocusLeaf={handleFocusLeaf}
+                      onResizeSplit={resizeSplit}
                       registerEditorHandle={registerEditorHandle}
                       onEditorDirtyChange={handleEditorDirty}
                       onEditorCloseTab={disposeTab}
