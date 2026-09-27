@@ -46,3 +46,26 @@ describe("mermaid stays behind the fence check", () => {
     expect([...hits.keys()]).toEqual([]);
   });
 });
+
+// Only the active editor theme is needed, and "auto" needs none of the
+// presets, so each loads behind its own dynamic import.
+describe("editor theme presets load on demand", () => {
+  const PRESETS = [
+    "@uiw/codemirror-theme-atomone",
+    "@uiw/codemirror-theme-aura",
+    "@uiw/codemirror-theme-copilot",
+    "@uiw/codemirror-theme-github",
+    "@uiw/codemirror-theme-gruvbox-dark",
+    "@uiw/codemirror-theme-nord",
+    "@uiw/codemirror-theme-tokyo-night",
+    "@uiw/codemirror-theme-xcode",
+  ];
+
+  it.each([
+    "src/modules/editor/EditorStack.tsx",
+    "src/modules/editor/GitDiffStack.tsx",
+  ])("%s does not statically import a preset theme", (entry) => {
+    const { hits } = traceEager(entry, PRESETS);
+    expect([...hits.keys()]).toEqual([]);
+  });
+});
