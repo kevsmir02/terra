@@ -49,13 +49,15 @@ pub async fn pty_open(
     rows: u16,
     cwd: Option<String>,
     shell: Option<String>,
+    agents: Option<Vec<String>>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<u32, String> {
     let cwd = user_spawn_cwd_or_home(&registry, cwd.as_deref());
+    let agents = agent_detect::detector_agents(agents);
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
     let session = tauri::async_runtime::spawn_blocking(move || {
-        session::spawn(id, app, cols, rows, cwd, shell, on_data, on_exit)
+        session::spawn(id, app, cols, rows, cwd, shell, agents, on_data, on_exit)
             .map(|(s, _)| s)
     })
     .await
