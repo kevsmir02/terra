@@ -90,7 +90,8 @@ export function traceEager(entry, watch = DEFAULT_WATCH) {
       }
     }
   }
-  return { moduleCount: seen.size, hits };
+  const files = [...seen].map((f) => f.replace(root + "/", ""));
+  return { moduleCount: seen.size, hits, files };
 }
 
 const isCli = process.argv[1] === fileURLToPath(import.meta.url);

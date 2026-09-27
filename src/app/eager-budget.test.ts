@@ -47,6 +47,19 @@ describe("mermaid stays behind the fence check", () => {
   });
 });
 
+// The session manager subscribes to the preferences store when it loads, and
+// no server can run before an editor asks for one, so it loads with the editor.
+describe("the LSP session manager stays dormant", () => {
+  it.each(["src/main.tsx", "src/settings/main.tsx"])(
+    "%s does not reach it eagerly",
+    (entry) => {
+      const { files } = traceEager(entry, []);
+      expect(files).toContain(entry);
+      expect(files).not.toContain("src/modules/lsp/lib/sessionManager.ts");
+    },
+  );
+});
+
 // Only the active editor theme is needed, and "auto" needs none of the
 // presets, so each loads behind its own dynamic import.
 describe("editor theme presets load on demand", () => {
