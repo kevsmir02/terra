@@ -70,21 +70,22 @@ function handleSignal(sig: AgentSignal, ctx: Ctx): void {
     case "working":
       store.setStatus(leafId, "working");
       return;
-    case "attention": {
-      store.setStatus(leafId, "waiting");
-      const session = store.sessions[leafId];
-      if (session) route(session, "attention", ctx);
-      return;
-    }
+    case "attention":
     case "finished": {
-      store.setStatus(leafId, "waiting");
-      const session = store.sessions[leafId];
-      if (session) route(session, "finished", ctx);
+      store.setStatus(leafId, sig.kind);
+      const session = useAgentStore.getState().sessions[leafId];
+      if (session) route(session, sig.kind, ctx);
       return;
     }
-    case "exited":
-      store.finish(leafId);
+    case "exited": {
+      const session = store.sessions[leafId];
+      if (!session) return;
+      store.finish(leafId, {
+        label: tabInfo(ctx.tabs, leafId)?.title ?? displayAgent(session.agent),
+        code: typeof sig.code === "number" ? sig.code : null,
+      });
       return;
+    }
   }
 }
 

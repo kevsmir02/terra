@@ -643,7 +643,9 @@ export default function App() {
   const activateAgentTarget = useCallback(
     (tabId: number, leafId: number) => {
       const space = tabsRef.current.find((t) => t.id === tabId)?.spaceId;
-      if (space && space !== useSpaces.getState().activeId) {
+      // A recent run or an old alert can outlive its tab.
+      if (!space) return;
+      if (space !== useSpaces.getState().activeId) {
         useSpaces.getState().setActive(space);
       }
       setActiveId(tabId);
@@ -705,7 +707,7 @@ export default function App() {
         else searchInlineRef.current?.focus();
       },
       "agent.focusAttention": () => {
-        const t = nextAttentionTarget();
+        const t = nextAttentionTarget(activeLeafId);
         if (t) activateAgentTarget(t.tabId, t.leafId);
       },
       "settings.open": () => void openSettingsWindow(),
