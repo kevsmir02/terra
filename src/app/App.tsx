@@ -65,6 +65,8 @@ import {
 } from "@/modules/spaces";
 import { StatusBar } from "@/modules/statusbar";
 import {
+  announceSplitCap,
+  splitCapReached,
   TabSwitcherHud,
   useTabSwitcher,
   useTabs,
@@ -601,6 +603,10 @@ export default function App() {
     (dir: "row" | "col") => {
       const t = tabsRef.current.find((x) => x.id === activeId);
       if (t?.kind !== "terminal") return;
+      if (splitCapReached(t.paneTree)) {
+        announceSplitCap();
+        return;
+      }
       splitActivePane(activeId, dir);
     },
     [activeId, splitActivePane],

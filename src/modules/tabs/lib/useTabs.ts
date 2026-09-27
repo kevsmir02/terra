@@ -17,10 +17,10 @@ import {
 } from "@/modules/terminal/lib/panes";
 import { disposeSession } from "@/modules/terminal/lib/useTerminalSession";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { splitCapReached } from "./splitCap";
 import { isTabColor } from "./tabColor";
 
-// Matches the renderer slot pool size, over this we'd evict an active leaf.
-export const MAX_PANES_PER_TAB = 4;
+export { MAX_PANES_PER_TAB } from "./splitCap";
 
 type TabBase = {
   spaceId: string;
@@ -944,7 +944,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       setTabs((curr) =>
         curr.map((t) => {
           if (t.id !== tabId || t.kind !== "terminal") return t;
-          if (leafIds(t.paneTree).length >= MAX_PANES_PER_TAB) return t;
+          if (splitCapReached(t.paneTree)) return t;
           const splitId = nextIdRef.current++;
           const leafId = nextIdRef.current++;
           newLeafId = leafId;
