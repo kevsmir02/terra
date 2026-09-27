@@ -27,10 +27,10 @@ const READ_BUF: usize = 16 * 1024;
 // Dropping a partial prefix would slice a CSI sequence in half and corrupt
 // xterm's screen state. 4 MiB is ~1000 full 80x24 screens.
 const MAX_PENDING: usize = 4 * 1024 * 1024;
-// Hard reset (ESC c) + dim notice. Written verbatim into the stream when
-// we're forced to discard backlog.
+// No ESC c here: a full reset (RIS) would wipe the screen and scrollback, the
+// opposite of what dropping a backlog should cost. Mirrors dormantRing.ts.
 const OVERFLOW_NOTICE: &[u8] =
-    b"\x1bc\x1b[2m[terra: dropped output due to backpressure]\x1b[0m\r\n";
+    b"\r\n\x1b[0m\x1b[2m[terra: dropped output due to backpressure]\x1b[0m\r\n";
 
 pub struct Session {
     // Field drop order is intentional. Rust drops fields top-to-bottom:
@@ -291,6 +291,16 @@ pub fn spawn(
 mod tests {
     use super::*;
     use portable_pty::CommandBuilder;
+
+    #[test]
+    fn overflow_notice_resets_sgr_without_a_full_terminal_reset() {
+        assert!(
+            !OVERFLOW_NOTICE.windows(2).any(|w| w == b"\x1bc"),
+            "ESC c would clear the screen and scrollback"
+        );
+        assert!(OVERFLOW_NOTICE.starts_with(b"\r\n\x1b[0m"));
+        assert!(OVERFLOW_NOTICE.ends_with(b"\x1b[0m\r\n"));
+    }
 
     #[test]
     fn drop_kills_child_process() {
