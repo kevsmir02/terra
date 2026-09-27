@@ -161,7 +161,8 @@ pub async fn git_push(
 pub async fn git_log(
     repo_root: String,
     limit: Option<u32>,
-    before_sha: Option<String>,
+    skip: Option<u32>,
+    anchor_sha: Option<String>,
     app: AppHandle,
 ) -> Result<Vec<GitLogEntry>, String> {
     blocking(app, move |r| {
@@ -169,7 +170,8 @@ pub async fn git_log(
             r,
             &repo_root,
             limit.unwrap_or(30),
-            before_sha.as_deref(),
+            skip.unwrap_or(0),
+            anchor_sha.as_deref(),
         )
         .map_err(Into::into)
     })

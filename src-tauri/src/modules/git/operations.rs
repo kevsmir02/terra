@@ -569,23 +569,30 @@ pub fn push(
 const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 const MAX_LOG_LIMIT: u32 = 200;
 
+/// Pages by offset from a fixed anchor. `<last shown>^` only walks the first
+/// parent of the last row, so when that row sits on a merged side branch every
+/// newer mainline commit is skipped; the same rev set and order with `--skip`
+/// resumes exactly where the previous page stopped, and pinning the anchor to
+/// the first page's head keeps a commit made in between from shifting pages.
 pub fn log(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     limit: u32,
-    before_sha: Option<&str>,
+    skip: u32,
+    anchor_sha: Option<&str>,
 ) -> Result<Vec<GitLogEntry>> {
     let repo_root = authorized_repo_root(registry, repo_root)?;
     ensure_git_available()?;
     let bounded = limit.clamp(1, MAX_LOG_LIMIT);
     let count_arg = format!("--max-count={bounded}");
+    let skip_arg = format!("--skip={skip}");
     let format_arg = format!("--format={LOG_FORMAT}");
-    let cursor = match before_sha {
+    let anchor = match anchor_sha {
         Some(sha) if !sha.is_empty() => {
             if !sha_is_safe(sha) {
-                return Err(GitError::command("git log", "invalid cursor sha"));
+                return Err(GitError::command("git log", "invalid anchor sha"));
             }
-            Some(format!("{sha}^"))
+            Some(sha)
         }
         _ => None,
     };
@@ -596,8 +603,12 @@ pub fn log(
         OsStr::new(&count_arg),
         OsStr::new(&format_arg),
     ];
-    if let Some(spec) = cursor.as_deref() {
-        args.push(OsStr::new(spec));
+    if skip > 0 {
+        args.push(OsStr::new(&skip_arg));
+    }
+    if let Some(sha) = anchor {
+        args.push(OsStr::new(sha));
+        args.push(OsStr::new("--"));
     }
     let output = run_git(
         Some(&repo_root.git_path),

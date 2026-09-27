@@ -42,6 +42,46 @@ impl GitRepoFixture {
         run_git_in(&self.repo_path, args);
     }
 
+    /// Runs with a fixed author and committer date `tick` seconds past a base,
+    /// for tests that depend on log order: commits made within one second
+    /// would otherwise tie. Git reads a bare small number as a malformed date.
+    pub fn run_git_at(&self, tick: i64, args: &[&str]) {
+        let stamp = format!("@{} +0000", 1_700_000_000 + tick);
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_AUTHOR_DATE", &stamp)
+            .env("GIT_COMMITTER_DATE", &stamp)
+            .output()
+            .expect("git on PATH");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// Runs git expecting it may fail, for setting up a stopped merge.
+    pub fn try_git(&self, args: &[&str]) -> bool {
+        Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .output()
+            .expect("git on PATH")
+            .status
+            .success()
+    }
+
+    pub fn git_stdout(&self, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .output()
+            .expect("git on PATH");
+        assert!(out.status.success(), "git {args:?} failed");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
     pub fn write_file(&self, rel: &str, content: &str) {
         let p = self.repo_path.join(rel);
         if let Some(parent) = p.parent() {

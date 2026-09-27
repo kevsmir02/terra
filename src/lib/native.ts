@@ -245,14 +245,17 @@ export const native = {
     invoke<GitPushResult>("git_push", {
       repoRoot,
     }),
+  /** Pages by `skip` from `anchorSha`, the first page's head, so a merge or
+   * a commit made between pages can neither skip nor repeat a row. */
   gitLog: (
     repoRoot: string,
-    options?: { limit?: number; beforeSha?: string },
+    options?: { limit?: number; skip?: number; anchorSha?: string },
   ) =>
     invoke<GitLogEntry[]>("git_log", {
       repoRoot,
       limit: options?.limit ?? null,
-      beforeSha: options?.beforeSha ?? null,
+      skip: options?.skip ?? null,
+      anchorSha: options?.anchorSha ?? null,
     }),
   gitShowCommit: (repoRoot: string, sha: string) =>
     invoke<GitDiffResult>("git_show_commit", {
