@@ -1,0 +1,6 @@
+# One toolchain for local builds, CI and release. Bump it deliberately, and
+# re-run clippy on the new version in the same change.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

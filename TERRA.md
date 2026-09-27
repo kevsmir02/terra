@@ -45,8 +45,8 @@ Raising a budget is its own reviewed decision, recorded in the commit message wi
 Production-grade or it does not ship. A change is done when all of these hold:
 
 - **Checks green.** CI (`.github/workflows/ci.yml`) is the authority; run its steps locally before claiming done.
-  - Frontend: `pnpm lint`, `pnpm format:check`, `pnpm check-types`, `pnpm test`, `pnpm build && pnpm size:eager`, `pnpm knip`, `pnpm audit --prod` and `pnpm audit`.
-  - Rust: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cargo nextest run --locked` (local fallback: `cargo test --locked`), `cargo audit`, then `git diff --exit-code src/modules/device/generated` (the `ts-rs` export must be committed).
+  - Frontend: `pnpm version:check`, `pnpm lint`, `pnpm format:check`, `pnpm check-types`, `pnpm test`, `pnpm build && pnpm size:eager`, `pnpm knip`, `pnpm audit --prod` and `pnpm audit`.
+  - Rust: `cd src-tauri && cargo clippy --all-targets --locked -- -D warnings`, `cargo nextest run --locked` (local fallback: `cargo test --locked`; the crate has no doctests, which nextest would skip), `cargo audit`, then `git diff --exit-code src/modules/device/generated` (the `ts-rs` export must be committed). The toolchain is pinned in `rust-toolchain.toml` for local, CI and release alike.
   - `pnpm lint` runs with `--error-on-warnings`: a deliberate exception carries `// biome-ignore <rule>: <reason>`. Accepted Rust advisories live in `src-tauri/.cargo/audit.toml` with their rationale; anything unlisted fails.
 - **Invariant locked.** A change to a core subsystem (terminal/shell spawn, workspace authorization, git, fs, IPC, the dormant state of a feature, and pure logic with wide reach such as cwd inheritance, tab-tree transforms, and OSC parsing) ships with a test that fails when the invariant breaks. Test the deny path and the edge, not the happy path; `fs::authorization_tests`, `workspace::auth_tests`, and `src/app/eager-budget.test.ts` are the models. UI rendering, themes, and anything the type-checker already guarantees need no test.
 - **Correct under stress.** Edge cases, failure modes, and concurrent access handled. Every boundary (IPC, fs, network, OSC) validates its input.
@@ -180,6 +180,8 @@ Each module is self-contained, exports a thin barrel via `index.ts`, and owns it
 ### Bundle config
 
 `tauri.conf.json` is the source of truth for the bundle: the targets are deb, rpm, and AppImage; the auto-updater is signed with a public minisign key and reads `https://github.com/kevsmir02/terra/releases/latest/download/latest.json`; `bundle.resources` ships `resources/scrcpy-server-*.jar` for the device module.
+
+The version lives in `package.json`, `src-tauri/Cargo.toml` (and the `terra` entry of `Cargo.lock`) and `tauri.conf.json`: `pnpm version:bump <x.y.z>` rewrites all four, `pnpm version:check [tag]` fails when they disagree or differ from the tag (CI and release run it), and `pnpm changelog` renders the conventional commits since the previous tag. `release.yml` on a `v*` tag runs the CI workflow as a gate (`workflow_call`), builds and publishes a **draft**, repacks the AppImage and re-signs every updater artifact, patches `latest.json` to those signatures and verifies each against the updater public key with `minisign`, and un-drafts only as the last step. Every step fails loudly: `releases/latest/download/latest.json` must never point an installed app at an artifact whose signature does not verify.
 
 ### Known gotchas
 
