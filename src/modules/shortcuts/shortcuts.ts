@@ -25,6 +25,7 @@ export type ShortcutId =
   | "pane.swapUp"
   | "pane.swapDown"
   | "pane.source"
+  | "pane.broadcast"
   | "terminal.clear"
   | "terminal.copy"
   | "terminal.paste"
@@ -176,6 +177,12 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Toggle source panel",
     group: "Panes",
     defaultBindings: [{ ctrl: true, key: "g" }],
+  },
+  {
+    id: "pane.broadcast",
+    label: "Send input to all panes",
+    group: "Panes",
+    defaultBindings: [{ ctrl: true, alt: true, key: "b" }],
   },
   {
     id: "terminal.clear",

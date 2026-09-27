@@ -77,6 +77,7 @@ import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import {
   clearFocusedTerminal,
   configureTerminalLinks,
+  BroadcastInput,
   disposeSession,
   findLeafCwd,
   formatDroppedPaths,
@@ -297,6 +298,13 @@ export default function App() {
   // Latches on first open so the palette chunk is fetched then, not at startup.
   // It stays mounted afterwards, keeping the dialog's exit animation.
   const [paletteMounted, setPaletteMounted] = useState(false);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  // Latched like the palette: the dialog chunk loads on first use only.
+  const [broadcastMounted, setBroadcastMounted] = useState(false);
+  const openBroadcast = useCallback(() => {
+    setBroadcastMounted(true);
+    setBroadcastOpen(true);
+  }, []);
   const [paletteInitialMode, setPaletteInitialMode] = useState<
     "commands" | "content"
   >("commands");
@@ -311,6 +319,10 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeId);
   const isTerminalTab = activeTab?.kind === "terminal";
+  const broadcastLeafIds = useMemo(
+    () => (activeTab?.kind === "terminal" ? leafIds(activeTab.paneTree) : []),
+    [activeTab],
+  );
   const isEditorTab = activeTab?.kind === "editor";
   const isGitHistoryTab = activeTab?.kind === "git-history";
 
@@ -687,6 +699,7 @@ export default function App() {
       "pane.swapUp": () => swapActivePane("up"),
       "pane.swapDown": () => swapActivePane("down"),
       "pane.source": toggleSourceControl,
+      "pane.broadcast": openBroadcast,
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
@@ -749,6 +762,7 @@ export default function App() {
       zoomOut,
       zoomReset,
       activateAgentTarget,
+      openBroadcast,
     ],
   );
 
@@ -770,7 +784,8 @@ export default function App() {
         id === "terminal.prevCommand" ||
         id === "terminal.nextCommand" ||
         id === "terminal.selectLastOutput" ||
-        id === "terminal.copyLastOutput"
+        id === "terminal.copyLastOutput" ||
+        id === "pane.broadcast"
       ) {
         return activeTab?.kind !== "terminal";
       }
@@ -1044,6 +1059,7 @@ export default function App() {
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
+            broadcastToPanes: openBroadcast,
             focusSearch: () => searchInlineRef.current?.focus(),
             focusExplorerSearch: () => explorerRef.current?.focusSearch(),
             toggleSidebar,
@@ -1073,6 +1089,7 @@ export default function App() {
       toggleSidebar,
       activeSpaceId,
       handleNewSpace,
+      openBroadcast,
     ],
   );
 
@@ -1296,6 +1313,14 @@ export default function App() {
 
           {switcherState && (
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />
+          )}
+
+          {broadcastMounted && (
+            <BroadcastInput
+              open={broadcastOpen}
+              onOpenChange={setBroadcastOpen}
+              leafIds={broadcastLeafIds}
+            />
           )}
 
           {paletteMounted && (

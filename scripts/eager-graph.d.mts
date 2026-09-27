@@ -4,5 +4,6 @@ export function traceEager(
   watch?: string[],
 ): {
   moduleCount: number;
+  files: string[];
   hits: Map<string, { spec: string; file: string }>;
 };

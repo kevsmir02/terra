@@ -46,3 +46,13 @@ describe("mermaid stays behind the fence check", () => {
     expect([...hits.keys()]).toEqual([]);
   });
 });
+
+// Broadcast input is a dialog opened by one shortcut: only its lazy wrapper may
+// sit in the startup graph, never the dialog itself.
+describe("broadcast input stays lazy", () => {
+  it("main window reaches the wrapper but not the dialog", () => {
+    const { files } = traceEager("src/main.tsx", []);
+    expect(files).toContain("src/modules/terminal/BroadcastInputLazy.tsx");
+    expect(files).not.toContain("src/modules/terminal/BroadcastInput.tsx");
+  });
+});
