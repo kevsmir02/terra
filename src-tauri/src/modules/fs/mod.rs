@@ -72,6 +72,10 @@ pub fn authorized_entry(
 /// Only the nearest existing ancestor can be canonicalized, so that is what
 /// gets authorized; the missing tail is re-joined onto the real base. A tail
 /// component can never be `..`, because `Path::file_name` refuses it.
+///
+/// Existence is `symlink_metadata`, never `exists`: a dangling link must count
+/// as present, so it is canonicalized (and refused) rather than treated as a
+/// missing tail that a later open would follow out of every root.
 pub fn authorized_new(
     registry: &WorkspaceRegistry,
     path: &str,
@@ -79,7 +83,12 @@ pub fn authorized_new(
     let resolved = PathBuf::from(path);
     let mut tail: Vec<std::ffi::OsString> = Vec::new();
     let mut cursor = resolved.as_path();
-    while !cursor.exists() {
+    loop {
+        match cursor.symlink_metadata() {
+            Ok(_) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("{}: {e}", cursor.display())),
+        }
         let (Some(name), Some(parent)) = (cursor.file_name(), cursor.parent()) else {
             return Err(format!("invalid path: {}", resolved.display()));
         };
@@ -213,5 +222,109 @@ mod authorization_tests {
 
         assert!(authorized_read(&reg, &s(dropped)).is_ok());
         assert!(authorized_read(&reg, &s(sibling)).is_err());
+    }
+
+    /// A link inside the root whose target does not exist yet, pointing out.
+    fn dangling_escape(
+        inside: &tempfile::TempDir,
+        outside: &tempfile::TempDir,
+    ) -> (std::path::PathBuf, std::path::PathBuf) {
+        let target = outside.path().join("planted.txt");
+        let link = inside.path().join("planted.txt");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        (link, target)
+    }
+
+    #[test]
+    fn new_path_gate_refuses_a_dangling_link_that_points_outside() {
+        let (inside, outside, reg) = fixture();
+        let (link, _target) = dangling_escape(&inside, &outside);
+        assert!(authorized_new(&reg, &s(link.clone())).is_err());
+        assert!(authorized_new(&reg, &s(link.join("child.txt"))).is_err());
+    }
+
+    #[test]
+    fn create_file_never_follows_a_dangling_link_out_of_the_root() {
+        let (inside, outside, reg) = fixture();
+        let (link, target) = dangling_escape(&inside, &outside);
+        assert!(mutate::create_file(&reg, &s(link.clone())).is_err());
+        assert!(mutate::create_dir(&reg, &s(link.join("sub"))).is_err());
+        assert!(target.symlink_metadata().is_err(), "nothing may appear outside");
+    }
+
+    #[test]
+    fn copy_never_writes_through_a_dangling_link_at_the_target() {
+        let (inside, outside, reg) = fixture();
+        let (_link, target) = dangling_escape(&inside, &outside);
+        let drop_dir = tempfile::tempdir().unwrap();
+        let source = drop_dir.path().join("planted.txt");
+        std::fs::write(&source, b"payload").unwrap();
+        reg.authorize(&source).expect("an OS drop registers its source");
+
+        let err = mutate::copy_into(&reg, &[s(source)], &s(inside.path().to_path_buf()))
+            .unwrap_err();
+        assert!(err.contains("already exists"), "got: {err}");
+        assert!(target.symlink_metadata().is_err(), "nothing may appear outside");
+    }
+
+    #[test]
+    fn rename_never_lands_on_a_dangling_link() {
+        let (inside, outside, reg) = fixture();
+        let (link, target) = dangling_escape(&inside, &outside);
+        let from = inside.path().join("a.txt");
+        std::fs::write(&from, b"a").unwrap();
+        assert!(mutate::rename(&reg, &s(from.clone()), &s(link.clone())).is_err());
+        assert!(from.exists());
+        assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(target.symlink_metadata().is_err());
+    }
+
+    #[test]
+    fn copy_keeps_a_nested_link_as_a_link_instead_of_reading_through_it() {
+        let (inside, outside, reg) = fixture();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, b"secret").unwrap();
+        let src = inside.path().join("src");
+        std::fs::create_dir(&src).unwrap();
+        std::os::unix::fs::symlink(&secret, src.join("leak")).unwrap();
+        let dest = inside.path().join("dest");
+        std::fs::create_dir(&dest).unwrap();
+
+        mutate::copy_into(&reg, &[s(src)], &s(dest.clone())).expect("copy");
+        let copied = dest.join("src").join("leak");
+        assert!(copied.symlink_metadata().unwrap().file_type().is_symlink());
+        assert!(authorized_read(&reg, &s(copied)).is_err());
+    }
+
+    // A link that stays inside the root still resolves: the gate hands back the
+    // real target, and create refuses because something is already there.
+    #[test]
+    fn a_link_that_stays_inside_the_root_resolves_to_its_target() {
+        let (inside, _outside, reg) = fixture();
+        let real = inside.path().join("real.txt");
+        std::fs::write(&real, b"keep").unwrap();
+        let link = inside.path().join("alias.txt");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let got = authorized_new(&reg, &s(link.clone())).expect("inside link");
+        assert_eq!(got, std::fs::canonicalize(&real).unwrap());
+        let err = mutate::create_file(&reg, &s(link)).unwrap_err();
+        assert!(err.contains("already exists"), "got: {err}");
+        assert_eq!(std::fs::read(&real).unwrap(), b"keep");
+    }
+
+    #[test]
+    fn directory_listings_refuse_paths_outside_every_root() {
+        let (inside, outside, reg) = fixture();
+        std::fs::create_dir(outside.path().join("private")).unwrap();
+        let escape = inside.path().join("escape");
+        std::os::unix::fs::symlink(outside.path(), &escape).unwrap();
+
+        for p in [s(outside.path().to_path_buf()), s(escape)] {
+            let err = tree::read_dir(&reg, &p, true, None).err().expect("refused");
+            assert!(err.contains("outside the authorized workspace"), "got: {err}");
+            let err = tree::subdirs(&reg, &p, true).unwrap_err();
+            assert!(err.contains("outside the authorized workspace"), "got: {err}");
+        }
     }
 }
