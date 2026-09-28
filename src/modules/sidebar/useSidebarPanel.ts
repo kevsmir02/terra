@@ -39,6 +39,7 @@ function readSidebarView(): SidebarViewId {
     const stored = window.localStorage.getItem(SIDEBAR_VIEW_STORAGE_KEY);
     if (
       stored === "explorer" ||
+      stored === "search" ||
       stored === "source-control" ||
       stored === "devices"
     )
@@ -140,6 +141,19 @@ export function useSidebarPanel(
     [persistSidebarView, sidebarView],
   );
 
+  /** Shows `view`, expanding a collapsed panel; unlike a rail click it never
+   * collapses, so a shortcut can always land on the view. */
+  const revealSidebarView = useCallback(
+    (view: SidebarViewId) => {
+      const panel = sidebarRef.current;
+      if (panel && panel.getSize().asPercentage <= 0) {
+        panel.resize(`${sidebarWidthRef.current}px`);
+      }
+      if (view !== sidebarView) persistSidebarView(view);
+    },
+    [persistSidebarView, sidebarView],
+  );
+
   const persistSidebarWidth = useCallback((next: number) => {
     sidebarWidthRef.current = next;
     if (sidebarWidthWriteTimerRef.current) {
@@ -204,6 +218,7 @@ export function useSidebarPanel(
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
+    revealSidebarView,
     persistSidebarWidth,
     toggleExplorerFocus,
   };

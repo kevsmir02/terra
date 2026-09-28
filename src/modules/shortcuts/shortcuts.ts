@@ -35,6 +35,7 @@ export type ShortcutId =
   | "terminal.selectLastOutput"
   | "terminal.copyLastOutput"
   | "search.focus"
+  | "search.replace"
   | "explorer.search"
   | "explorer.focus"
   | "view.zoomIn"
@@ -289,6 +290,12 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Find in tab",
     group: "Search",
     defaultBindings: [{ ctrl: true, key: "f" }],
+  },
+  {
+    id: "search.replace",
+    label: "Search and replace in files",
+    group: "Search",
+    defaultBindings: [{ ctrl: true, shift: true, key: "h" }],
   },
   {
     id: "agent.focusAttention",

@@ -4,6 +4,7 @@ import {
   CommandIcon,
   FolderGitTwoIcon,
   FolderTreeIcon,
+  Search01Icon,
   Settings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -43,6 +44,12 @@ export function SidebarRail({
 }: Props) {
   const items: RailItem[] = [
     { id: "explorer", label: "Files", title: "Files", icon: FolderTreeIcon },
+    {
+      id: "search",
+      label: "Search",
+      title: "Search and Replace",
+      icon: Search01Icon,
+    },
     {
       id: "source-control",
       label: "Source",
