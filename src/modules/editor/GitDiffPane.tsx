@@ -2,7 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import type { GitDiffContentResult } from "@/lib/native";
-import { unifiedMergeView } from "@codemirror/merge";
+import {
+  goToNextChunk,
+  goToPreviousChunk,
+  unifiedMergeView,
+} from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
@@ -23,6 +27,7 @@ import {
   languageCompartment,
 } from "./lib/extensions";
 import { resolveLanguage, resolveLanguageSync } from "./lib/languageResolver";
+import { registerDiffChunkStepper } from "./lib/diffNavigation";
 import { patchStats } from "./lib/patchStats";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
@@ -256,6 +261,16 @@ export function GitDiffPane({
       cancelled = true;
     };
   }, [useFallback, path, state]);
+
+  const showsMergeView = active && state.kind === "loaded" && !useFallback;
+  useEffect(() => {
+    if (!showsMergeView) return;
+    return registerDiffChunkStepper((dir) => {
+      const view = cmRef.current?.view;
+      if (!view) return false;
+      return (dir > 0 ? goToNextChunk : goToPreviousChunk)(view);
+    });
+  }, [showsMergeView]);
 
   const stats = useMemo(
     () => (useFallback ? patchStats(fallbackPatch) : { added: 0, removed: 0 }),

@@ -42,6 +42,10 @@ export type CommandPaletteActionContext = {
   openNewPreview: () => void;
   openGitGraph: () => void;
   toggleSourceControl: () => void;
+  canStepChange: boolean;
+  canStepFile: boolean;
+  stepChange: (dir: 1 | -1) => void;
+  stepFile: (dir: 1 | -1) => void;
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
@@ -219,6 +223,32 @@ export function createCommandItems(
       shortcutId: "pane.source",
       run: ctx.toggleSourceControl,
     },
+    ...(
+      [
+        ["diff.nextChange", "Next change in diff", 1],
+        ["diff.prevChange", "Previous change in diff", -1],
+        ["diff.nextFile", "Next changed file", 1],
+        ["diff.prevFile", "Previous changed file", -1],
+      ] as const
+    ).map(([id, title, dir]) => {
+      const file = id.endsWith("File");
+      return {
+        id,
+        title,
+        group: "Git",
+        keywords: ["git", "diff", "review", file ? "file" : "hunk"],
+        icon: SourceCodeIcon,
+        shortcutId: id,
+        disabledReason: file
+          ? ctx.canStepFile
+            ? undefined
+            : "No changed files"
+          : ctx.canStepChange
+            ? undefined
+            : "No diff open",
+        run: () => (file ? ctx.stepFile : ctx.stepChange)(dir),
+      };
+    }),
     {
       id: "search.content",
       title: "Find content in files",

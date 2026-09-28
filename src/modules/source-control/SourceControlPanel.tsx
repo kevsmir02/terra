@@ -89,6 +89,8 @@ import {
 
 type Props = {
   open: boolean;
+  /** The working-tree diff tab in front, so the list follows keyboard review. */
+  activeDiff?: { path: string; mode: "+" | "-" } | null;
   sourceControl: SourceControlSummary;
   onOpenGitGraph?: () => void;
   onOpenDiff: (input: {
@@ -460,6 +462,7 @@ function StashDropdown({
 
 export const SourceControlPanel = memo(function SourceControlPanel({
   open,
+  activeDiff,
   sourceControl,
   onOpenGitGraph,
   onOpenDiff,
@@ -483,7 +486,13 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     observer.observe(el);
     observerRef.current = observer;
   }, []);
-  const scm = useSourceControlPanel(open, visible, sourceControl, onOpenDiff);
+  const scm = useSourceControlPanel(
+    open,
+    visible,
+    sourceControl,
+    onOpenDiff,
+    activeDiff ?? null,
+  );
   const refreshAnimationRef = useRef<number | null>(null);
   const [refreshAnimating, setRefreshAnimating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -660,6 +669,18 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     overscan: 12,
     getItemKey: (index) => rows[index]?.key ?? index,
   });
+
+  const selectedPath = scm.selected?.path ?? null;
+  const scrollTargetRef = useRef({ rowKeyToIndex, virtualizer });
+  scrollTargetRef.current = { rowKeyToIndex, virtualizer };
+  // Follows the selection only when it moves: a refresh that reshuffles the
+  // rows must not yank the list away from where the user scrolled it.
+  useEffect(() => {
+    if (!selectedPath) return;
+    const { rowKeyToIndex: index, virtualizer: v } = scrollTargetRef.current;
+    const at = index.get(selectedPath);
+    if (at !== undefined) v.scrollToIndex(at, { align: "auto" });
+  }, [selectedPath]);
 
   const moveFocus = useCallback(
     (direction: 1 | -1) => {

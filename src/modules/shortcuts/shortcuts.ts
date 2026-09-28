@@ -43,6 +43,10 @@ export type ShortcutId =
   | "agent.focusAttention"
   | "settings.open"
   | "sidebar.toggle"
+  | "diff.nextChange"
+  | "diff.prevChange"
+  | "diff.nextFile"
+  | "diff.prevFile"
   | "editor.undo"
   | "editor.redo"
   | "editor.codeComplete";
@@ -55,6 +59,7 @@ export type ShortcutGroup =
   | "Terminal"
   | "Search"
   | "View"
+  | "Git"
   | "Editor";
 
 export type KeyBinding = {
@@ -338,6 +343,34 @@ export const SHORTCUTS: Shortcut[] = [
     group: "View",
     defaultBindings: [{ ctrl: true, shift: true, key: "'" }],
   },
+  // F7 is the diff editor's next-difference key elsewhere. All four stay
+  // disabled, and so fall through to the terminal, while nothing is reviewable.
+  {
+    id: "diff.nextChange",
+    label: "Next change in diff",
+    group: "Git",
+    defaultBindings: [{ key: "F7" }],
+    allowRepeat: true,
+  },
+  {
+    id: "diff.prevChange",
+    label: "Previous change in diff",
+    group: "Git",
+    defaultBindings: [{ shift: true, key: "F7" }],
+    allowRepeat: true,
+  },
+  {
+    id: "diff.nextFile",
+    label: "Next changed file",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, key: "F7" }],
+  },
+  {
+    id: "diff.prevFile",
+    label: "Previous changed file",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, shift: true, key: "F7" }],
+  },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface
   // them, they don't have App-level handlers, so `useGlobalShortcuts` falls
@@ -370,6 +403,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   "Terminal",
   "View",
   "Search",
+  "Git",
   "Editor",
 ];
 

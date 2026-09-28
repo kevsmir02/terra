@@ -301,8 +301,9 @@ export function useSourceControlPanel(
         mode: DiffMode;
         originalPath: string | null;
         title?: string;
-      }) => void)
+      }) => unknown)
     | null,
+  activeDiff: DiffSelection | null = null,
 ): SourceControlPanelState {
   const [panelState, setPanelState] = useState<PanelState>("closed");
   const [repo, setRepo] = useState<GitRepoInfo | null>(null);
@@ -330,6 +331,17 @@ export function useSourceControlPanel(
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  const activePath = activeDiff?.path ?? null;
+  const activeMode = activeDiff?.mode ?? null;
+  useEffect(() => {
+    if (!activePath || !activeMode) return;
+    setSelected((cur) =>
+      cur?.path === activePath && cur.mode === activeMode
+        ? cur
+        : { path: activePath, mode: activeMode },
+    );
+  }, [activePath, activeMode]);
 
   const stagedEntries = useMemo(
     () =>
