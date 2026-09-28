@@ -22,12 +22,14 @@ type Props = {
   onCwd: TerminalStackProps["onCwd"];
   onExit: TerminalStackProps["onExit"];
   onFocusLeaf: TerminalStackProps["onFocusLeaf"];
+  onResizeSplit: TerminalStackProps["onResizeSplit"];
   registerEditorHandle: EditorStackProps["registerHandle"];
   onEditorDirtyChange: EditorStackProps["onDirtyChange"];
   onEditorCloseTab: EditorStackProps["onCloseTab"];
   registerPreviewHandle: PreviewStackProps["registerHandle"];
   onPreviewUrlChange: PreviewStackProps["onUrlChange"];
   onOpenCommitFile: GitHistoryStackProps["onOpenCommitFile"];
+  onRepoChanged: () => void;
   onGitHistorySearchHandle: GitHistoryStackProps["onSearchHandle"];
   onSetMarkdownView: EditorStackProps["onSetMarkdownView"];
 };
@@ -46,12 +48,14 @@ export function WorkspaceSurface({
   onCwd,
   onExit,
   onFocusLeaf,
+  onResizeSplit,
   registerEditorHandle,
   onEditorDirtyChange,
   onEditorCloseTab,
   registerPreviewHandle,
   onPreviewUrlChange,
   onOpenCommitFile,
+  onRepoChanged,
   onGitHistorySearchHandle,
   onSetMarkdownView,
 }: Props) {
@@ -80,6 +84,7 @@ export function WorkspaceSurface({
           onCwd={onCwd}
           onExit={onExit}
           onFocusLeaf={onFocusLeaf}
+          onResizeSplit={onResizeSplit}
         />
       </div>
       <div
@@ -96,6 +101,7 @@ export function WorkspaceSurface({
           onDirtyChange={onEditorDirtyChange}
           onCloseTab={onEditorCloseTab}
           onSetMarkdownView={onSetMarkdownView}
+          onOpenCommitFile={onOpenCommitFile}
         />
       </div>
       <div
@@ -136,7 +142,11 @@ export function WorkspaceSurface({
         )}
         aria-hidden={!isGitDiffTab}
       >
-        <GitDiffStack tabs={tabs} activeId={activeId} />
+        <GitDiffStack
+          tabs={tabs}
+          activeId={activeId}
+          onRepoChanged={onRepoChanged}
+        />
       </div>
       <div
         className={cn(

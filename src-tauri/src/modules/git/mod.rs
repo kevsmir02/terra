@@ -1,7 +1,12 @@
+pub mod blame;
+pub mod checkpoint;
 pub mod commands;
 pub mod errors;
+pub mod history;
+pub mod hunk;
 pub mod operations;
 pub mod parser;
 mod process;
+pub mod review;
 pub mod types;
 pub mod utils;

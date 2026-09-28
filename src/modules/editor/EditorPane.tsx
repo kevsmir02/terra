@@ -1,4 +1,4 @@
-import { lspFormatDocument, useLspExtension } from "@/modules/lsp";
+import { lspFormatDocument, useLspExtension } from "@/modules/lsp/editor";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { acceptCompletion, startCompletion } from "@codemirror/autocomplete";
 import { redo, undo } from "@codemirror/commands";
@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { diagnosticsReporter } from "./lib/diagnosticsReporter";
 import { useDiagnosticsStore } from "./lib/diagnosticsStore";
 import {
+  blameCompartment,
   buildSharedExtensions,
   DEFAULT_INDENT,
   indentCompartment,
@@ -40,6 +41,7 @@ import { detectIndentUnit } from "./lib/indent";
 import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
 import type { DiskState } from "./lib/diskState";
 import { FORCE_READ_LIMIT, useDocument } from "./lib/useDocument";
+import { type OpenCommitFile, useBlame } from "./lib/useBlame";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
 export type EditorPaneHandle = {
@@ -61,6 +63,10 @@ export type EditorPaneHandle = {
   redo: () => void;
   /** Open CodeMirror's completion popup. */
   triggerCodeComplete: () => void;
+  /** Show or hide the current line's blame in this pane. */
+  toggleBlame: () => void;
+  /** Open the diff of the commit that last touched the cursor's line. */
+  openLineCommit: () => boolean;
 };
 
 type Props = {
@@ -69,6 +75,7 @@ type Props = {
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
   onClose?: () => void;
+  onOpenCommitFile?: OpenCommitFile;
 };
 
 // Above this, syntax highlighting and LSP are disabled: a multi-MB lezer
@@ -121,10 +128,18 @@ function formatBytes(n: number): string {
 // skip re-rendering entirely when App re-renders (terminal events, tab churn).
 export const EditorPane = memo(
   forwardRef<EditorPaneHandle, Props>(function EditorPane(props, ref) {
-    const { path, overrideLanguage, onDirtyChange, onSaved, onClose } = props;
+    const {
+      path,
+      overrideLanguage,
+      onDirtyChange,
+      onSaved,
+      onClose,
+      onOpenCommitFile,
+    } = props;
 
     const {
       doc,
+      dirty,
       diskState,
       onChange,
       save,
@@ -154,6 +169,7 @@ export const EditorPane = memo(
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
     const lspActiveRef = useRef(false);
+    const blameRefreshRef = useRef<(saved?: boolean) => void>(() => {});
     const warnedNoLspRef = useRef(false);
     const warnedNoFormatRef = useRef(false);
 
@@ -186,6 +202,7 @@ export const EditorPane = memo(
       }
       const saved = await saveRef.current();
       if (!saved) return;
+      blameRefreshRef.current(true);
       onSavedRef.current?.();
     }, []);
     const performSaveRef = useRef(performSave);
@@ -227,6 +244,7 @@ export const EditorPane = memo(
         indentCompartment.of(DEFAULT_INDENT),
         languageCompartment.of([]),
         lspCompartment.of([]),
+        blameCompartment.of([]),
         diagnosticsReporter(() => pathRef.current),
         Prec.highest(keymap.of([{ key: "Tab", run: acceptCompletion }])),
         keymap.of([
@@ -290,6 +308,17 @@ export const EditorPane = memo(
     // Only the ready variant carries a size. Hoisting it keeps the syntax-limit
     // gate honest as a dependency: a reload that changes size re-resolves.
     const readySize = doc.status === "ready" ? doc.size : null;
+
+    const blame = useBlame({
+      cmRef,
+      path,
+      dirty,
+      readySize,
+      doc,
+      maxBytes: SYNTAX_MAX_BYTES,
+      onOpenCommitFile,
+    });
+    blameRefreshRef.current = blame.refresh;
 
     useEffect(() => {
       const ext =
@@ -388,8 +417,10 @@ export const EditorPane = memo(
           view.focus();
           startCompletion(view);
         },
+        toggleBlame: () => void blame.toggle(),
+        openLineCommit: blame.openLineCommit,
       }),
-      [path, applyPendingGoto],
+      [path, applyPendingGoto, blame.toggle, blame.openLineCommit],
     );
 
     if (doc.status === "loading") {

@@ -8,6 +8,7 @@ import { routeAgentNotification } from "../lib/route";
 import type { AgentSession, AgentSignal } from "../lib/types";
 import { useWindowFocus } from "../lib/useWindowFocus";
 import { useAgentStore } from "../store/agentStore";
+import { useResumeStore } from "../store/resumeStore";
 
 type Activate = (tabId: number, leafId: number) => void;
 type Ctx = {
@@ -65,26 +66,28 @@ function handleSignal(sig: AgentSignal, ctx: Ctx): void {
       const info = tabInfo(ctx.tabs, leafId);
       if (!info) return;
       store.start(leafId, info.tabId, sig.agent ?? "agent");
+      useResumeStore.getState().dismiss(leafId);
       return;
     }
     case "working":
       store.setStatus(leafId, "working");
       return;
-    case "attention": {
-      store.setStatus(leafId, "waiting");
-      const session = store.sessions[leafId];
-      if (session) route(session, "attention", ctx);
-      return;
-    }
+    case "attention":
     case "finished": {
-      store.setStatus(leafId, "waiting");
-      const session = store.sessions[leafId];
-      if (session) route(session, "finished", ctx);
+      store.setStatus(leafId, sig.kind);
+      const session = useAgentStore.getState().sessions[leafId];
+      if (session) route(session, sig.kind, ctx);
       return;
     }
-    case "exited":
-      store.finish(leafId);
+    case "exited": {
+      const session = store.sessions[leafId];
+      if (!session) return;
+      store.finish(leafId, {
+        label: tabInfo(ctx.tabs, leafId)?.title ?? displayAgent(session.agent),
+        code: typeof sig.code === "number" ? sig.code : null,
+      });
       return;
+    }
   }
 }
 

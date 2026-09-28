@@ -1,20 +1,19 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use std::{fs, io::Write};
 
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter, Manager};
 use tempfile::NamedTempFile;
 
-use tauri::{Manager, State};
-
 use super::{authorized_entry, authorized_new, authorized_read};
+use crate::modules::blocking::{on_app, on_registry as blocking};
 use crate::modules::workspace::WorkspaceRegistry;
 
-const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+pub(super) const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 /// Ceiling for explicit "open anyway"; mirrored as FORCE_READ_LIMIT in useDocument.ts.
 const FORCE_MAX_READ_BYTES: u64 = 50 * 1024 * 1024;
-const BINARY_SNIFF_BYTES: usize = 8 * 1024;
+pub(super) const BINARY_SNIFF_BYTES: usize = 8 * 1024;
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -49,7 +48,7 @@ pub struct FileStat {
     pub kind: StatKind,
 }
 
-fn mtime_millis(meta: &fs::Metadata) -> u64 {
+pub(super) fn mtime_millis(meta: &fs::Metadata) -> u64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
@@ -61,10 +60,18 @@ fn mtime_millis(meta: &fs::Metadata) -> u64 {
 pub async fn fs_read_file(
     path: String,
     force: Option<bool>,
-    registry: State<'_, WorkspaceRegistry>,
+    app: AppHandle,
 ) -> Result<ReadResult, String> {
-    let p = authorized_read(&registry, &path)?;
-    read_file_sync(&p, force.unwrap_or(false))
+    blocking(app, move |r| read_file(r, &path, force.unwrap_or(false))).await
+}
+
+pub fn read_file(
+    registry: &WorkspaceRegistry,
+    path: &str,
+    force: bool,
+) -> Result<ReadResult, String> {
+    let p = authorized_read(registry, path)?;
+    read_file_sync(&p, force)
 }
 
 fn read_file_sync(p: &Path, force: bool) -> Result<ReadResult, String> {
@@ -106,20 +113,25 @@ fn read_file_sync(p: &Path, force: bool) -> Result<ReadResult, String> {
 }
 
 #[derive(Serialize, Clone)]
-struct FileWrittenEvent {
-    path: String,
+pub(super) struct FileWrittenEvent {
+    pub(super) path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<String>,
+    pub(super) source: Option<String>,
 }
 
 /// Atomic write via O_EXCL tempfile in the target's parent, then rename.
-/// The random suffix is what blocks pre-staged symlink attacks.
-fn write_atomic(target: &Path, content: &[u8]) -> std::io::Result<()> {
+/// The random suffix is what blocks pre-staged symlink attacks. An existing
+/// target's mode goes onto the temp file before the rename, so the file is
+/// never visible with the temp file's 0600.
+pub(super) fn write_atomic(target: &Path, content: &[u8]) -> std::io::Result<()> {
     let parent = target.parent().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
     })?;
     let mut tmp = NamedTempFile::new_in(parent)?;
     tmp.as_file_mut().write_all(content)?;
+    if let Ok(meta) = fs::metadata(target) {
+        tmp.as_file().set_permissions(meta.permissions())?;
+    }
     tmp.as_file_mut().sync_all()?;
     tmp.persist(target).map_err(|e| e.error)?;
     Ok(())
@@ -132,33 +144,27 @@ pub async fn fs_write_file(
     path: String,
     content: String,
     source: Option<String>,
-    app: tauri::AppHandle,
-    registry: State<'_, WorkspaceRegistry>,
+    app: AppHandle,
+) -> Result<u64, String> {
+    let written = path.clone();
+    let mtime = blocking(app.clone(), move |r| write_file(r, &written, content.as_bytes())).await?;
+    let _ = app.emit("fs:file-written", FileWrittenEvent { path, source });
+    Ok(mtime)
+}
+
+pub fn write_file(
+    registry: &WorkspaceRegistry,
+    path: &str,
+    content: &[u8],
 ) -> Result<u64, String> {
     // `authorized_new` covers both cases a save hits: an existing file, and a
     // first save into an already-authorized directory.
-    let target = authorized_new(&registry, &path)?;
-    let original_permissions = fs::metadata(&target).ok().map(|m| m.permissions());
-    write_atomic(&target, content.as_bytes()).map_err(|e| {
+    let target = authorized_new(registry, path)?;
+    write_atomic(&target, content).map_err(|e| {
         log::warn!("fs_write_file({}) failed: {e}", target.display());
         e.to_string()
     })?;
-
-    if let Some(perms) = original_permissions {
-        let _ = fs::set_permissions(&target, perms);
-    }
-    let mtime = fs::metadata(&target)
-        .map(|m| mtime_millis(&m))
-        .unwrap_or(0);
-    let _ = app.emit(
-        "fs:file-written",
-        FileWrittenEvent {
-            path: path.clone(),
-            source,
-        },
-    );
-
-    Ok(mtime)
+    Ok(fs::metadata(&target).map(|m| mtime_millis(&m)).unwrap_or(0))
 }
 
 /// Grants `asset://` access to one already-authorized file, for the media and
@@ -166,54 +172,59 @@ pub async fn fs_write_file(
 /// the webview read any file on disk over a channel the workspace gate never
 /// sees. Granting per file keeps the protocol as narrow as what the user opened.
 #[tauri::command]
-pub async fn fs_allow_asset(
-    path: String,
-    app: tauri::AppHandle,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<String, String> {
-    let canonical = authorized_read(&registry, &path)?;
+pub async fn fs_allow_asset(path: String, app: AppHandle) -> Result<String, String> {
+    on_app(app, move |app| {
+        let canonical = asset_file(&app.state::<WorkspaceRegistry>(), &path)?;
+        app.asset_protocol_scope()
+            .allow_file(&canonical)
+            .map_err(|e| e.to_string())?;
+        Ok(super::to_canon(&canonical))
+    })
+    .await
+}
+
+pub fn asset_file(registry: &WorkspaceRegistry, path: &str) -> Result<PathBuf, String> {
+    let canonical = authorized_read(registry, path)?;
     if !canonical.is_file() {
         return Err(format!("not a file: {}", canonical.display()));
     }
-    app.asset_protocol_scope()
-        .allow_file(&canonical)
-        .map_err(|e| e.to_string())?;
-    Ok(super::to_canon(&canonical))
+    Ok(canonical)
 }
 
 #[tauri::command]
-pub async fn fs_canonicalize(
-    path: String,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<String, String> {
-    let canon = authorized_read(&registry, &path)?;
-    Ok(super::to_canon(&canon))
+pub async fn fs_canonicalize(path: String, app: AppHandle) -> Result<String, String> {
+    blocking(app, move |r| authorized_read(r, &path).map(super::to_canon)).await
 }
 
 #[tauri::command]
-pub async fn fs_stat(
-    path: String,
-    registry: State<'_, WorkspaceRegistry>,
-) -> Result<FileStat, String> {
+pub async fn fs_stat(path: String, app: AppHandle) -> Result<FileStat, String> {
+    blocking(app, move |r| stat(r, &path)).await
+}
+
+pub fn stat(registry: &WorkspaceRegistry, path: &str) -> Result<FileStat, String> {
     // Not `authorized_read`: reporting `Symlink` requires the entry itself.
-    let p = authorized_entry(&registry, &path)?;
-    let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
-    // fs::metadata follows symlinks, so the link check needs symlink_metadata.
-    let kind = if std::fs::symlink_metadata(&p)
-        .map(|m| m.file_type().is_symlink())
-        .unwrap_or(false)
-    {
-        StatKind::Symlink
-    } else if meta.is_dir() {
-        StatKind::Dir
+    let p = authorized_entry(registry, path)?;
+    let own = fs::symlink_metadata(&p).map_err(|e| e.to_string())?;
+    if !own.file_type().is_symlink() {
+        return Ok(file_stat(&own, if own.is_dir() { StatKind::Dir } else { StatKind::File }));
+    }
+    // A link's target is described only when the target is itself authorized;
+    // otherwise its size and mtime would leak from outside every root.
+    let target = fs::canonicalize(&p).map_err(|e| e.to_string())?;
+    let meta = if registry.is_authorized(&target) {
+        fs::metadata(target).map_err(|e| e.to_string())?
     } else {
-        StatKind::File
+        own
     };
-    Ok(FileStat {
+    Ok(file_stat(&meta, StatKind::Symlink))
+}
+
+fn file_stat(meta: &fs::Metadata, kind: StatKind) -> FileStat {
+    FileStat {
         size: meta.len(),
-        mtime: mtime_millis(&meta),
+        mtime: mtime_millis(meta),
         kind,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -287,6 +298,18 @@ mod tests {
     }
 
     #[test]
+    fn overwrite_keeps_the_target_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("run.sh");
+        std::fs::write(&target, b"old").unwrap();
+        std::fs::set_permissions(&target, fs::Permissions::from_mode(0o755)).unwrap();
+        write_atomic(&target, b"new").unwrap();
+        let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755);
+    }
+
+    #[test]
     fn does_not_follow_legacy_staging_symlink() {
         use std::os::unix::fs::symlink;
         let dir = tempfile::tempdir().unwrap();
@@ -303,5 +326,68 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"payload");
         // The pre-staged symlink target must not have been written through.
         assert_eq!(std::fs::read(&outside).unwrap(), b"untouched");
+    }
+
+    fn gated() -> (tempfile::TempDir, tempfile::TempDir, WorkspaceRegistry) {
+        let inside = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let registry = WorkspaceRegistry::default();
+        registry.authorize(inside.path()).unwrap();
+        (inside, outside, registry)
+    }
+
+    fn s(p: &Path) -> String {
+        p.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn every_file_core_refuses_a_path_outside_all_roots() {
+        let (_inside, outside, reg) = gated();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, b"secret").unwrap();
+        let p = s(&secret);
+        let refused = |e: String| assert!(e.contains("outside the authorized workspace"), "got: {e}");
+
+        refused(read_file(&reg, &p, true).err().expect("read refused"));
+        refused(write_file(&reg, &p, b"x").unwrap_err());
+        refused(asset_file(&reg, &p).unwrap_err());
+        refused(stat(&reg, &p).err().expect("stat refused"));
+        assert_eq!(std::fs::read(&secret).unwrap(), b"secret");
+    }
+
+    #[test]
+    fn write_through_a_link_that_points_outside_is_refused() {
+        let (inside, outside, reg) = gated();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, b"secret").unwrap();
+        let link = inside.path().join("note.txt");
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+
+        assert!(write_file(&reg, &s(&link), b"pwned").is_err());
+        assert!(read_file(&reg, &s(&link), false).is_err());
+        assert!(asset_file(&reg, &s(&link)).is_err());
+        assert_eq!(std::fs::read(&secret).unwrap(), b"secret");
+    }
+
+    #[test]
+    fn asset_grant_is_for_files_only() {
+        let (inside, _outside, reg) = gated();
+        let err = asset_file(&reg, &s(inside.path())).unwrap_err();
+        assert!(err.contains("not a file"), "got: {err}");
+    }
+
+    // Stat acts on the entry, but only describes a link's target when that
+    // target is itself inside a root.
+    #[test]
+    fn stat_of_a_link_to_outside_does_not_describe_the_target() {
+        let (inside, outside, reg) = gated();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, vec![b'x'; 4096]).unwrap();
+        let link = inside.path().join("leak");
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+
+        let st = stat(&reg, &s(&link)).expect("the link itself is inside");
+        assert!(matches!(st.kind, StatKind::Symlink));
+        assert_ne!(st.size, 4096);
     }
 }

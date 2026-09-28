@@ -1,24 +1,58 @@
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
-import { unifiedMergeView } from "@codemirror/merge";
+import type { GitDiffContentResult } from "@/lib/native";
+import {
+  getChunks,
+  getOriginalDoc,
+  goToNextChunk,
+  goToPreviousChunk,
+  unifiedMergeView,
+} from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { gitIpc } from "@/modules/source-control/lib/gitIpc";
+import { useReviewAutoRefresh } from "@/modules/source-control/lib/reviewRefresh";
+import { HunkBar } from "./HunkBar";
 import {
   commitDiffKey,
   fetchCommitDiff,
+  fetchTurnDiff,
   fetchWorkingDiff,
   getCachedDiff,
+  invalidateRepoDiffs,
+  sameDiff,
+  subscribeDiffInvalidation,
+  turnDiffKey,
   workingDiffKey,
 } from "./lib/diffCache";
+import {
+  chunkAt,
+  chunkToHunk,
+  type HunkAction,
+  type HunkLines,
+  hunkActionsFor,
+} from "./lib/hunks";
 import {
   buildSharedExtensions,
   DEFAULT_INDENT,
   languageCompartment,
 } from "./lib/extensions";
 import { resolveLanguage, resolveLanguageSync } from "./lib/languageResolver";
+import {
+  registerDiffChunkStepper,
+  registerHunkRunner,
+} from "./lib/diffNavigation";
+import { patchStats } from "./lib/patchStats";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
 type WorkingSource = {
@@ -37,10 +71,22 @@ type CommitSource = {
   originalPath: string | null;
 };
 
+/** A file as a turn's checkpoint had it, against the working tree now. */
+type TurnSource = {
+  kind: "turn";
+  repoRoot: string;
+  checkpoint: string;
+  path: string;
+};
+
+type Source = WorkingSource | CommitSource | TurnSource;
+
 type Props = {
-  source: WorkingSource | CommitSource;
+  source: Source;
   chipLabel?: string;
   active: boolean;
+  /** A working diff saw the repo change under it; the status should follow. */
+  onRepoChanged?: () => void;
 };
 
 const LARGE_FILE_THRESHOLD = 256 * 1024;
@@ -88,124 +134,143 @@ const DIFF_THEME = EditorView.theme({
   },
 });
 
-function countDiffLines(patch: string): { added: number; removed: number } {
-  let added = 0;
-  let removed = 0;
-  for (let i = 0; i < patch.length; i++) {
-    if (i > 0 && patch.charCodeAt(i - 1) !== 10) continue;
-    const c = patch.charCodeAt(i);
-    if (c === 43 && patch.charCodeAt(i + 1) !== 43) added++;
-    else if (c === 45 && patch.charCodeAt(i + 1) !== 45) removed++;
-  }
-  if (patch.length > 0 && patch.charCodeAt(0) === 43) added++;
-  else if (patch.length > 0 && patch.charCodeAt(0) === 45) removed++;
-  return { added, removed };
-}
-
 type LoadState =
   | { kind: "idle" }
   | { kind: "loading" }
   | {
       kind: "loaded";
-      originalContent: string;
-      modifiedContent: string;
-      isBinary: boolean;
-      fallbackPatch: string;
+      diff: GitDiffContentResult;
       /** Resolved before mount: a late compartment reconfigure would leave
        * the merge view's deleted-chunk widgets unhighlighted. */
       langExt: Extension | null;
     }
   | { kind: "error"; message: string };
 
-function cacheKey(source: WorkingSource | CommitSource): string {
-  return source.kind === "working"
-    ? workingDiffKey(source.repoRoot, source.path, source.mode)
-    : commitDiffKey(source.repoRoot, source.sha, source.path);
+function cacheKey(source: Source): string {
+  switch (source.kind) {
+    case "working":
+      return workingDiffKey(source.repoRoot, source.path, source.mode);
+    case "commit":
+      return commitDiffKey(source.repoRoot, source.sha, source.path);
+    case "turn":
+      return turnDiffKey(source.repoRoot, source.checkpoint, source.path);
+  }
 }
 
-function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
+function fetchDiff(src: Source, force: boolean) {
+  switch (src.kind) {
+    case "working":
+      return fetchWorkingDiff(
+        src.repoRoot,
+        src.path,
+        src.mode,
+        src.originalPath,
+        force,
+      );
+    case "commit":
+      return fetchCommitDiff(src.repoRoot, src.sha, src.path, src.originalPath);
+    case "turn":
+      return fetchTurnDiff(src.repoRoot, src.checkpoint, src.path, force);
+  }
+}
+
+function loadStateFromCache(source: Source): LoadState {
   const hit = getCachedDiff(cacheKey(source));
   if (!hit) return { kind: "idle" };
   return {
     kind: "loaded",
-    originalContent: hit.originalContent,
-    modifiedContent: hit.modifiedContent,
-    isBinary: hit.isBinary,
-    fallbackPatch: hit.fallbackPatch,
+    diff: hit,
     langExt: resolveLanguageSync(source.path)?.ext ?? null,
   };
 }
 
-export function GitDiffPane({ source, chipLabel, active }: Props) {
+function errorMessage(err: unknown): string {
+  return err && typeof err === "object" && "message" in err
+    ? String((err as { message: unknown }).message)
+    : String(err);
+}
+
+export function GitDiffPane({
+  source,
+  chipLabel,
+  active,
+  onRepoChanged,
+}: Props) {
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const themeExt = useEditorThemeExt();
   const [state, setState] = useState<LoadState>(() =>
     active ? loadStateFromCache(source) : { kind: "idle" },
   );
+  const [revision, setRevision] = useState(0);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
 
   const key = cacheKey(source);
+  const followsWorktree = source.kind !== "commit";
+  const watchedRoot = active && followsWorktree ? source.repoRoot : null;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: `key` is the cache identity the fetch is keyed on
+  useEffect(() => {
+    if (!watchedRoot) return;
+    return subscribeDiffInvalidation((root) => {
+      if (root === watchedRoot) setRevision((r) => r + 1);
+    });
+  }, [watchedRoot]);
+
+  useReviewAutoRefresh(watchedRoot, () => onRepoChanged?.());
+
+  // Keyed on the fetch identity only: the stack rebuilds `source` on every
+  // render, and a working diff revalidates, so depending on it would refetch
+  // on every parent render.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` and `revision` are the re-run triggers; `source` is read through a ref
   useEffect(() => {
     if (!active) return;
-    const cached = loadStateFromCache(source);
-    if (cached.kind === "loaded") {
-      setState(cached);
-      return;
+    const src = sourceRef.current;
+    const cached = loadStateFromCache(src);
+    const hasCached = cached.kind === "loaded";
+    if (hasCached) {
+      setState((prev) =>
+        prev.kind === "loaded" && sameDiff(prev.diff, cached.diff)
+          ? prev
+          : cached,
+      );
+      // A commit's diff never changes; a working diff is shown from the
+      // cache and revalidated, since it may predate the last agent turn.
+      if (src.kind === "commit") return;
     }
     let cancelled = false;
-    setState({ kind: "loading" });
-    const promise =
-      source.kind === "working"
-        ? fetchWorkingDiff(
-            source.repoRoot,
-            source.path,
-            source.mode,
-            source.originalPath,
-          )
-        : fetchCommitDiff(
-            source.repoRoot,
-            source.sha,
-            source.path,
-            source.originalPath,
-          );
-    Promise.all([promise, resolveLanguage(source.path).catch(() => null)])
+    setState((prev) => (prev.kind === "loaded" ? prev : { kind: "loading" }));
+    const promise = fetchDiff(src, hasCached);
+    Promise.all([promise, resolveLanguage(src.path).catch(() => null)])
       .then(([res, lang]) => {
         if (cancelled) return;
-        setState({
-          kind: "loaded",
-          originalContent: res.originalContent,
-          modifiedContent: res.modifiedContent,
-          isBinary: res.isBinary,
-          fallbackPatch: res.fallbackPatch,
-          langExt: lang?.ext ?? null,
-        });
+        setState((prev) =>
+          prev.kind === "loaded" && sameDiff(prev.diff, res)
+            ? prev
+            : { kind: "loaded", diff: res, langExt: lang?.ext ?? null },
+        );
       })
       .catch((err) => {
         if (cancelled) return;
-        setState({
-          kind: "error",
-          message:
-            err && typeof err === "object" && "message" in err
-              ? String((err as { message: unknown }).message)
-              : String(err),
-        });
+        setState({ kind: "error", message: errorMessage(err) });
       });
     return () => {
       cancelled = true;
     };
-  }, [active, key, source]);
+  }, [active, key, revision]);
 
   const path = source.path;
   const repoRoot = source.repoRoot;
   const mode = source.kind === "working" ? source.mode : "+";
   const loaded = state.kind === "loaded" ? state : null;
-  const originalContent = loaded?.originalContent ?? "";
-  const modifiedContent = loaded?.modifiedContent ?? "";
-  const isBinary = loaded?.isBinary ?? false;
-  const fallbackPatch = loaded?.fallbackPatch ?? "";
+  const originalContent = loaded?.diff.originalContent ?? "";
+  const modifiedContent = loaded?.diff.modifiedContent ?? "";
+  const isBinary = loaded?.diff.isBinary ?? false;
+  const fallbackPatch = loaded?.diff.fallbackPatch ?? "";
+  const patchTruncated = loaded?.diff.truncated ?? false;
+  const isConflict = loaded?.diff.conflict ?? false;
 
   const isTooLarge =
+    (loaded?.diff.tooLarge ?? false) ||
     originalContent.length > LARGE_FILE_THRESHOLD ||
     modifiedContent.length > LARGE_FILE_THRESHOLD;
   const useFallback = isBinary || isTooLarge;
@@ -244,9 +309,104 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
     };
   }, [useFallback, path, state]);
 
+  const showsMergeView = active && state.kind === "loaded" && !useFallback;
+  useEffect(() => {
+    if (!showsMergeView) return;
+    return registerDiffChunkStepper((dir) => {
+      const view = cmRef.current?.view;
+      if (!view) return false;
+      return (dir > 0 ? goToNextChunk : goToPreviousChunk)(view);
+    });
+  }, [showsMergeView]);
+
+  const hunkMode =
+    showsMergeView && source.kind === "working" && !isConflict
+      ? source.mode
+      : null;
+  const [hunkSel, setHunkSel] = useState({ index: -1, total: 0 });
+  const [hunkBusy, setHunkBusy] = useState(false);
+  const [hunkError, setHunkError] = useState<string | null>(null);
+  const [pendingDiscard, setPendingDiscard] = useState<HunkLines | null>(null);
+
+  const trackHunk = useCallback((view: EditorView) => {
+    const chunks = getChunks(view.state)?.chunks ?? [];
+    const index = chunkAt(chunks, view.state.selection.main.head);
+    setHunkSel((prev) =>
+      prev.index === index && prev.total === chunks.length
+        ? prev
+        : { index, total: chunks.length },
+    );
+  }, []);
+
+  const selectedHunk = useCallback((): HunkLines | null => {
+    const view = cmRef.current?.view;
+    if (!view) return null;
+    const chunks = getChunks(view.state)?.chunks ?? [];
+    const chunk = chunks[chunkAt(chunks, view.state.selection.main.head)];
+    const original = getOriginalDoc(view.state);
+    return chunk ? chunkToHunk(original, view.state.doc, chunk) : null;
+  }, []);
+
+  const applyHunk = useCallback(
+    async (action: HunkAction, hunk: HunkLines) => {
+      const src = sourceRef.current;
+      if (src.kind !== "working") return;
+      setHunkBusy(true);
+      setHunkError(null);
+      try {
+        await gitIpc.gitApplyHunk(src.repoRoot, {
+          path: src.path,
+          originalPath: src.originalPath,
+          action,
+          ...hunk,
+        });
+        setPendingDiscard(null);
+      } catch (err) {
+        setHunkError(errorMessage(err));
+      } finally {
+        setHunkBusy(false);
+        // A refused hunk usually means the view is stale, so refresh either way.
+        invalidateRepoDiffs(src.repoRoot);
+        onRepoChanged?.();
+        cmRef.current?.view?.focus();
+      }
+    },
+    [onRepoChanged],
+  );
+
+  const runPrimary = useCallback(() => {
+    if (!hunkMode || hunkBusy) return false;
+    const hunk = selectedHunk();
+    if (!hunk) return false;
+    void applyHunk(hunkActionsFor(hunkMode).primary, hunk);
+    return true;
+  }, [hunkMode, hunkBusy, selectedHunk, applyHunk]);
+
+  const askDiscard = useCallback(() => {
+    if (!hunkMode || !hunkActionsFor(hunkMode).discard || hunkBusy)
+      return false;
+    const hunk = selectedHunk();
+    if (!hunk) return false;
+    setHunkError(null);
+    setPendingDiscard(hunk);
+    return true;
+  }, [hunkMode, hunkBusy, selectedHunk]);
+
+  useEffect(() => {
+    if (!hunkMode) return;
+    return registerHunkRunner((kind) =>
+      kind === "stage" ? runPrimary() : askDiscard(),
+    );
+  }, [hunkMode, runPrimary, askDiscard]);
+
+  // A new diff can move or drop the change a discard was asked for.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `state` is the re-run trigger
+  useEffect(() => {
+    setPendingDiscard(null);
+  }, [state]);
+
   const stats = useMemo(
-    () =>
-      useFallback ? countDiffLines(fallbackPatch) : { added: 0, removed: 0 },
+    () => (useFallback ? patchStats(fallbackPatch) : { added: 0, removed: 0 }),
     [useFallback, fallbackPatch],
   );
 
@@ -257,6 +417,14 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
           <Badge variant="outline" className="text-[10px] terra-label">
             {chipLabel ?? mode}
           </Badge>
+          {isConflict ? (
+            <Badge
+              variant="outline"
+              className="border-status-conflict/(--emph-strong) text-[10px] text-status-conflict"
+            >
+              Conflict: ours → theirs
+            </Badge>
+          ) : null}
           {isBinary ? (
             <Badge variant="secondary" className="text-[10px]">
               Binary / patch fallback
@@ -295,30 +463,85 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
             {state.message}
           </div>
         ) : useFallback ? (
-          <ScrollArea className="h-full">
-            <pre className="min-h-full whitespace-pre-wrap wrap-break-word p-4 font-mono text-[12px] leading-relaxed text-muted-foreground">
-              {fallbackPatch || "Diff preview is not available for this file."}
-            </pre>
-          </ScrollArea>
+          <div className="flex h-full min-h-0 flex-col">
+            {patchTruncated ? (
+              <DiffNotice>
+                The patch is over 2 MiB and was cut short; the counts and the
+                text below cover only its start.
+              </DiffNotice>
+            ) : null}
+            <ScrollArea className="min-h-0 flex-1">
+              <pre className="min-h-full whitespace-pre-wrap wrap-break-word p-4 font-mono text-[12px] leading-relaxed text-muted-foreground">
+                {fallbackPatch ||
+                  (isTooLarge
+                    ? "This file is too large to diff here, and no patch was produced for it."
+                    : "Diff preview is not available for this file.")}
+              </pre>
+            </ScrollArea>
+          </div>
         ) : (
-          <CodeMirror
-            ref={cmRef}
-            value={modifiedContent}
-            theme={themeExt}
-            extensions={extensions}
-            editable={false}
-            height="100%"
-            className="h-full"
-            basicSetup={{
-              lineNumbers: true,
-              foldGutter: true,
-              highlightActiveLine: false,
-              highlightActiveLineGutter: false,
-              searchKeymap: true,
-            }}
-          />
+          <div className="flex h-full min-h-0 flex-col">
+            {isConflict ? (
+              <DiffNotice>
+                Unmerged. Removed lines are ours (stage 2), added lines are
+                theirs (stage 3). Resolve the file, then mark it resolved in
+                Source Control.
+              </DiffNotice>
+            ) : null}
+            {hunkMode ? (
+              <HunkBar
+                mode={hunkMode}
+                index={hunkSel.index}
+                total={hunkSel.total}
+                busy={hunkBusy}
+                error={hunkError}
+                confirmingDiscard={pendingDiscard !== null}
+                onPrimary={runPrimary}
+                onDiscard={askDiscard}
+                onConfirmDiscard={() => {
+                  if (pendingDiscard) void applyHunk("discard", pendingDiscard);
+                }}
+                onCancelDiscard={() => {
+                  setPendingDiscard(null);
+                  cmRef.current?.view?.focus();
+                }}
+              />
+            ) : null}
+            <div className="min-h-0 flex-1">
+              <CodeMirror
+                ref={cmRef}
+                value={modifiedContent}
+                theme={themeExt}
+                extensions={extensions}
+                onCreateEditor={trackHunk}
+                onUpdate={(update) => trackHunk(update.view)}
+                editable={false}
+                height="100%"
+                className="h-full"
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: true,
+                  highlightActiveLine: false,
+                  highlightActiveLineGutter: false,
+                  searchKeymap: true,
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function DiffNotice({ children }: { children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b border-border/(--emph-soft) bg-foreground/[0.04] px-3 py-1.5 text-[10.5px] leading-snug text-muted-foreground"
+    >
+      <span className="size-1.5 shrink-0 rounded-circle bg-muted-foreground/(--emph-strong)" />
+      <span className="min-w-0">{children}</span>
     </div>
   );
 }

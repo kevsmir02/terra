@@ -44,8 +44,17 @@ export type GitChangedFile = {
   staged: boolean;
   unstaged: boolean;
   untracked: boolean;
+  /** An unmerged path; git's XY alone misses both-added and deleted-by-them. */
+  conflicted: boolean;
   statusLabel: string;
 };
+
+export type GitRepoOperation =
+  | "merge"
+  | "rebase"
+  | "cherry-pick"
+  | "revert"
+  | "am";
 
 export type GitStatusSnapshot = {
   repoRoot: string;
@@ -55,12 +64,9 @@ export type GitStatusSnapshot = {
   behind: number;
   isDetached: boolean;
   truncated: boolean;
+  /** The operation the repo is stopped in, read from the git dir markers. */
+  operation: GitRepoOperation | null;
   changedFiles: GitChangedFile[];
-};
-
-export type GitDiffResult = {
-  diffText: string;
-  truncated: boolean;
 };
 
 export type GitDiffContentResult = {
@@ -68,7 +74,12 @@ export type GitDiffContentResult = {
   modifiedContent: string;
   isBinary: boolean;
   fallbackPatch: string;
+  /** The patch hit the output cap and is only its start. */
   truncated: boolean;
+  /** A side is over the content cap: both contents are empty, use the patch. */
+  tooLarge: boolean;
+  /** Unmerged path: original is ours (stage 2), modified is theirs (stage 3). */
+  conflict: boolean;
 };
 
 export type GitCommitResult = {
@@ -93,7 +104,40 @@ export type GitLogEntry = {
   filesChanged: number;
   insertions: number;
   deletions: number;
+  /** File history only: the file's name at this commit, and before it when
+   * the commit renamed it. */
+  path: string | null;
+  originalPath: string | null;
 };
+
+export type GitBlameCommit = {
+  sha: string;
+  shortSha: string;
+  author: string;
+  authorEmail: string;
+  authorTime: number;
+  summary: string;
+  /** The blamed file's repo-relative name in this commit. */
+  filename: string;
+  previousSha: string | null;
+  previousFilename: string | null;
+  boundary: boolean;
+  uncommitted: boolean;
+};
+
+/** `count` lines from 1-based `start` belong to `commits[commit]`. */
+export type GitBlameHunk = { start: number; count: number; commit: number };
+
+export type GitBlame =
+  | {
+      kind: "ready";
+      repoRoot: string;
+      commits: GitBlameCommit[];
+      hunks: GitBlameHunk[];
+    }
+  | { kind: "untracked" }
+  | { kind: "tooLarge" }
+  | { kind: "notInRepo" };
 
 export type GitCommitFileChange = {
   path: string;
@@ -134,9 +178,15 @@ export type GitStashEntry = {
 
 export const native = {
   workspaceCurrentDir: () => invoke<string>("workspace_current_dir"),
-  workspaceAuthorize: (path: string) =>
-    invoke<string>("workspace_authorize", {
+  /** Grants a typed space root, asking the user natively when it is new. */
+  workspaceGrantRoot: (path: string) =>
+    invoke<string>("workspace_grant_root", {
       path,
+    }),
+  /** Boot only: re-grants saved roots once per process, then refuses. */
+  workspaceRestoreRoots: (paths: string[]) =>
+    invoke<string[]>("workspace_restore_roots", {
+      paths,
     }),
   /** Grants `asset://` access to one file and returns its canonical path. */
   allowAsset: (path: string) =>
@@ -195,44 +245,6 @@ export const native = {
     invoke<GitStatusSnapshot>("git_status", {
       repoRoot,
     }),
-  gitDiff: (repoRoot: string, path: string | null, staged: boolean) =>
-    invoke<GitDiffResult>("git_diff", {
-      repoRoot,
-      path,
-      staged,
-    }),
-  gitDiffContent: (
-    repoRoot: string,
-    path: string,
-    staged: boolean,
-    originalPath?: string | null,
-  ) =>
-    invoke<GitDiffContentResult>("git_diff_content", {
-      repoRoot,
-      path,
-      staged,
-      originalPath: originalPath ?? null,
-    }),
-  gitStage: (repoRoot: string, paths: string[]) =>
-    invoke<void>("git_stage", {
-      repoRoot,
-      paths,
-    }),
-  gitUnstage: (repoRoot: string, paths: string[]) =>
-    invoke<void>("git_unstage", {
-      repoRoot,
-      paths,
-    }),
-  gitDiscard: (repoRoot: string, entries: GitDiscardEntry[]) =>
-    invoke<void>("git_discard", {
-      repoRoot,
-      entries,
-    }),
-  gitCommit: (repoRoot: string, message: string) =>
-    invoke<GitCommitResult>("git_commit", {
-      repoRoot,
-      message,
-    }),
   gitFetch: (repoRoot: string) =>
     invoke<void>("git_fetch", {
       repoRoot,
@@ -244,73 +256,5 @@ export const native = {
   gitPush: (repoRoot: string) =>
     invoke<GitPushResult>("git_push", {
       repoRoot,
-    }),
-  gitLog: (
-    repoRoot: string,
-    options?: { limit?: number; beforeSha?: string },
-  ) =>
-    invoke<GitLogEntry[]>("git_log", {
-      repoRoot,
-      limit: options?.limit ?? null,
-      beforeSha: options?.beforeSha ?? null,
-    }),
-  gitShowCommit: (repoRoot: string, sha: string) =>
-    invoke<GitDiffResult>("git_show_commit", {
-      repoRoot,
-      sha,
-    }),
-  gitCommitFiles: (repoRoot: string, sha: string) =>
-    invoke<GitCommitFileChange[]>("git_commit_files", {
-      repoRoot,
-      sha,
-    }),
-  gitCommitFileDiff: (
-    repoRoot: string,
-    sha: string,
-    path: string,
-    originalPath?: string | null,
-  ) =>
-    invoke<GitDiffContentResult>("git_commit_file_diff", {
-      repoRoot,
-      sha,
-      path,
-      originalPath: originalPath ?? null,
-    }),
-  gitRemoteUrl: (repoRoot: string, name?: string) =>
-    invoke<string | null>("git_remote_url", {
-      repoRoot,
-      name: name ?? null,
-    }),
-  gitListBranches: (repoRoot: string) =>
-    invoke<GitBranchListResult>("git_list_branches", {
-      repoRoot,
-    }),
-  gitCheckoutBranch: (repoRoot: string, branch: string) =>
-    invoke<void>("git_checkout_branch", {
-      repoRoot,
-      branch,
-    }),
-  gitCommitAmend: (repoRoot: string, message: string) =>
-    invoke<GitCommitResult>("git_commit_amend", {
-      repoRoot,
-      message,
-    }),
-  gitStashPush: (repoRoot: string, message: string) =>
-    invoke<boolean>("git_stash_push", {
-      repoRoot,
-      message,
-    }),
-  gitStashPop: (repoRoot: string) =>
-    invoke<void>("git_stash_pop", {
-      repoRoot,
-    }),
-  gitStashList: (repoRoot: string) =>
-    invoke<GitStashEntry[]>("git_stash_list", {
-      repoRoot,
-    }),
-  gitCreateBranch: (repoRoot: string, name: string) =>
-    invoke<void>("git_create_branch", {
-      repoRoot,
-      name,
     }),
 };

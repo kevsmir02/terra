@@ -2,6 +2,11 @@ const LABELS: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
   opencode: "OpenCode",
+  gemini: "Gemini CLI",
+  aider: "Aider",
+  amp: "Amp",
+  "cursor-agent": "Cursor Agent",
+  qwen: "Qwen Code",
   terra: "Terra",
   shell: "Terminal",
 };

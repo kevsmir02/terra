@@ -16,6 +16,7 @@ function file(overrides: Partial<GitChangedFile>): GitChangedFile {
     staged: false,
     unstaged: false,
     untracked: false,
+    conflicted: false,
     statusLabel: "",
     ...overrides,
   };
@@ -30,6 +31,7 @@ function snapshot(changedFiles: GitChangedFile[]): GitStatusSnapshot {
     behind: 0,
     isDetached: false,
     truncated: false,
+    operation: null,
     changedFiles,
   };
 }

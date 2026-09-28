@@ -3,6 +3,7 @@ import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
 import { leafIds } from "@/modules/terminal";
 import {
   Cancel01Icon,
+  ComputerTerminal02Icon,
   DashboardSquare01Icon,
   FileEditIcon,
   FileSearchIcon,
@@ -42,9 +43,23 @@ export type CommandPaletteActionContext = {
   openNewPreview: () => void;
   openGitGraph: () => void;
   toggleSourceControl: () => void;
+  canStepChange: boolean;
+  canStepFile: boolean;
+  stepChange: (dir: 1 | -1) => void;
+  stepFile: (dir: 1 | -1) => void;
+  openSearchReplace: () => void;
+  openFileHistory: () => void;
+  toggleBlame: () => void;
+  openLineCommit: () => void;
+  canRunHunk: boolean;
+  runHunk: (kind: "stage" | "discard") => void;
+  /** The focused pane's agent turn has a checkpoint to compare against. */
+  hasTurn: boolean;
+  openTurn: (revert: boolean) => void;
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
+  broadcastToPanes: () => void;
   focusSearch: () => void;
   focusExplorerSearch: () => void;
   toggleSidebar: () => void;
@@ -74,6 +89,8 @@ export function createCommandItems(
     : activePaneCount >= MAX_PANES_PER_TAB
       ? "Pane limit"
       : undefined;
+  const broadcastDisabled = !activeTerminalTab ? "No terminal tab" : undefined;
+  const noEditor = activeTab?.kind === "editor" ? undefined : "No editor tab";
   const closeDisabled =
     onlyOneTab && activePaneCount < 2 ? "Last tab" : undefined;
 
@@ -203,6 +220,16 @@ export function createCommandItems(
       run: ctx.splitPaneDown,
     },
     {
+      id: "pane.broadcast",
+      title: "Send input to all panes",
+      group: "Panes",
+      keywords: ["broadcast", "all panes", "type", "send", "agents", "sync"],
+      icon: ComputerTerminal02Icon,
+      shortcutId: "pane.broadcast",
+      disabledReason: broadcastDisabled,
+      run: ctx.broadcastToPanes,
+    },
+    {
       id: "git.graph",
       title: "Open git graph",
       group: "Git",
@@ -219,6 +246,93 @@ export function createCommandItems(
       shortcutId: "pane.source",
       run: ctx.toggleSourceControl,
     },
+    ...(
+      [
+        ["diff.nextChange", "Next change in diff", 1],
+        ["diff.prevChange", "Previous change in diff", -1],
+        ["diff.nextFile", "Next changed file", 1],
+        ["diff.prevFile", "Previous changed file", -1],
+      ] as const
+    ).map(([id, title, dir]) => {
+      const file = id.endsWith("File");
+      return {
+        id,
+        title,
+        group: "Git",
+        keywords: ["git", "diff", "review", file ? "file" : "hunk"],
+        icon: SourceCodeIcon,
+        shortcutId: id,
+        disabledReason: file
+          ? ctx.canStepFile
+            ? undefined
+            : "No changed files"
+          : ctx.canStepChange
+            ? undefined
+            : "No diff open",
+        run: () => (file ? ctx.stepFile : ctx.stepChange)(dir),
+      };
+    }),
+    ...(
+      [
+        ["diff.stageHunk", "Stage or unstage the selected change", "stage"],
+        ["diff.discardHunk", "Discard the selected change", "discard"],
+      ] as const
+    ).map(([id, title, kind]) => ({
+      id,
+      title,
+      group: "Git",
+      keywords: ["git", "diff", "hunk", "change", kind, "partial"],
+      icon: SourceCodeIcon,
+      shortcutId: id,
+      disabledReason: ctx.canRunHunk ? undefined : "No working diff open",
+      run: () => ctx.runHunk(kind),
+    })),
+    // Absent, not disabled, outside a repo or with checkpoints off.
+    ...(ctx.hasTurn
+      ? (
+          [
+            ["agent.turnChanges", "Show changes this turn", false],
+            ["agent.turnRevert", "Revert this turn", true],
+          ] as const
+        ).map(([id, title, revert]) => ({
+          id,
+          title,
+          group: "Git" as const,
+          keywords: ["agent", "turn", "checkpoint", "changes", "undo", "diff"],
+          icon: SourceCodeIcon,
+          run: () => ctx.openTurn(revert),
+        }))
+      : []),
+    {
+      id: "git.fileHistory",
+      title: "File history",
+      group: "Git",
+      keywords: ["git", "log", "history", "commits", "file", "follow"],
+      icon: SourceCodeIcon,
+      shortcutId: "git.fileHistory",
+      disabledReason: noEditor,
+      run: ctx.openFileHistory,
+    },
+    {
+      id: "git.toggleBlame",
+      title: "Toggle blame annotations",
+      group: "Git",
+      keywords: ["git", "blame", "annotate", "author", "who"],
+      icon: SourceCodeIcon,
+      shortcutId: "git.toggleBlame",
+      disabledReason: noEditor,
+      run: ctx.toggleBlame,
+    },
+    {
+      id: "git.openLineCommit",
+      title: "Open the current line's commit",
+      group: "Git",
+      keywords: ["git", "blame", "commit", "diff", "line"],
+      icon: SourceCodeIcon,
+      shortcutId: "git.openLineCommit",
+      disabledReason: noEditor,
+      run: ctx.openLineCommit,
+    },
     {
       id: "search.content",
       title: "Find content in files",
@@ -227,6 +341,16 @@ export function createCommandItems(
       icon: FileSearchIcon,
       trailing: "#",
       run: noop,
+    },
+    {
+      id: "search.replace",
+      title: "Find and replace in files",
+      group: "Search",
+      keywords: ["replace", "substitute", "rename", "sed", "search in files"],
+      icon: FileSearchIcon,
+      shortcutId: "search.replace",
+      disabledReason: ctx.explorerRoot ? undefined : "No workspace root",
+      run: ctx.openSearchReplace,
     },
     {
       id: "search.focus",

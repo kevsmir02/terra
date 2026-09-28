@@ -7,6 +7,11 @@ const OSC_MAX: usize = 2048;
 
 const DEFAULT_AGENTS: &[&str] = &["claude", "codex", "opencode"];
 
+// Extra agent names arrive from the webview and end up matched against every
+// command line a shell runs, so they are held to a plain command-name shape.
+pub const MAX_EXTRA_AGENTS: usize = 16;
+pub const MAX_AGENT_NAME_LEN: usize = 32;
+
 // OSC 777 markers our agent hooks emit. Legacy 3-field `notify;Terra;<event>`
 // (Claude) or 4-field `notify;Terra;<agent>;<event>` (Codex).
 //
@@ -36,7 +41,7 @@ pub enum Transition {
     Working,
     Attention,
     Finished,
-    Exited,
+    Exited { code: Option<i32> },
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -44,20 +49,62 @@ pub struct AgentSignal {
     pub id: u32,
     pub kind: &'static str,
     pub agent: Option<String>,
+    pub code: Option<i32>,
 }
 
 impl Transition {
     pub fn into_signal(self, id: u32) -> AgentSignal {
-        match self {
-            Transition::Started { agent } => {
-                AgentSignal { id, kind: "started", agent: Some(agent) }
-            }
-            Transition::Working => AgentSignal { id, kind: "working", agent: None },
-            Transition::Attention => AgentSignal { id, kind: "attention", agent: None },
-            Transition::Finished => AgentSignal { id, kind: "finished", agent: None },
-            Transition::Exited => AgentSignal { id, kind: "exited", agent: None },
-        }
+        let (kind, agent, code) = match self {
+            Transition::Started { agent } => ("started", Some(agent), None),
+            Transition::Working => ("working", None, None),
+            Transition::Attention => ("attention", None, None),
+            Transition::Finished => ("finished", None, None),
+            Transition::Exited { code } => ("exited", None, code),
+        };
+        AgentSignal { id, kind, agent, code }
     }
+}
+
+/// A bare command name: ASCII alphanumeric first, then alphanumerics, `-`, `_`
+/// or `.`. No path, no whitespace, nothing that reads as a flag.
+pub fn is_safe_agent_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= MAX_AGENT_NAME_LEN
+        && bytes[0].is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+}
+
+/// The detector's agent list: the built-in names plus the user's extras that
+/// pass `is_safe_agent_name`, deduplicated and capped. Invalid entries are
+/// dropped rather than failing the spawn, so a bad setting never costs a shell.
+pub fn detector_agents(extra: Option<Vec<String>>) -> Vec<String> {
+    let mut agents: Vec<String> = DEFAULT_AGENTS.iter().map(|s| s.to_string()).collect();
+    let mut added = 0;
+    for name in extra.unwrap_or_default() {
+        if added == MAX_EXTRA_AGENTS {
+            break;
+        }
+        if !is_safe_agent_name(&name) {
+            log::warn!("ignoring an agent command name that is not a plain command");
+            continue;
+        }
+        if agents.contains(&name) {
+            continue;
+        }
+        agents.push(name);
+        added += 1;
+    }
+    agents
+}
+
+// `D;<code>[;...]` from OSC 133; a bare `D` carries no code.
+fn exit_code(pt: &[u8]) -> Option<i32> {
+    let rest = pt.strip_prefix(b"D;")?;
+    let end = rest.iter().position(|&c| c == b';').unwrap_or(rest.len());
+    std::str::from_utf8(&rest[..end]).ok()?.parse().ok()
 }
 
 pub struct AgentDetector {
@@ -69,8 +116,9 @@ pub struct AgentDetector {
 }
 
 impl AgentDetector {
+    #[cfg(test)]
     pub fn new() -> Self {
-        Self::with_agents(DEFAULT_AGENTS.iter().map(|s| s.to_string()).collect())
+        Self::with_agents(detector_agents(None))
     }
 
     pub fn with_agents(agents: Vec<String>) -> Self {
@@ -141,7 +189,7 @@ impl AgentDetector {
     pub fn finish<F: FnMut(Transition)>(&mut self, mut emit: F) {
         if self.armed {
             self.disarm();
-            emit(Transition::Exited);
+            emit(Transition::Exited { code: None });
         }
     }
 
@@ -219,7 +267,7 @@ impl AgentDetector {
             }
             Some(b'D') if self.armed => {
                 self.disarm();
-                emit(Transition::Exited);
+                emit(Transition::Exited { code: exit_code(pt) });
             }
             _ => {}
         }
@@ -411,8 +459,51 @@ mod tests {
     fn exits_on_133d() {
         let mut d = AgentDetector::new();
         run(&mut d, &osc("133;C;claude"));
-        assert_eq!(run(&mut d, &osc("133;D;0")), vec![Transition::Exited]);
+        assert_eq!(run(&mut d, &osc("133;D;0")), vec![Transition::Exited { code: Some(0) }]);
         assert!(run(&mut d, &osc("133;D;0")).is_empty());
+    }
+
+    #[test]
+    fn exit_carries_the_command_status_only_when_well_formed() {
+        for (body, code) in [("133;D;130", Some(130)), ("133;D", None), ("133;D;x9", None), ("133;D;1;aid=4", Some(1))] {
+            let mut d = AgentDetector::new();
+            run(&mut d, &osc("133;C;codex"));
+            assert_eq!(run(&mut d, &osc(body)), vec![Transition::Exited { code }], "{body}");
+        }
+    }
+
+    #[test]
+    fn safe_agent_names_are_plain_command_names() {
+        for ok in ["gemini", "cursor-agent", "qwen", "amp", "aider.v2", "a_b", "X1"] {
+            assert!(is_safe_agent_name(ok), "{ok} should pass");
+        }
+        assert!(is_safe_agent_name(&"a".repeat(MAX_AGENT_NAME_LEN)));
+        let long = "a".repeat(MAX_AGENT_NAME_LEN + 1);
+        for bad in ["", "-rf", ".hidden", "_x", "a b", "a/b", "../x", "a;b", "a$b", "a\u{7}", "\u{e9}t\u{e9}", &long] {
+            assert!(!is_safe_agent_name(bad), "{bad:?} should be refused");
+        }
+    }
+
+    #[test]
+    fn detector_agents_drops_unsafe_duplicate_and_excess_extras() {
+        assert_eq!(detector_agents(None), vec!["claude", "codex", "opencode"]);
+        let extra = ["gemini", "-evil", "claude", "gemini", "a b"].map(String::from).to_vec();
+        assert_eq!(detector_agents(Some(extra)), vec!["claude", "codex", "opencode", "gemini"]);
+        let many: Vec<String> = (0..MAX_EXTRA_AGENTS + 5).map(|i| format!("agent{i}")).collect();
+        assert_eq!(detector_agents(Some(many)).len(), DEFAULT_AGENTS.len() + MAX_EXTRA_AGENTS);
+    }
+
+    #[test]
+    fn arms_on_a_configured_extra_agent_only() {
+        let extra = || AgentDetector::with_agents(detector_agents(Some(vec!["gemini".into()])));
+        assert_eq!(run(&mut extra(), &osc("133;C;gemini -p hi")), vec![started("gemini")]);
+        assert_eq!(
+            run(&mut extra(), &osc("777;notify;Terra;gemini;attention")),
+            vec![started("gemini"), Transition::Attention]
+        );
+        let mut plain = AgentDetector::new();
+        assert!(run(&mut plain, &osc("133;C;gemini -p hi")).is_empty());
+        assert!(run(&mut plain, &osc("777;notify;Terra;gemini;attention")).is_empty());
     }
 
     #[test]
@@ -441,7 +532,7 @@ mod tests {
         run(&mut d, &osc("133;C;claude"));
         let mut out = Vec::new();
         d.finish(|t| out.push(t));
-        assert_eq!(out, vec![Transition::Exited]);
+        assert_eq!(out, vec![Transition::Exited { code: None }]);
         let mut out2 = Vec::new();
         d.finish(|t| out2.push(t));
         assert!(out2.is_empty());

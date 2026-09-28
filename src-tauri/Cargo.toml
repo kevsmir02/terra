@@ -31,6 +31,8 @@ grep-regex = "0.1"
 grep-searcher = "0.1"
 grep-matcher = "0.1"
 globset = "0.4"
+regex = "1"
+sha2 = "0.10"
 nucleo-matcher = "0.3"
 shared_child = "1"
 tauri-plugin-log = "2"
@@ -46,6 +48,9 @@ tokio = "1"
 minisign-verify = "0.2"
 base64 = "0.23"
 libc = "0.2"
+# Native consent prompt for a workspace root the webview asks for (ADR 0006);
+# already linked through tauri, so this adds no code, only the import.
+gtk = "0.18"
 # WebKitGTK can't read external clipboard copies.
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-autostart = "2"
@@ -64,5 +69,7 @@ incremental = true
 codegen-units = 1
 lto = "fat"
 opt-level = "s"
-panic = "abort"
+# Unwind, not abort: sync.rs recovers poisoned locks so one panicking thread
+# (a PTY reader, an LSP pump) costs that session, not every terminal at once.
+panic = "unwind"
 strip = true

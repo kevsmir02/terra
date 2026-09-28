@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -9,10 +10,12 @@ use tauri::ipc::{Channel, Response};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::agent_detect::AgentDetector;
+use super::cwd_detect::CwdDetector;
 use super::da_filter::DaFilter;
 use super::shell_init;
 use super::url_detect::{DevServerSignal, UrlDetector};
 use crate::modules::sync::MutexExt;
+use crate::modules::workspace::{grant_shell_cwd, proc_cwd, WorkspaceRegistry};
 
 const AGENT_EVENT: &str = "terra:agent-signal";
 const DEV_SERVER_EVENT: &str = "terra:dev-server";
@@ -27,10 +30,10 @@ const READ_BUF: usize = 16 * 1024;
 // Dropping a partial prefix would slice a CSI sequence in half and corrupt
 // xterm's screen state. 4 MiB is ~1000 full 80x24 screens.
 const MAX_PENDING: usize = 4 * 1024 * 1024;
-// Hard reset (ESC c) + dim notice. Written verbatim into the stream when
-// we're forced to discard backlog.
+// No ESC c here: a full reset (RIS) would wipe the screen and scrollback, the
+// opposite of what dropping a backlog should cost. Mirrors dormantRing.ts.
 const OVERFLOW_NOTICE: &[u8] =
-    b"\x1bc\x1b[2m[terra: dropped output due to backpressure]\x1b[0m\r\n";
+    b"\r\n\x1b[0m\x1b[2m[terra: dropped output due to backpressure]\x1b[0m\r\n";
 
 pub struct Session {
     // Field drop order is intentional. Rust drops fields top-to-bottom:
@@ -53,14 +56,25 @@ impl Drop for Session {
         // frontend disconnected, window crashed, dev HMR), the reader/flusher
         // threads would otherwise stay alive forever holding the child. Kill
         // the child here so the reader hits EOF and the threads unwind.
-        if let Ok(mut k) = self.killer.lock() {
-            let _ = k.kill();
-        }
+        let _ = self.killer.lock_or_recover().kill();
     }
 }
 
 pub(super) fn drop_session(session: Arc<Session>) {
     drop(session);
+}
+
+// The shell's cwd, plus the foreground job's: a nested shell reports its own.
+fn live_cwds(shell_pid: u32, session: &std::sync::Weak<Session>) -> Vec<PathBuf> {
+    let foreground = session
+        .upgrade()
+        .and_then(|s| s.master.lock_or_recover().process_group_leader())
+        .and_then(|pid| u32::try_from(pid).ok());
+    [Some(shell_pid).filter(|&p| p != 0), foreground]
+        .into_iter()
+        .flatten()
+        .filter_map(proc_cwd)
+        .collect()
 }
 
 struct ChildKillGuard {
@@ -69,7 +83,9 @@ struct ChildKillGuard {
 
 impl ChildKillGuard {
     fn new(killer: Box<dyn ChildKiller + Send + Sync>) -> Self {
-        Self { killer: Some(killer) }
+        Self {
+            killer: Some(killer),
+        }
     }
 
     fn disarm(&mut self) {
@@ -93,10 +109,10 @@ pub fn spawn(
     rows: u16,
     cwd: Option<String>,
     shell: Option<String>,
+    agents: Vec<String>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
-
     let pty_system = native_pty_system();
     let size = PtySize {
         rows,
@@ -132,10 +148,8 @@ pub fn spawn(
         exited: exited.clone(),
     });
 
-    let pending: Arc<(Mutex<Vec<u8>>, Condvar)> = Arc::new((
-        Mutex::new(Vec::with_capacity(READ_BUF)),
-        Condvar::new(),
-    ));
+    let pending: Arc<(Mutex<Vec<u8>>, Condvar)> =
+        Arc::new((Mutex::new(Vec::with_capacity(READ_BUF)), Condvar::new()));
     let done = Arc::new(AtomicBool::new(false));
     let spawn_at = Instant::now();
 
@@ -145,152 +159,183 @@ pub fn spawn(
     let writer_for_da = writer.clone();
     let app_reader = app.clone();
     let first_byte_r = first_byte;
-    let reader_thread = thread::Builder::new()
-        .name("terra-pty-reader".into())
-        .spawn(move || {
-            let mut buf = [0u8; READ_BUF];
-            let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
-            let mut da_filter = DaFilter::new();
-            let mut agent_detect = AgentDetector::new();
-            let mut url_detect = UrlDetector::new();
-            let mut dropped_bytes: u64 = 0;
-            loop {
-                match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        if !first_byte_r.load(Ordering::Relaxed) {
-                            first_byte_r.store(true, Ordering::Release);
-                            log::debug!("pty first byte after {}ms", spawn_at.elapsed().as_millis());
-                        }
-                        agent_detect.process(&buf[..n], |t| {
-                            let _ = app_reader.emit(AGENT_EVENT, t.into_signal(id));
-                        });
-                        url_detect.process(&buf[..n], |url| {
-                            let _ = app_reader.emit(
-                                DEV_SERVER_EVENT,
-                                DevServerSignal { id, url: url.to_string() },
-                            );
-                        });
-                        filtered.clear();
-                        da_filter.process(&buf[..n], &mut filtered, |reply| {
-                            if let Ok(mut w) = writer_for_da.lock() {
-                                let _ = w.write_all(reply);
-                            }
-                        });
-                        if filtered.is_empty() {
-                            continue;
-                        }
-                        let (lock, cv) = &*pending_r;
-                        let mut g = lock.lock_or_recover();
-                        if g.len() + filtered.len() > MAX_PENDING {
-                            dropped_bytes += g.len() as u64;
-                            g.clear();
-                            g.extend_from_slice(OVERFLOW_NOTICE);
-                        }
-                        g.extend_from_slice(&filtered);
-                        cv.notify_one();
+    // Weak: a strong handle here would keep the session (and its kill-on-drop)
+    // alive for as long as the reader it is meant to stop.
+    let session_r = Arc::downgrade(&session);
+    let reader_thread = spawn_thread("terra-pty-reader", move || {
+        let mut buf = [0u8; READ_BUF];
+        let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
+        let mut da_filter = DaFilter::new();
+        let mut agent_detect = AgentDetector::with_agents(agents);
+        let mut url_detect = UrlDetector::new();
+        let mut cwd_detect = CwdDetector::new();
+        let mut dropped_bytes: u64 = 0;
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if !first_byte_r.load(Ordering::Relaxed) {
+                        first_byte_r.store(true, Ordering::Release);
+                        log::debug!("pty first byte after {}ms", spawn_at.elapsed().as_millis());
                     }
-                    Err(e) => {
-                        log::debug!("pty reader ended: {e}");
-                        break;
+                    agent_detect.process(&buf[..n], |t| {
+                        let _ = app_reader.emit(AGENT_EVENT, t.into_signal(id));
+                    });
+                    url_detect.process(&buf[..n], |url| {
+                        let _ = app_reader.emit(
+                            DEV_SERVER_EVENT,
+                            DevServerSignal {
+                                id,
+                                url: url.to_string(),
+                            },
+                        );
+                    });
+                    // Granted here, before the bytes reach the webview, so the
+                    // explorer's first read of the new cwd already passes.
+                    cwd_detect.process(&buf[..n], |path| {
+                        if let Some(registry) = app_reader.try_state::<WorkspaceRegistry>() {
+                            grant_shell_cwd(&registry, &path, || live_cwds(shell_pid, &session_r));
+                        }
+                    });
+                    filtered.clear();
+                    da_filter.process(&buf[..n], &mut filtered, |reply| {
+                        let _ = writer_for_da.lock_or_recover().write_all(reply);
+                    });
+                    if filtered.is_empty() {
+                        continue;
                     }
+                    let (lock, cv) = &*pending_r;
+                    let mut g = lock.lock_or_recover();
+                    if g.len() + filtered.len() > MAX_PENDING {
+                        dropped_bytes += g.len() as u64;
+                        g.clear();
+                        g.extend_from_slice(OVERFLOW_NOTICE);
+                    }
+                    g.extend_from_slice(&filtered);
+                    cv.notify_one();
+                }
+                Err(e) => {
+                    log::debug!("pty reader ended: {e}");
+                    break;
                 }
             }
-            agent_detect.finish(|t| {
-                let _ = app_reader.emit(AGENT_EVENT, t.into_signal(id));
-            });
-            pending_r.1.notify_one();
-            if dropped_bytes > 0 {
-                log::warn!("pty backpressure: dropped {dropped_bytes} bytes (cap {MAX_PENDING})");
-            }
-        })
-        .expect("spawn pty reader thread");
+        }
+        agent_detect.finish(|t| {
+            let _ = app_reader.emit(AGENT_EVENT, t.into_signal(id));
+        });
+        pending_r.1.notify_one();
+        if dropped_bytes > 0 {
+            log::warn!("pty backpressure: dropped {dropped_bytes} bytes (cap {MAX_PENDING})");
+        }
+    })?;
 
     let on_data_flush = on_data.clone();
     let pending_f = pending.clone();
     let done_f = done.clone();
-    thread::Builder::new()
-        .name("terra-pty-flusher".into())
-        .spawn(move || {
-            let (lock, cv) = &*pending_f;
-            loop {
-                {
-                    let mut g = lock.lock_or_recover();
-                    while g.is_empty() {
-                        if done_f.load(Ordering::Acquire) {
-                            return;
-                        }
-                        let (next, _) = cv.wait_timeout(g, FLUSH_MAX_IDLE).unwrap();
-                        g = next;
+    spawn_thread("terra-pty-flusher", move || {
+        let (lock, cv) = &*pending_f;
+        loop {
+            {
+                let mut g = lock.lock_or_recover();
+                while g.is_empty() {
+                    if done_f.load(Ordering::Acquire) {
+                        return;
                     }
-                }
-                // Coalesce a short window so a burst flushes as one chunk.
-                thread::sleep(FLUSH_COALESCE);
-                // Swap in a pre-sized buffer rather than `take`ing a zero
-                // capacity one: the pending vec is refilled to ~READ_BUF within
-                // milliseconds, and `take` makes every flush pay the doublings
-                // back from empty.
-                let chunk = std::mem::replace(
-                    &mut *lock.lock_or_recover(),
-                    Vec::with_capacity(READ_BUF),
-                );
-                if chunk.is_empty() {
-                    continue;
-                }
-                if let Err(e) = on_data_flush.send(Response::new(chunk)) {
-                    log::debug!("pty flusher exiting, channel closed: {e}");
-                    break;
+                    let (next, _) = cv
+                        .wait_timeout(g, FLUSH_MAX_IDLE)
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    g = next;
                 }
             }
-        })
-        .expect("spawn pty flusher thread");
+            // Coalesce a short window so a burst flushes as one chunk.
+            thread::sleep(FLUSH_COALESCE);
+            // Swap in a pre-sized buffer rather than `take`ing a zero
+            // capacity one: the pending vec is refilled to ~READ_BUF within
+            // milliseconds, and `take` makes every flush pay the doublings
+            // back from empty.
+            let chunk =
+                std::mem::replace(&mut *lock.lock_or_recover(), Vec::with_capacity(READ_BUF));
+            if chunk.is_empty() {
+                continue;
+            }
+            if let Err(e) = on_data_flush.send(Response::new(chunk)) {
+                log::debug!("pty flusher exiting, channel closed: {e}");
+                break;
+            }
+        }
+    })?;
 
     let on_data_exit = on_data;
-    let pending_e = pending;
-    let done_e = done;
+    let pending_e = pending.clone();
+    let done_e = done.clone();
     let app_waiter = app;
     let exited_w = exited;
-    thread::Builder::new()
-        .name("terra-pty-waiter".into())
-        .spawn(move || {
-            let code = match child.wait() {
-                Ok(status) => status.exit_code() as i32,
-                Err(e) => {
-                    log::warn!("pty child wait failed: {e}");
-                    -1
-                }
-            };
-            exited_w.store(true, Ordering::Release);
-            if let Err(e) = reader_thread.join() {
-                log::error!("pty reader thread panicked: {e:?}");
+    let waiter = spawn_thread("terra-pty-waiter", move || {
+        let code = match child.wait() {
+            Ok(status) => status.exit_code() as i32,
+            Err(e) => {
+                log::warn!("pty child wait failed: {e}");
+                -1
             }
-            let (lock, cv) = &*pending_e;
-            let tail = std::mem::take(&mut *lock.lock_or_recover());
-            if !tail.is_empty() {
-                if let Err(e) = on_data_exit.send(Response::new(tail)) {
-                    log::debug!("pty final-data send failed (channel closed): {e}");
-                }
+        };
+        exited_w.store(true, Ordering::Release);
+        if let Err(e) = reader_thread.join() {
+            log::error!("pty reader thread panicked: {e:?}");
+        }
+        let (lock, cv) = &*pending_e;
+        let tail = std::mem::take(&mut *lock.lock_or_recover());
+        if !tail.is_empty() {
+            if let Err(e) = on_data_exit.send(Response::new(tail)) {
+                log::debug!("pty final-data send failed (channel closed): {e}");
             }
-            done_e.store(true, Ordering::Release);
-            cv.notify_all();
-            if let Err(e) = on_exit.send(code) {
-                log::debug!("pty exit send failed (channel closed): {e}");
+        }
+        done_e.store(true, Ordering::Release);
+        cv.notify_all();
+        if let Err(e) = on_exit.send(code) {
+            log::debug!("pty exit send failed (channel closed): {e}");
+        }
+        if let Some(state) = app_waiter.try_state::<super::PtyState>() {
+            if let Some(s) = state.take(id) {
+                drop_session(s);
             }
-            if let Some(state) = app_waiter.try_state::<super::PtyState>() {
-                if let Some(s) = state.take(id) {
-                    drop_session(s);
-                }
-            }
-        })
-        .expect("spawn pty waiter thread");
+        }
+    });
+    if let Err(e) = waiter {
+        // Nothing will ever set `done` now, so release the flusher by hand.
+        done.store(true, Ordering::Release);
+        pending.1.notify_all();
+        return Err(e);
+    }
 
     Ok((session, size))
+}
+
+// Returning the error drops `session` in `spawn`, whose Drop kills the child,
+// so a refused thread fails pty_open cleanly instead of aborting the process.
+fn spawn_thread(
+    name: &str,
+    f: impl FnOnce() + Send + 'static,
+) -> Result<thread::JoinHandle<()>, String> {
+    thread::Builder::new()
+        .name(name.into())
+        .spawn(f)
+        .map_err(|e| format!("could not start {name}: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use portable_pty::CommandBuilder;
+
+    #[test]
+    fn overflow_notice_resets_sgr_without_a_full_terminal_reset() {
+        assert!(
+            !OVERFLOW_NOTICE.windows(2).any(|w| w == b"\x1bc"),
+            "ESC c would clear the screen and scrollback"
+        );
+        assert!(OVERFLOW_NOTICE.starts_with(b"\r\n\x1b[0m"));
+        assert!(OVERFLOW_NOTICE.ends_with(b"\x1b[0m\r\n"));
+    }
 
     #[test]
     fn drop_kills_child_process() {

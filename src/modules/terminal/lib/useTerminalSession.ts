@@ -1,7 +1,6 @@
 import { ensureTerminalFontLoaded, resolveTerminalFont } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
-import type { SearchAddon } from "@xterm/addon-search";
 import {
   useCallback,
   useEffect,
@@ -9,6 +8,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import type { BroadcastCandidate } from "./broadcast";
 import { outputRange, stepCommandLine } from "./commandMarks";
 import {
   capScrollback,
@@ -17,6 +17,7 @@ import {
   takeRestoredScrollback,
 } from "./scrollbackPersist";
 import { DormantRing } from "./dormantRing";
+import type { TerminalSearch } from "./lazySearch";
 import {
   createShellIntegrationState,
   registerCwdHandler,
@@ -57,7 +58,7 @@ import {
 import { useTerminalFont } from "./useTerminalFont";
 
 type Callbacks = {
-  onSearchReady?: (addon: SearchAddon) => void;
+  onSearchReady?: (search: TerminalSearch) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
 };
@@ -166,6 +167,36 @@ export function submitToLeaf(leafId: number, text: string): void {
     : `${text}\r`;
   if (s.pty) void s.pty.write(data);
   else queuePendingInput(s, data);
+}
+
+export function broadcastCandidate(leafId: number): BroadcastCandidate {
+  const s = sessions.get(leafId);
+  return {
+    leafId,
+    alive: !!s && !s.shellExited && !s.disposed,
+    agent: !!s?.pty && isAgentActivePty(s.pty.id),
+  };
+}
+
+const BROADCAST_ENTER_DELAY_MS = 30;
+
+/**
+ * Type a line into a leaf, then press Enter as its own write: an agent TUI can
+ * read text and CR arriving in one chunk as a paste and insert a newline
+ * instead of submitting. Returns whether the leaf took the line.
+ */
+export function typeLineIntoLeaf(leafId: number, text: string): boolean {
+  const s = sessions.get(leafId);
+  if (!s || s.shellExited || s.disposed) return false;
+  const send = (data: string) => {
+    if (s.pty) void s.pty.write(data);
+    else queuePendingInput(s, data);
+  };
+  send(text.includes("\n") ? `\x1b[200~${text}\x1b[201~` : text);
+  setTimeout(() => {
+    if (sessions.get(leafId) === s && !s.shellExited) send("\r");
+  }, BROADCAST_ENTER_DELAY_MS);
+  return true;
 }
 
 /**
@@ -473,6 +504,7 @@ async function openPtyForSession(
     },
     cwd,
     usePreferencesStore.getState().terminalShell || undefined,
+    usePreferencesStore.getState().agentCommands,
   );
   // Only resize if the bound dims changed during the spawn: a same-size
   // ResizePseudoConsole during conhost warmup is a known ConPTY trigger for
@@ -695,7 +727,7 @@ type Options = {
   visible: boolean;
   focused?: boolean;
   initialCwd?: string;
-  onSearchReady?: (addon: SearchAddon) => void;
+  onSearchReady?: (search: TerminalSearch) => void;
   onExit?: (code: number) => void;
   onCwd?: (cwd: string) => void;
 };

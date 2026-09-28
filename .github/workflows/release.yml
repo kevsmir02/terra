@@ -1,18 +1,57 @@
 name: Release
 
+# Order matters: the CI gates pass, the release is built and published as a
+# draft, the AppImage is repacked and every updater artifact re-signed, and
+# latest.json is patched to those signatures. Only then is the draft
+# published, so /releases/latest/download/latest.json never points an
+# installed app at an artifact whose signature does not verify.
+
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build, e.g. v0.9.5
+        type: string
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
-  publish-tauri:
+  gates:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+
+  release:
+    needs: gates
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
     permissions:
       contents: write
-    runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
+      - name: Tag and signing key are present
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]] \
+            || { echo "::error::not a release tag: $TAG"; exit 1; }
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] \
+            || { echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set"; exit 1; }
+
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          # Full history and tags for the changelog range.
+          fetch-depth: 0
 
       - name: Install Linux build dependencies
         run: |
@@ -22,7 +61,9 @@ jobs:
             libgtk-3-dev \
             librsvg2-dev \
             libssl-dev \
-            patchelf
+            patchelf \
+            jq \
+            minisign
 
       - uses: pnpm/action-setup@v6
 
@@ -31,7 +72,10 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
+      # rust-toolchain.toml pins the version, so the release builds with the
+      # compiler the gates just linted and tested with.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -40,29 +84,37 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - id: tauri
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Terra ${{ github.ref_name }}"
-          releaseBody: "Release build for Linux (.rpm, .deb, .AppImage)."
-          releaseDraft: false
-          prerelease: false
+      - name: Versions agree with the tag
+        run: pnpm version:check "$TAG"
 
-      - name: Fix AppImage wayland libs and re-sign
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Release notes
+        id: notes
         run: |
           set -euo pipefail
+          {
+            echo "body<<__TERRA_RELEASE_NOTES__"
+            echo "Release build for Linux (.rpm, .deb, .AppImage)."
+            echo
+            pnpm --silent changelog
+            echo "__TERRA_RELEASE_NOTES__"
+          } >> "$GITHUB_OUTPUT"
 
-          APPIMAGE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -n1)
+      - uses: tauri-apps/tauri-action@v1
+        with:
+          tagName: ${{ env.TAG }}
+          releaseName: "Terra ${{ env.TAG }}"
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+
+      - name: Repack the AppImage without the bundled wayland libs
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          appimages=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          [ "${#appimages[@]}" -eq 1 ] \
+            || { echo "::error::expected one AppImage, found ${#appimages[@]}"; exit 1; }
+          APPIMAGE="${appimages[0]}"
           BASENAME=$(basename "$APPIMAGE")
           echo "Patching: $APPIMAGE"
 
@@ -74,7 +126,7 @@ jobs:
 
           for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
             test -e "squashfs-root/usr/lib/$lib" \
-              || { echo "expected bundled lib missing: $lib"; exit 1; }
+              || { echo "::error::expected bundled lib missing: $lib"; exit 1; }
           done
 
           rm -f squashfs-root/usr/lib/libwayland-client.so.0 \
@@ -84,6 +136,8 @@ jobs:
 
           curl -fsSL -o appimagetool.AppImage \
             https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool.AppImage" \
+            | sha256sum -c -
           chmod +x appimagetool.AppImage
           ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run squashfs-root "$BASENAME"
 
@@ -92,70 +146,79 @@ jobs:
           "./$BASENAME" --appimage-extract >/dev/null
           for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
             test ! -e "squashfs-root/usr/lib/$lib" \
-              || { echo "lib still present after repack: $lib"; exit 1; }
+              || { echo "::error::lib still present after repack: $lib"; exit 1; }
           done
           popd >/dev/null
 
           cp "$WORK/$BASENAME" "$APPIMAGE"
 
-          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-            rm -f "$APPIMAGE.sig"
-            pnpm tauri signer sign "$APPIMAGE"
-          fi
-
-          TAG="${GITHUB_REF_NAME}"
-          gh release upload "$TAG" "$APPIMAGE" "$APPIMAGE.sig" \
-            --clobber --repo "$GITHUB_REPOSITORY"
-
-      - name: Sign and upload rpm/deb for the in-app updater
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Re-sign and upload the updater artifacts
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-
-          for pkg in \
-            src-tauri/target/release/bundle/rpm/*.rpm \
-            src-tauri/target/release/bundle/deb/*.deb
-          do
-            test -e "$pkg" || { echo "missing bundle: $pkg"; exit 1; }
+          one() {
+            { [ "$#" -eq 1 ] && [ -e "$1" ]; } \
+              || { echo "::error::expected exactly one bundle, found: $*" >&2; return 1; }
+            printf '%s\n' "$1"
+          }
+          bundle=src-tauri/target/release/bundle
+          appimage=$(one "$bundle"/appimage/*.AppImage)
+          rpm=$(one "$bundle"/rpm/*.rpm)
+          deb=$(one "$bundle"/deb/*.deb)
+          for pkg in "$appimage" "$rpm" "$deb"; do
             rm -f "$pkg.sig"
             pnpm tauri signer sign "$pkg"
-            test -s "$pkg.sig" || { echo "signing produced no .sig for $pkg"; exit 1; }
+            test -s "$pkg.sig" || { echo "::error::signing produced no .sig for $pkg"; exit 1; }
             gh release upload "$TAG" "$pkg" "$pkg.sig" \
               --clobber --repo "$GITHUB_REPOSITORY"
           done
 
-  patch-appimage-updater:
-    needs: publish-tauri
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Patch latest.json with re-signed AppImage signature
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Point latest.json at the new signatures
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-
+          DIR="$RUNNER_TEMP/latest"
+          mkdir -p "$DIR"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern "latest.json" --pattern "*_amd64.AppImage.sig" --clobber || exit 0
+            --pattern latest.json --dir "$DIR" --clobber
+          test -s "$DIR/latest.json" || { echo "::error::draft has no latest.json"; exit 1; }
 
-          if [ -f *_amd64.AppImage.sig ]; then
-            SIG_FILE=$(ls ./*_amd64.AppImage.sig | head -n1)
-            NEW_SIG=$(cat "$SIG_FILE")
+          cp "$DIR/latest.json" "$DIR/patched.json"
+          for sig in src-tauri/target/release/bundle/{appimage/*.AppImage,rpm/*.rpm,deb/*.deb}.sig; do
+            name=$(basename "${sig%.sig}")
+            jq --arg name "$name" --rawfile sig "$sig" '
+              .platforms |= with_entries(
+                if (.value.url | endswith("/" + $name))
+                then .value.signature = ($sig | rtrimstr("\n"))
+                else . end)
+            ' "$DIR/patched.json" > "$DIR/next.json"
+            mv "$DIR/next.json" "$DIR/patched.json"
+          done
 
-            jq --arg sig "$NEW_SIG" '
-              .platforms["linux-x86_64"].signature = $sig
-              | if .platforms["linux-x86_64-appimage"]
-                then .platforms["linux-x86_64-appimage"].signature = $sig else . end
-            ' latest.json > latest.json.tmp
-            mv latest.json.tmp latest.json
+          # The AppImage entry is the one the repack invalidated, so it must be
+          # present; every entry naming a local artifact must verify against
+          # the public key the installed app checks with.
+          APPIMAGE_SIG=(src-tauri/target/release/bundle/appimage/*.AppImage.sig)
+          APPIMAGE_NAME=$(basename "${APPIMAGE_SIG[0]%.sig}")
+          jq -e --arg name "$APPIMAGE_NAME" \
+            '[.platforms[] | select(.url | endswith("/" + $name))] | length > 0' \
+            "$DIR/patched.json" >/dev/null \
+            || { echo "::error::latest.json has no entry for $APPIMAGE_NAME"; exit 1; }
 
-            gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
-          fi
+          jq -r '.plugins.updater.pubkey' src-tauri/tauri.conf.json | base64 -d > "$DIR/terra.pub"
+          for sig in src-tauri/target/release/bundle/{appimage/*.AppImage,rpm/*.rpm,deb/*.deb}.sig; do
+            file="${sig%.sig}"
+            name=$(basename "$file")
+            jq -r --arg name "$name" \
+              '.platforms[] | select(.url | endswith("/" + $name)) | .signature' \
+              "$DIR/patched.json" > "$DIR/entries"
+            while read -r entry; do
+              printf '%s' "$entry" | base64 -d > "$DIR/entry.minisig"
+              minisign -Vq -p "$DIR/terra.pub" -m "$file" -x "$DIR/entry.minisig" \
+                || { echo "::error::latest.json signature for $name does not verify"; exit 1; }
+            done < "$DIR/entries"
+          done
+
+          cp "$DIR/patched.json" "$DIR/latest.json"
+          gh release upload "$TAG" "$DIR/latest.json" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish the release
+        run: gh release edit "$TAG" --draft=false --latest --repo "$GITHUB_REPOSITORY"

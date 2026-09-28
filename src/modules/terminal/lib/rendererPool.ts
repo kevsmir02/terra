@@ -3,9 +3,9 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
-import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { createLazySearch, type TerminalSearch } from "./lazySearch";
 import { lazyPathLinkProvider } from "./linkDeps";
 import {
   capScrollback,
@@ -15,6 +15,7 @@ import {
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type FontWeight, Terminal } from "@xterm/xterm";
 import { shouldCursorBlink } from "./cursorBlink";
+import { pickSlot, type SlotView } from "./slotPolicy";
 import { type CellSize, proposeDimensions } from "./fitDimensions";
 import {
   readTerminalClipboard,
@@ -26,7 +27,10 @@ import {
   terminalReadlineSequence,
 } from "./keymap";
 
-export const POOL_MAX_SIZE = 5;
+// Past the soft cap an idle buffer is serialized to make room; a leaf with a
+// foreground job keeps its grid until the hard cap (see slotPolicy.ts).
+export const POOL_SOFT_CAP = 5;
+export const POOL_HARD_CAP = 8;
 const FIT_DEBOUNCE_MS = 8;
 const PTY_RESIZE_DEBOUNCE_MS = 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
@@ -54,7 +58,7 @@ export type Slot = {
   readonly id: number;
   readonly term: Terminal;
   readonly fitAddon: FitAddon;
-  readonly searchAddon: SearchAddon;
+  readonly searchAddon: TerminalSearch;
   readonly serializeAddon: SerializeAddon;
   readonly host: HTMLDivElement;
   webglAddon: WebglAddon | null;
@@ -219,10 +223,8 @@ export function applyBackgroundActive(active: boolean): void {
 function createSlot(): Slot {
   const term = new Terminal(termOptions());
   const fitAddon = new FitAddon();
-  const searchAddon = new SearchAddon();
   const serializeAddon = new SerializeAddon();
   term.loadAddon(fitAddon);
-  term.loadAddon(searchAddon);
   term.loadAddon(serializeAddon);
   term.loadAddon(
     new WebLinksAddon((_e, uri) => openUrl(uri).catch(console.error)),
@@ -238,7 +240,7 @@ function createSlot(): Slot {
     id: slots.length,
     term,
     fitAddon,
-    searchAddon,
+    searchAddon: createLazySearch(term),
     serializeAddon,
     host,
     webglAddon: null,
@@ -355,54 +357,33 @@ function isAltScreen(s: Slot): boolean {
   }
 }
 
-function evictionScore(s: Slot): number {
-  const leafId = s.currentLeafId;
-  const visible = leafId !== null && (adapter?.isLeafVisible(leafId) ?? false);
-  const busy = leafId !== null && (adapter?.isLeafBusy(leafId) ?? false);
-  const focused = leafId !== null && (adapter?.isLeafFocused(leafId) ?? false);
-  return (
-    (visible ? 1000 : 0) +
-    (isAltScreen(s) ? 100 : 0) +
-    (busy ? 80 : 0) +
-    (focused ? 10 : 0) +
-    s.lastUsedAt / 1e12
-  );
+function slotView(s: Slot, requester: number): SlotView {
+  const owner = s.currentLeafId ?? s.retainedLeafId;
+  const bound = s.currentLeafId !== null;
+  return {
+    bound,
+    retained: s.retainedLeafId !== null,
+    retainedForRequester: s.retainedLeafId === requester,
+    visible:
+      bound && owner !== null && (adapter?.isLeafVisible(owner) ?? false),
+    busy: owner !== null && (adapter?.isLeafBusy(owner) ?? false),
+    altScreen: isAltScreen(s),
+    focused:
+      bound && owner !== null && (adapter?.isLeafFocused(owner) ?? false),
+    lastUsedAt: s.lastUsedAt,
+  };
 }
 
 function pickSlotFor(leafId: number): PickResult {
-  const retainedOwn = slots.find(
-    (s) => s.currentLeafId === null && s.retainedLeafId === leafId,
+  const pick = pickSlot(
+    slots.map((s) => slotView(s, leafId)),
+    { soft: POOL_SOFT_CAP, hard: POOL_HARD_CAP },
   );
-  if (retainedOwn) return { slot: retainedOwn, previousLeafId: null };
-
-  const clean = slots.find(
-    (s) => s.currentLeafId === null && s.retainedLeafId === null,
-  );
-  if (clean) return { slot: clean, previousLeafId: null };
-  if (slots.length < POOL_MAX_SIZE)
+  if (pick.kind === "create")
     return { slot: createSlot(), previousLeafId: null };
-
-  // Retained buffers are cheaper to lose than bound ones: serialize, no evict.
-  let retained: Slot | null = null;
-  for (const s of slots) {
-    if (s.currentLeafId !== null) continue;
-    if (!retained || s.lastUsedAt < retained.lastUsedAt) retained = s;
-  }
-  if (retained) return { slot: retained, previousLeafId: null };
-
-  // The pool is full here (the size check above returns), so slots[0] is a
-  // real starting candidate and the result never needs an assertion.
-  let chosen: Slot = slots[0];
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const s of slots) {
-    if (s.currentLeafId === leafId) return { slot: s, previousLeafId: null };
-    const score = evictionScore(s);
-    if (score < bestScore) {
-      bestScore = score;
-      chosen = s;
-    }
-  }
-  return { slot: chosen, previousLeafId: chosen.currentLeafId };
+  const slot = slots[pick.index];
+  if (pick.kind === "reuse") return { slot, previousLeafId: null };
+  return { slot, previousLeafId: slot.currentLeafId };
 }
 
 export type AcquireParams = {
@@ -419,7 +400,7 @@ export type AcquireParams = {
   cols: number;
   rows: number;
   registerOsc: (term: Terminal) => (() => void)[];
-  onSearchReady: (addon: SearchAddon) => void;
+  onSearchReady: (search: TerminalSearch) => void;
 };
 
 export function acquireSlot(params: AcquireParams): Slot {
@@ -762,6 +743,8 @@ function reapIdleSlot(slot: Slot): void {
   const surplus = idle.slice(0, idle.length - IDLE_SLOTS_KEEP_WARM);
   if (!surplus.includes(slot)) return;
   if (slot.retainedLeafId !== null) {
+    // A command started in the released leaf; its rebind will claim this slot.
+    if (adapter?.isLeafBusy(slot.retainedLeafId)) return;
     adapter?.storeSnapshot(slot.retainedLeafId, serializeSlot(slot));
   }
   disposeSlot(slot);

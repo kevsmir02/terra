@@ -5,7 +5,7 @@ use tempfile::TempDir;
 use terra_lib::modules::fs::to_canon;
 use terra_lib::modules::git::errors::GitError;
 use terra_lib::modules::git::operations;
-use terra_lib::modules::git::types::DiscardEntry;
+use terra_lib::modules::git::types::{DiscardEntry, GitLogEntry};
 use terra_lib::modules::workspace::WorkspaceRegistry;
 
 fn skip_if_no_git() -> bool {
@@ -121,7 +121,7 @@ fn stage_then_commit_produces_log_entry() {
     assert_eq!(commit.summary, "add a");
     assert_eq!(commit.commit_sha.len(), 40);
 
-    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, None)
+    let entries = operations::log(&fx.registry, &fx.repo_str(), 10, 0, None)
         .expect("log");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].sha, commit.commit_sha);
@@ -185,7 +185,7 @@ fn log_on_empty_repo_returns_empty_list() {
     }
     let fx = GitRepoFixture::new();
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None).expect("log");
+        operations::log(&fx.registry, &fx.repo_str(), 10, 0, None).expect("log");
     assert!(entries.is_empty());
 }
 
@@ -317,7 +317,7 @@ fn show_commit_diff_returns_patch_for_known_sha() {
     fx.run_git(&["commit", "-q", "-m", "seed"]);
 
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 10, 0, None).unwrap();
     let sha = &entries[0].sha;
 
     let diff = operations::show_commit_diff(&fx.registry, &fx.repo_str(), sha)
@@ -344,7 +344,7 @@ fn show_commit_diff_rejects_invalid_sha() {
 }
 
 #[test]
-fn log_paginates_with_before_sha_cursor() {
+fn log_paginates_with_skip_from_the_anchor() {
     if skip_if_no_git() {
         return;
     }
@@ -352,27 +352,22 @@ fn log_paginates_with_before_sha_cursor() {
     for i in 0..3 {
         fx.write_file(&format!("f{i}.txt"), &format!("v{i}\n"));
         fx.run_git(&["add", &format!("f{i}.txt")]);
-        fx.run_git(&["commit", "-q", "-m", &format!("c{i}")]);
+        fx.run_git_at(i + 1, &["commit", "-q", "-m", &format!("c{i}")]);
     }
 
     let first_page =
-        operations::log(&fx.registry, &fx.repo_str(), 1, None).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 1, 0, None).unwrap();
     assert_eq!(first_page.len(), 1);
-    let cursor = first_page[0].sha.clone();
+    let anchor = first_page[0].sha.clone();
 
-    let second_page = operations::log(
-        &fx.registry,
-        &fx.repo_str(),
-        10,
-        Some(&cursor),
-    )
-    .unwrap();
-    assert!(second_page.iter().all(|e| e.sha != cursor));
+    let second_page =
+        operations::log(&fx.registry, &fx.repo_str(), 10, 1, Some(&anchor)).unwrap();
+    assert!(second_page.iter().all(|e| e.sha != anchor));
     assert_eq!(second_page.len(), 2);
 }
 
 #[test]
-fn log_with_invalid_cursor_sha_errors() {
+fn log_with_invalid_anchor_sha_errors() {
     if skip_if_no_git() {
         return;
     }
@@ -381,16 +376,73 @@ fn log_with_invalid_cursor_sha_errors() {
     fx.run_git(&["add", "a.txt"]);
     fx.run_git(&["commit", "-q", "-m", "seed"]);
 
-    match operations::log(
-        &fx.registry,
-        &fx.repo_str(),
-        10,
-        Some("not-hex"),
-    ) {
-        Err(GitError::CommandFailed { .. }) => {}
-        Err(other) => panic!("expected CommandFailed, got {other}"),
-        Ok(_) => panic!("expected error for bad cursor"),
+    for bad in ["not-hex", "HEAD", "--all", "main..side"] {
+        match operations::log(&fx.registry, &fx.repo_str(), 10, 0, Some(bad)) {
+            Err(GitError::CommandFailed { .. }) => {}
+            Err(other) => panic!("expected CommandFailed for {bad}, got {other}"),
+            Ok(_) => panic!("expected error for bad anchor {bad}"),
+        }
     }
+}
+
+fn commit(fx: &GitRepoFixture, rel: &str, content: &str, message: &str, at: i64) -> String {
+    fx.write_file(rel, content);
+    fx.run_git(&["add", "--", rel]);
+    fx.run_git_at(at, &["commit", "-q", "-m", message]);
+    fx.git_stdout(&["rev-parse", "HEAD"])
+}
+/// main: A(1) B(2) C(4) M(5); side from A: S(3), merged into M. Newest-first
+/// log order is M C S B A, so a page ending on S resumed from `S^` lands on A
+/// and never shows B.
+fn merged_side_branch() -> (GitRepoFixture, [String; 5]) {
+    let fx = GitRepoFixture::new();
+    let a = commit(&fx, "a.txt", "a", "A", 1);
+    let b = commit(&fx, "b.txt", "b", "B", 2);
+    fx.run_git(&["switch", "-q", "-c", "side", &a]);
+    let s = commit(&fx, "s.txt", "s", "S", 3);
+    fx.run_git(&["switch", "-q", "main"]);
+    let c = commit(&fx, "c.txt", "c", "C", 4);
+    fx.run_git_at(5, &["merge", "-q", "--no-ff", "-m", "M", "side"]);
+    let m = fx.git_stdout(&["rev-parse", "HEAD"]);
+    (fx, [m, c, s, b, a])
+}
+
+fn shas(entries: &[GitLogEntry]) -> Vec<String> {
+    entries.iter().map(|e| e.sha.clone()).collect()
+}
+
+#[test]
+fn history_pages_have_no_gap_when_a_page_ends_on_a_side_branch() {
+    if skip_if_no_git() {
+        return;
+    }
+    let (fx, order) = merged_side_branch();
+    let root = fx.repo_str();
+    let first = operations::log(&fx.registry, &root, 3, 0, None).unwrap();
+    assert_eq!(shas(&first), order[..3].to_vec());
+    assert_eq!(first[2].subject, "S", "the page must end on the side-branch commit");
+
+    let parent_cursor = fx.git_stdout(&["log", "--format=%H", &format!("{}^", order[2])]);
+    assert!(
+        !parent_cursor.contains(&order[3]),
+        "fixture no longer reproduces the gap the parent cursor had"
+    );
+
+    let second = operations::log(&fx.registry, &root, 3, 3, Some(&first[0].sha)).unwrap();
+    assert_eq!(shas(&second), order[3..].to_vec());
+}
+
+#[test]
+fn history_pages_stay_put_when_head_moves_between_pages() {
+    if skip_if_no_git() {
+        return;
+    }
+    let (fx, order) = merged_side_branch();
+    let root = fx.repo_str();
+    let first = operations::log(&fx.registry, &root, 2, 0, None).unwrap();
+    commit(&fx, "late.txt", "late", "late", 6);
+    let second = operations::log(&fx.registry, &root, 2, 2, Some(&first[0].sha)).unwrap();
+    assert_eq!(shas(&second), order[2..4].to_vec());
 }
 
 #[test]
@@ -408,7 +460,7 @@ fn commit_files_reports_added_and_modified() {
     fx.run_git(&["commit", "-q", "-m", "modify"]);
 
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 10, 0, None).unwrap();
     let head = &entries[0].sha;
 
     let files =
@@ -433,7 +485,7 @@ fn commit_file_diff_returns_original_and_modified_text() {
     fx.run_git(&["commit", "-q", "-m", "v2"]);
 
     let entries =
-        operations::log(&fx.registry, &fx.repo_str(), 10, None).unwrap();
+        operations::log(&fx.registry, &fx.repo_str(), 10, 0, None).unwrap();
     let head = &entries[0].sha;
 
     let diff =
@@ -554,4 +606,44 @@ fn list_branches_keeps_current_branch_local_and_surfaces_worktrees() {
     assert_eq!(feature[0].kind, "worktree");
     assert!(!feature[0].is_head);
     assert!(feature[0].worktree_path.is_some());
+}
+
+// Past the 2 MiB content cap with room to spare.
+const OVER_CAP: usize = 3 * 1024 * 1024;
+
+fn big_text(fill: char) -> String {
+    let line: String = std::iter::repeat_n(fill, 79).chain(['\n']).collect();
+    line.repeat(OVER_CAP / 80)
+}
+
+#[test]
+fn a_worktree_file_over_the_cap_falls_back_to_the_patch() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    commit(&fx, "big.txt", "small\n", "small", 1);
+    fx.write_file("big.txt", &big_text('a'));
+    let res = operations::diff_content(&fx.registry, &fx.repo_str(), "big.txt", false, None).unwrap();
+    assert!(res.too_large);
+    assert!(res.original_content.is_empty() && res.modified_content.is_empty());
+    assert!(!res.fallback_patch.is_empty());
+}
+
+#[test]
+fn a_head_blob_over_the_cap_is_never_rendered_truncated() {
+    if skip_if_no_git() {
+        return;
+    }
+    let fx = GitRepoFixture::new();
+    commit(&fx, "big.txt", &big_text('b'), "big", 1);
+    fx.write_file("big.txt", "tiny\n");
+    fx.run_git(&["add", "--", "big.txt"]);
+    let res = operations::diff_content(&fx.registry, &fx.repo_str(), "big.txt", true, None).unwrap();
+    assert!(res.too_large);
+    assert!(
+        res.original_content.is_empty(),
+        "a partial blob would read as a huge deletion"
+    );
+    assert!(res.modified_content.is_empty());
 }

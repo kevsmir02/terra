@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PaneNode } from "@/modules/terminal/lib/panes";
 import type { Tab } from "@/modules/tabs/lib/useTabs";
-import { hydrateTabs, serializeTabs, type SerializedTab } from "./serialize";
+import {
+  hydrateTabs,
+  type SerializedNode,
+  type SerializedTab,
+  serializeTabs,
+} from "./serialize";
 
 function counter(start = 100): () => number {
   let n = start;
@@ -202,10 +207,9 @@ describe("scrollback round trip", () => {
         { kind: "leaf", id: 3, cwd: "/b" },
       ],
     };
-    const [tab] = serializeTabs(
-      [term({ paneTree: tree, activeLeafId: 2 })],
-      (leafId) => (leafId === 2 ? "buffer-two" : null),
-    );
+    const [tab] = serializeTabs([term({ paneTree: tree, activeLeafId: 2 })], {
+      scrollback: (leafId) => (leafId === 2 ? "buffer-two" : null),
+    });
     expect(tab.kind).toBe("terminal");
     if (tab.kind !== "terminal" || tab.tree.kind !== "split")
       throw new Error("shape");
@@ -232,11 +236,153 @@ describe("scrollback round trip", () => {
       },
     ];
     const seen: Array<[number, string]> = [];
-    const [tab] = hydrateTabs(serialized, "s1", counter(), (leafId, text) =>
-      seen.push([leafId, text]),
-    );
+    const [tab] = hydrateTabs(serialized, "s1", counter(), {
+      scrollback: (leafId, text) => seen.push([leafId, text]),
+    });
     if (tab.kind !== "terminal") throw new Error("shape");
     expect(seen).toEqual([[leafIdsOf(tab.paneTree)[0], "old output"]]);
     expect(tab.paneTree).not.toHaveProperty("scrollback");
+  });
+});
+
+describe("split sizes", () => {
+  const sizedTree = (sizes?: number[]): PaneNode => ({
+    kind: "split",
+    id: 10,
+    dir: "row",
+    children: [
+      { kind: "leaf", id: 11, cwd: "/a" },
+      { kind: "leaf", id: 12, cwd: "/b" },
+    ],
+    ...(sizes && { sizes }),
+  });
+
+  const restoreWith = (sizes: unknown) => {
+    const serialized: SerializedTab[] = [
+      {
+        kind: "terminal",
+        tree: {
+          kind: "split",
+          dir: "row",
+          children: [{ kind: "leaf" }, { kind: "leaf" }],
+          sizes: sizes as number[],
+        },
+      },
+    ];
+    const [tab] = hydrateTabs(serialized, "s", counter());
+    if (tab.kind !== "terminal" || tab.paneTree.kind !== "split")
+      throw new Error("shape");
+    return tab.paneTree;
+  };
+
+  it("round-trips dragged sizes", () => {
+    const serialized = serializeTabs([
+      term({ paneTree: sizedTree([30, 70]), activeLeafId: 11 }),
+    ]);
+    const [restored] = hydrateTabs(serialized, "s", counter());
+    if (restored.kind !== "terminal" || restored.paneTree.kind !== "split")
+      throw new Error("shape");
+    expect(restored.paneTree.sizes).toEqual([30, 70]);
+  });
+
+  it("writes no sizes for an untouched split", () => {
+    const [tab] = serializeTabs([
+      term({ paneTree: sizedTree(), activeLeafId: 11 }),
+    ]);
+    if (tab.kind !== "terminal") throw new Error("shape");
+    expect(tab.tree).not.toHaveProperty("sizes");
+  });
+
+  it("drops stored sizes that do not fit, restoring an equal split", () => {
+    for (const bad of [
+      [100],
+      [30, 30, 40],
+      [-20, 120],
+      [0, 100],
+      [50, "50"],
+      [10, 10],
+      "50,50",
+      { 0: 50, 1: 50 },
+      null,
+    ]) {
+      expect(restoreWith(bad)).not.toHaveProperty("sizes");
+    }
+  });
+});
+
+describe("resumable agent persistence", () => {
+  const split: PaneNode = {
+    kind: "split",
+    id: 9,
+    dir: "row",
+    children: [
+      { kind: "leaf", id: 2, cwd: "/a" },
+      { kind: "leaf", id: 3, cwd: "/b" },
+    ],
+  };
+
+  it("persists the agent per leaf and omits leaves without one", () => {
+    const [tab] = serializeTabs([term({ paneTree: split, activeLeafId: 2 })], {
+      agent: (leafId) => (leafId === 3 ? "codex" : null),
+    });
+    if (tab.kind !== "terminal" || tab.tree.kind !== "split")
+      throw new Error("shape");
+    expect(tab.tree.children[0]).not.toHaveProperty("agent");
+    expect(tab.tree.children[1]).toMatchObject({ agent: "codex" });
+  });
+
+  it("never persists a name the resume table does not know", () => {
+    const [tab] = serializeTabs([term({})], {
+      agent: () => "gemini" as never,
+    });
+    if (tab.kind !== "terminal") throw new Error("shape");
+    expect(tab.tree).not.toHaveProperty("agent");
+  });
+
+  it("round-trips an agent to the leaf id the restored tree allocated", () => {
+    const serialized = serializeTabs(
+      [term({ paneTree: split, activeLeafId: 2 })],
+      { agent: (leafId) => (leafId === 2 ? "claude" : "opencode") },
+    );
+    const seen: Array<[number, string]> = [];
+    const [tab] = hydrateTabs(serialized, "s1", counter(), {
+      agent: (leafId, agent) => seen.push([leafId, agent]),
+    });
+    if (tab.kind !== "terminal") throw new Error("shape");
+    const [first, second] = leafIdsOf(tab.paneTree);
+    expect(seen).toEqual([
+      [first, "claude"],
+      [second, "opencode"],
+    ]);
+    expect(tab.paneTree).not.toHaveProperty("agent");
+  });
+
+  it("drops unknown, inherited and non-string persisted values on restore", () => {
+    const leaf = (agent: unknown) =>
+      ({ kind: "leaf", cwd: "/a", agent }) as unknown as SerializedNode;
+    const serialized: SerializedTab[] = [
+      "gemini",
+      "toString",
+      "__proto__",
+      "claude --continue; rm -rf ~",
+      "",
+      42,
+      null,
+      { claude: true },
+    ].map((agent) => ({ kind: "terminal", tree: leaf(agent) }));
+    const seen: unknown[] = [];
+    const tabs = hydrateTabs(serialized, "s1", counter(), {
+      agent: (_leafId, agent) => seen.push(agent),
+    });
+    expect(tabs).toHaveLength(serialized.length);
+    expect(seen).toEqual([]);
+  });
+
+  it("does not persist an agent without a provider", () => {
+    const [tab] = serializeTabs([term({})], {
+      scrollback: () => "text",
+    });
+    if (tab.kind !== "terminal") throw new Error("shape");
+    expect(tab.tree).not.toHaveProperty("agent");
   });
 });

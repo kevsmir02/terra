@@ -6,15 +6,25 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { consumeLaunchFiles, getLaunchDir } from "@/lib/launchDir";
-import { native } from "@/lib/native";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { isMarkdownPath } from "@/lib/utils";
 import {
   AgentNotificationsBridge,
   AgentStatusCluster,
+  acceptResume,
+  hasResumeOffer,
   nextAttentionTarget,
+  persistedAgent,
 } from "@/modules/agents";
+import {
+  CheckpointBridge,
+  type Turn,
+  TurnActions,
+  TurnChangesDialog,
+  type TurnDialogView,
+  turnFor,
+} from "@/modules/checkpoints";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
   DeviceDock,
@@ -30,7 +40,10 @@ import {
   useEditorFileSync,
 } from "@/modules/editor";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
-import type { GitHistorySearchHandle } from "@/modules/git-history";
+import {
+  type GitHistorySearchHandle,
+  useFileHistoryOpener,
+} from "@/modules/git-history";
 import {
   Header,
   type SearchInlineHandle,
@@ -50,12 +63,20 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   SidebarRail,
+  type SidebarViewId,
   useSidebarPanel,
 } from "@/modules/sidebar";
+import { SearchView } from "@/modules/search";
 import {
   SourceControlPanel,
   useSourceControlContext,
 } from "@/modules/source-control";
+import {
+  canRunHunkShortcut,
+  canStepDiffChunk,
+  runHunkShortcut,
+  stepDiffChunk,
+} from "@/modules/editor/lib/diffNavigation";
 import {
   SpaceSwitcher,
   useSpacePersistence,
@@ -65,6 +86,8 @@ import {
 } from "@/modules/spaces";
 import { StatusBar } from "@/modules/statusbar";
 import {
+  announceSplitCap,
+  splitCapReached,
   TabSwitcherHud,
   useTabSwitcher,
   useTabs,
@@ -75,16 +98,19 @@ import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import {
   clearFocusedTerminal,
   configureTerminalLinks,
+  BroadcastInput,
   disposeSession,
   findLeafCwd,
   formatDroppedPaths,
   hasLeaf,
+  leafIdForPty,
   leafIds,
   type PaneBounds,
   pasteIntoLeaf,
   persistedScrollback,
   submitToNewTab,
   type TerminalPaneHandle,
+  type TerminalSearch,
   useTerminalDropStore,
   useTerminalFileDrop,
 } from "@/modules/terminal";
@@ -92,7 +118,6 @@ import { ThemeProvider } from "@/modules/theme";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
@@ -132,6 +157,7 @@ export default function App() {
     focusPane,
     focusNextPaneInTab,
     swapActivePaneInDirection,
+    resizeSplit,
     splitActivePane,
     closeActivePane,
     closePaneByLeaf,
@@ -156,9 +182,9 @@ export default function App() {
   }, [tabs, activeId]);
   const activeLeafId = activeTerminalTab?.activeLeafId ?? null;
 
-  const searchAddons = useRef<Map<number, SearchAddon>>(new Map());
+  const searchAddons = useRef<Map<number, TerminalSearch>>(new Map());
   const [activeSearchAddon, setActiveSearchAddon] =
-    useState<SearchAddon | null>(null);
+    useState<TerminalSearch | null>(null);
   const searchInlineRef = useRef<SearchInlineHandle | null>(null);
   const terminalRefs = useRef<Map<number, TerminalPaneHandle>>(new Map());
   const editorRefs = useRef<Map<number, EditorPaneHandle>>(new Map());
@@ -219,7 +245,7 @@ export default function App() {
     activeSidebarPct,
   });
   const persistScrollback = useCallback(
-    () => flushWithScrollback(persistedScrollback),
+    () => flushWithScrollback(persistedScrollback, persistedAgent),
     [flushWithScrollback],
   );
 
@@ -264,9 +290,30 @@ export default function App() {
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
+    revealSidebarView,
     persistSidebarWidth,
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
+
+  const [searchFocusToken, setSearchFocusToken] = useState(0);
+  const openSearchReplace = useCallback(() => {
+    revealSidebarView("search");
+    setSearchFocusToken((n) => n + 1);
+  }, [revealSidebarView]);
+  const selectSidebarView = useCallback(
+    (view: SidebarViewId) => {
+      const open = (sidebarRef.current?.getSize().asPercentage ?? 0) > 0;
+      if (view === "search" && !(open && sidebarView === "search")) {
+        setSearchFocusToken((n) => n + 1);
+      }
+      cycleSidebarView(view);
+    },
+    [cycleSidebarView, sidebarRef, sidebarView],
+  );
+  const dirtyEditorPaths = useMemo(
+    () => tabs.flatMap((t) => (t.kind === "editor" && t.dirty ? [t.path] : [])),
+    [tabs],
+  );
 
   const {
     dockRef,
@@ -290,10 +337,40 @@ export default function App() {
   });
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);
+  // Mounted on the first request and kept for the close animation.
+  const [turnDialog, setTurnDialog] = useState<{
+    turn: Turn;
+    view: TurnDialogView;
+    open: boolean;
+  } | null>(null);
+  const openTurn = useCallback((leafId: number, revert: boolean) => {
+    const turn = turnFor(leafId);
+    if (turn)
+      setTurnDialog({ turn, view: revert ? "revert" : "list", open: true });
+  }, []);
+  const turnSessionExtra = useCallback(
+    (leafId: number, close: () => void) => (
+      <TurnActions
+        leafId={leafId}
+        onOpen={(leaf, revert) => {
+          close();
+          openTurn(leaf, revert);
+        }}
+      />
+    ),
+    [openTurn],
+  );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   // Latches on first open so the palette chunk is fetched then, not at startup.
   // It stays mounted afterwards, keeping the dialog's exit animation.
   const [paletteMounted, setPaletteMounted] = useState(false);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  // Latched like the palette: the dialog chunk loads on first use only.
+  const [broadcastMounted, setBroadcastMounted] = useState(false);
+  const openBroadcast = useCallback(() => {
+    setBroadcastMounted(true);
+    setBroadcastOpen(true);
+  }, []);
   const [paletteInitialMode, setPaletteInitialMode] = useState<
     "commands" | "content"
   >("commands");
@@ -308,6 +385,10 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeId);
   const isTerminalTab = activeTab?.kind === "terminal";
+  const broadcastLeafIds = useMemo(
+    () => (activeTab?.kind === "terminal" ? leafIds(activeTab.paneTree) : []),
+    [activeTab],
+  );
   const isEditorTab = activeTab?.kind === "editor";
   const isGitHistoryTab = activeTab?.kind === "git-history";
 
@@ -331,7 +412,7 @@ export default function App() {
   }, [activeId, activeLeafId]);
 
   const handleSearchReady = useCallback(
-    (leafId: number, addon: SearchAddon) => {
+    (leafId: number, addon: TerminalSearch) => {
       searchAddons.current.set(leafId, addon);
       if (leafId === activeLeafId) setActiveSearchAddon(addon);
     },
@@ -566,6 +647,30 @@ export default function App() {
       cycleSidebarView,
       openCommitHistoryTab,
     });
+  const refreshSourceControl = sourceControl.refresh;
+  const openFileHistory = useFileHistoryOpener(openCommitHistoryTab);
+  const activeEditorPath = activeTab?.kind === "editor" ? activeTab.path : null;
+  const reviewStatus = sourceControl.status;
+  const activeDiff = activeTab?.kind === "git-diff" ? activeTab : null;
+  const canStepFile =
+    (!!activeDiff || sidebarView === "source-control") &&
+    !!reviewStatus?.changedFiles.length;
+  // Stepping opens previews and replaces the preview it starts from, so a
+  // review walks one file at a time; a diff opened on purpose stays.
+  const stepFile = useCallback(
+    (dir: 1 | -1) => {
+      if (!canStepFile || !reviewStatus) return;
+      const root = reviewStatus.repoRoot;
+      const from = activeDiff?.repoRoot === root ? activeDiff : null;
+      void import("@/modules/source-control/lib/reviewNav").then((m) => {
+        const next = m.stepChangedFile(reviewStatus.changedFiles, from, dir);
+        if (!next) return;
+        const id = openGitDiffTab({ repoRoot: root, ...next, preview: true });
+        if (from && m.stepReplaces(from, id)) disposeTab(from.id);
+      });
+    },
+    [canStepFile, reviewStatus, activeDiff, openGitDiffTab, disposeTab],
+  );
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
@@ -600,6 +705,10 @@ export default function App() {
     (dir: "row" | "col") => {
       const t = tabsRef.current.find((x) => x.id === activeId);
       if (t?.kind !== "terminal") return;
+      if (splitCapReached(t.paneTree)) {
+        announceSplitCap();
+        return;
+      }
       splitActivePane(activeId, dir);
     },
     [activeId, splitActivePane],
@@ -643,7 +752,9 @@ export default function App() {
   const activateAgentTarget = useCallback(
     (tabId: number, leafId: number) => {
       const space = tabsRef.current.find((t) => t.id === tabId)?.spaceId;
-      if (space && space !== useSpaces.getState().activeId) {
+      // A recent run or an old alert can outlive its tab.
+      if (!space) return;
+      if (space !== useSpaces.getState().activeId) {
         useSpaces.getState().setActive(space);
       }
       setActiveId(tabId);
@@ -680,6 +791,7 @@ export default function App() {
       "pane.swapUp": () => swapActivePane("up"),
       "pane.swapDown": () => swapActivePane("down"),
       "pane.source": toggleSourceControl,
+      "pane.broadcast": openBroadcast,
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
@@ -699,14 +811,18 @@ export default function App() {
         if (activeLeafId !== null)
           terminalRefs.current.get(activeLeafId)?.copyLastOutput();
       },
+      "search.replace": openSearchReplace,
       "search.focus": () => {
         const editor = editorRefs.current.get(activeId);
         if (editor) editor.openSearch();
         else searchInlineRef.current?.focus();
       },
       "agent.focusAttention": () => {
-        const t = nextAttentionTarget();
+        const t = nextAttentionTarget(activeLeafId);
         if (t) activateAgentTarget(t.tabId, t.leafId);
+      },
+      "agent.resume": () => {
+        if (activeLeafId !== null) acceptResume(activeLeafId);
       },
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
@@ -715,6 +831,18 @@ export default function App() {
       "view.zoomOut": zoomOut,
       "view.zoomReset": zoomReset,
       "view.zenMode": () => setZenMode((v) => !v),
+      "diff.nextChange": () => stepDiffChunk(1),
+      "diff.prevChange": () => stepDiffChunk(-1),
+      "diff.nextFile": () => stepFile(1),
+      "diff.prevFile": () => stepFile(-1),
+      "git.fileHistory": () => {
+        if (activeEditorPath) void openFileHistory(activeEditorPath);
+      },
+      "git.toggleBlame": () => editorRefs.current.get(activeId)?.toggleBlame(),
+      "git.openLineCommit": () =>
+        editorRefs.current.get(activeId)?.openLineCommit(),
+      "diff.stageHunk": () => runHunkShortcut("stage"),
+      "diff.discardHunk": () => runHunkShortcut("discard"),
       "editor.undo": () => editorRefs.current.get(activeId)?.undo(),
       "editor.redo": () => editorRefs.current.get(activeId)?.redo(),
       "editor.codeComplete": () =>
@@ -736,12 +864,17 @@ export default function App() {
       focusNextPaneInTab,
       swapActivePane,
       toggleSourceControl,
+      openSearchReplace,
       toggleSidebar,
       toggleExplorerFocus,
       zoomIn,
       zoomOut,
       zoomReset,
       activateAgentTarget,
+      openBroadcast,
+      stepFile,
+      activeEditorPath,
+      openFileHistory,
     ],
   );
 
@@ -752,10 +885,25 @@ export default function App() {
           ? leafIds(activeTab.paneTree).length
           : null;
       if (shouldDisablePaneSwapShortcut(id, terminalPaneCount)) return true;
+      // With nothing to resume the chord falls through to the shell.
+      if (id === "agent.resume")
+        return activeLeafId === null || !hasResumeOffer(activeLeafId);
+      if (id === "diff.nextChange" || id === "diff.prevChange") {
+        return !canStepDiffChunk();
+      }
+      if (id === "diff.nextFile" || id === "diff.prevFile") {
+        return !canStepFile;
+      }
+      if (id === "diff.stageHunk" || id === "diff.discardHunk") {
+        return !canRunHunkShortcut();
+      }
       if (
         id === "editor.undo" ||
         id === "editor.redo" ||
-        id === "editor.codeComplete"
+        id === "editor.codeComplete" ||
+        id === "git.fileHistory" ||
+        id === "git.toggleBlame" ||
+        id === "git.openLineCommit"
       ) {
         return activeTab?.kind !== "editor";
       }
@@ -763,7 +911,8 @@ export default function App() {
         id === "terminal.prevCommand" ||
         id === "terminal.nextCommand" ||
         id === "terminal.selectLastOutput" ||
-        id === "terminal.copyLastOutput"
+        id === "terminal.copyLastOutput" ||
+        id === "pane.broadcast"
       ) {
         return activeTab?.kind !== "terminal";
       }
@@ -789,7 +938,7 @@ export default function App() {
       }
       return false;
     },
-    [activeTab],
+    [activeTab, activeLeafId, canStepFile],
   );
 
   useGlobalShortcuts(shortcutHandlers, { isDisabled: shortcutsDisabled });
@@ -832,17 +981,10 @@ export default function App() {
     [updateTab],
   );
 
-  const authorizedCwds = useRef(new Set<string>());
+  // The PTY reader grants the new cwd from the same OSC 7 before these bytes
+  // arrive, so there is nothing to authorize here.
   const handleTerminalCwd = useCallback(
-    (leafId: number, cwd: string) => {
-      setLeafCwd(leafId, cwd);
-      if (cwd && !authorizedCwds.current.has(cwd)) {
-        authorizedCwds.current.add(cwd);
-        native.workspaceAuthorize(cwd).catch(() => {
-          authorizedCwds.current.delete(cwd);
-        });
-      }
-    },
+    (leafId: number, cwd: string) => setLeafCwd(leafId, cwd),
     [setLeafCwd],
   );
 
@@ -1034,9 +1176,27 @@ export default function App() {
             openNewPreview: () => openPreviewTab(""),
             openGitGraph: openGitGraphFromContext,
             toggleSourceControl,
+            canStepChange: canStepDiffChunk(),
+            canStepFile,
+            stepChange: stepDiffChunk,
+            stepFile,
+            openSearchReplace,
+            openFileHistory: () => {
+              if (activeEditorPath) void openFileHistory(activeEditorPath);
+            },
+            toggleBlame: () => editorRefs.current.get(activeId)?.toggleBlame(),
+            openLineCommit: () =>
+              void editorRefs.current.get(activeId)?.openLineCommit(),
+            canRunHunk: canRunHunkShortcut(),
+            hasTurn: turnFor(activeLeafId) !== null,
+            openTurn: (revert) => {
+              if (activeLeafId !== null) openTurn(activeLeafId, revert);
+            },
+            runHunk: (kind) => void runHunkShortcut(kind),
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
+            broadcastToPanes: openBroadcast,
             focusSearch: () => searchInlineRef.current?.focus(),
             focusExplorerSearch: () => explorerRef.current?.focusSearch(),
             toggleSidebar,
@@ -1061,11 +1221,19 @@ export default function App() {
       openPreviewTab,
       openGitGraphFromContext,
       toggleSourceControl,
+      openSearchReplace,
       handleCloseTabOrPane,
       splitActivePaneInActiveTab,
       toggleSidebar,
       activeSpaceId,
       handleNewSpace,
+      openBroadcast,
+      canStepFile,
+      stepFile,
+      activeEditorPath,
+      openFileHistory,
+      activeLeafId,
+      openTurn,
     ],
   );
 
@@ -1134,7 +1302,7 @@ export default function App() {
             {!zenMode && (
               <SidebarRail
                 activeView={sidebarView}
-                onSelectView={cycleSidebarView}
+                onSelectView={selectSidebarView}
                 changedCount={sourceControl.changedCount}
                 onOpenCommandPalette={() => openCommandPalette("commands")}
                 onOpenSettings={() => void openSettingsWindow()}
@@ -1187,10 +1355,19 @@ export default function App() {
                         }
                         onDropToTerminal={pastePathIntoLeaf}
                         onTerminalHover={setTerminalDropTarget}
+                        onShowHistory={openFileHistory}
+                      />
+                    ) : sidebarView === "search" ? (
+                      <SearchView
+                        root={explorerRoot}
+                        dirtyPaths={dirtyEditorPaths}
+                        focusToken={searchFocusToken}
+                        onOpenMatch={openContentHit}
                       />
                     ) : sidebarView === "source-control" ? (
                       <SourceControlPanel
                         open
+                        activeDiff={activeDiff}
                         sourceControl={sourceControl}
                         onOpenDiff={openGitDiffTab}
                         onOpenGitGraph={openGitGraphFromContext}
@@ -1219,12 +1396,14 @@ export default function App() {
                       onCwd={handleTerminalCwd}
                       onExit={handleLeafExit}
                       onFocusLeaf={handleFocusLeaf}
+                      onResizeSplit={resizeSplit}
                       registerEditorHandle={registerEditorHandle}
                       onEditorDirtyChange={handleEditorDirty}
                       onEditorCloseTab={disposeTab}
                       registerPreviewHandle={registerPreviewHandle}
                       onPreviewUrlChange={handlePreviewUrl}
                       onOpenCommitFile={openCommitFileDiffTab}
+                      onRepoChanged={refreshSourceControl}
                       onGitHistorySearchHandle={setGitHistoryHandle}
                       onSetMarkdownView={setMarkdownView}
                     />
@@ -1275,7 +1454,12 @@ export default function App() {
                 behind: sourceControl.behind,
                 changedCount: sourceControl.changedCount,
               }}
-              agents={<AgentStatusCluster onActivate={onActivateAgent} />}
+              agents={
+                <AgentStatusCluster
+                  onActivate={onActivateAgent}
+                  sessionExtra={turnSessionExtra}
+                />
+              }
             />
           )}
 
@@ -1284,10 +1468,40 @@ export default function App() {
             activeId={activeId}
             onActivate={onActivateAgent}
           />
+          <CheckpointBridge
+            cwdForLeaf={cwdForLeaf}
+            leafIdForPty={leafIdForPty}
+          />
           <Toaster position="bottom-right" />
+
+          {turnDialog && (
+            <TurnChangesDialog
+              open={turnDialog.open}
+              onOpenChange={(open) =>
+                setTurnDialog((d) => (d ? { ...d, open } : d))
+              }
+              turn={turnDialog.turn}
+              view={turnDialog.view}
+              onViewChange={(view) =>
+                setTurnDialog((d) => (d ? { ...d, view } : d))
+              }
+              onOpenDiff={(repoRoot, checkpoint, path) =>
+                openGitDiffTab({ repoRoot, path, mode: "-", checkpoint })
+              }
+              onReverted={refreshSourceControl}
+            />
+          )}
 
           {switcherState && (
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />
+          )}
+
+          {broadcastMounted && (
+            <BroadcastInput
+              open={broadcastOpen}
+              onOpenChange={setBroadcastOpen}
+              leafIds={broadcastLeafIds}
+            />
           )}
 
           {paletteMounted && (

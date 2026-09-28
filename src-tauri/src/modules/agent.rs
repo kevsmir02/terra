@@ -9,12 +9,26 @@ enum Delivery {
     // Codex hooks can't write to the terminal, so the hook command emits
     // the marker itself to /dev/tty.
     Osc,
+    // OpenCode 2 has no hook config: a TUI plugin file of ours, loaded by the
+    // terminal client (not the shared background server, which has no tty for
+    // this pane), writes the 4-field marker to /dev/tty.
+    TuiPlugin,
+}
+
+// Where `dir` is rooted: `$HOME`, or the XDG config dir OpenCode reads.
+#[derive(Clone, Copy)]
+enum Base {
+    Home,
+    Config,
 }
 
 struct AgentSpec {
     agent: &'static str,
+    base: Base,
     dir: &'static str,
     file: &'static str,
+    // (the agent's event, our marker). For a plugin the event names are the
+    // ones the plugin subscribes to; only the markers are checked.
     events: &'static [(&'static str, &'static str)],
     delivery: Delivery,
 }
@@ -22,6 +36,7 @@ struct AgentSpec {
 const AGENTS: &[AgentSpec] = &[
     AgentSpec {
         agent: "claude",
+        base: Base::Home,
         dir: ".claude",
         file: "settings.json",
         events: &[
@@ -33,6 +48,7 @@ const AGENTS: &[AgentSpec] = &[
     },
     AgentSpec {
         agent: "codex",
+        base: Base::Home,
         dir: ".codex",
         file: "hooks.json",
         events: &[
@@ -42,7 +58,83 @@ const AGENTS: &[AgentSpec] = &[
         ],
         delivery: Delivery::Osc,
     },
+    AgentSpec {
+        agent: "opencode",
+        base: Base::Config,
+        dir: "opencode/plugins/terra",
+        file: "tui.js",
+        events: &[
+            ("session.execution.started", "working"),
+            ("permission.asked", "attention"),
+            ("session.idle", "finished"),
+        ],
+        delivery: Delivery::TuiPlugin,
+    },
 ];
+
+// First line of the plugin we write. A file at our path without it belongs to
+// someone else and is never overwritten.
+const PLUGIN_OWNER: &str = "// terra-opencode-notify:";
+
+// Only the routed session (and its subagents, for permission prompts) counts:
+// every TUI client sees every session on the shared server, including ones
+// open in other panes.
+const OPENCODE_PLUGIN: &str = r#"// terra-opencode-notify: written by Terra. Reinstall from Terra's agent panel.
+// Tells Terra what this pane's OpenCode session is doing through OSC 777.
+import { closeSync, openSync, writeSync } from "node:fs";
+
+const WORKING = "\x1b]777;notify;Terra;opencode;working\x07";
+const ATTENTION = "\x1b]777;notify;Terra;opencode;attention\x07";
+const FINISHED = "\x1b]777;notify;Terra;opencode;finished\x07";
+
+function write(seq) {
+  let fd;
+  try {
+    fd = openSync("/dev/tty", "w");
+    writeSync(fd, seq);
+  } catch {
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+export default {
+  id: "terra.notify",
+  setup(context) {
+    if (!process.env.TERRA_TERMINAL) return () => {};
+    let last = "";
+    const emit = (seq) => {
+      if (seq === last && seq !== ATTENTION) return;
+      last = seq;
+      write(seq);
+    };
+    const current = () => {
+      const route = context.ui.router.current();
+      return route && route.type === "session" ? route.sessionID : null;
+    };
+    const own = (id) => id != null && id === current();
+    const ownOrChild = (id) =>
+      own(id) ||
+      (current() !== null && context.data.session.get(id)?.parentID === current());
+    const on = (type, fn) => {
+      try {
+        return context.data.on(type, (event) => fn(event?.data?.sessionID));
+      } catch {
+        return () => {};
+      }
+    };
+    const stops = [
+      on("session.execution.started", (id) => own(id) && emit(WORKING)),
+      on("permission.replied", (id) => ownOrChild(id) && emit(WORKING)),
+      on("permission.asked", (id) => ownOrChild(id) && emit(ATTENTION)),
+      on("session.idle", (id) => own(id) && emit(FINISHED)),
+    ];
+    return () => {
+      for (const stop of stops) stop();
+    };
+  },
+};
+"#;
 
 // Substrings identifying a hook command as ours, across every form we've ever
 // emitted (legacy /dev/tty Claude, current TerminalSequence, Osc, the old
@@ -73,7 +165,7 @@ fn hook_command(spec: &AgentSpec, event: &str) -> String {
         Delivery::TerminalSequence => format!(
             r#"[ -n "$TERRA_TERMINAL" ] && printf '{{"terminalSequence":"\\u001b]777;notify;Terra;{event}\\u0007"}}' || true"#
         ),
-        Delivery::Osc => osc_command(spec.agent, event),
+        Delivery::Osc | Delivery::TuiPlugin => osc_command(spec.agent, event),
     }
 }
 
@@ -89,7 +181,32 @@ fn osc_command(agent: &str, event: &str) -> String {
 fn status_needle(spec: &AgentSpec, event: &str) -> String {
     match spec.delivery {
         Delivery::TerminalSequence => format!("notify;Terra;{event}"),
-        Delivery::Osc => format!("notify;Terra;{};{event}", spec.agent),
+        Delivery::Osc | Delivery::TuiPlugin => format!("notify;Terra;{};{event}", spec.agent),
+    }
+}
+
+// A plugin is ours whole, so anything but the current source (an older Terra's,
+// a hand edit) reads as not installed and Enable rewrites it.
+fn is_installed(spec: &AgentSpec, content: &str) -> bool {
+    match spec.delivery {
+        Delivery::TuiPlugin => content == OPENCODE_PLUGIN,
+        _ => spec
+            .events
+            .iter()
+            .all(|(_, m)| content.contains(&status_needle(spec, m))),
+    }
+}
+
+// What to write over a plugin file that may already exist: `None` when ours
+// is current, an error when the file is someone else's.
+fn plugin_update(existing: Option<&str>, path: &std::path::Path) -> Result<Option<&'static str>, String> {
+    match existing {
+        Some(s) if s == OPENCODE_PLUGIN => Ok(None),
+        Some(s) if !s.starts_with(PLUGIN_OWNER) => Err(format!(
+            "{} was not written by Terra; refusing to overwrite",
+            path.display()
+        )),
+        _ => Ok(Some(OPENCODE_PLUGIN)),
     }
 }
 
@@ -149,15 +266,22 @@ fn existing_config(contents: Option<&str>, path: &std::path::Path) -> Result<Val
     }
 }
 
-fn home_path(dir: &str, file: &str) -> Result<std::path::PathBuf, String> {
-    Ok(dirs::home_dir()
-        .ok_or_else(|| "could not resolve home dir".to_string())?
-        .join(dir)
-        .join(file))
+fn settings_path(spec: &AgentSpec) -> Result<std::path::PathBuf, String> {
+    let base = match spec.base {
+        Base::Home => dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?,
+        Base::Config => {
+            dirs::config_dir().ok_or_else(|| "could not resolve config dir".to_string())?
+        }
+    };
+    Ok(base.join(spec.dir).join(spec.file))
 }
 
-fn settings_path(spec: &AgentSpec) -> Result<std::path::PathBuf, String> {
-    home_path(spec.dir, spec.file)
+fn read_existing(path: &std::path::Path) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("read {}: {e}", path.display())),
+    }
 }
 
 fn write_atomic(path: &std::path::Path, contents: &str) -> Result<(), String> {
@@ -175,14 +299,16 @@ pub fn agent_enable_hooks(agent: String) -> Result<(), String> {
     let path = settings_path(spec)?;
     let dir = path.parent().unwrap();
     std::fs::create_dir_all(dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    let existing = read_existing(&path)?;
 
-    let existing = match std::fs::read_to_string(&path) {
-        Ok(s) => existing_config(Some(&s), &path)?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({}),
-        Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
+    if let Delivery::TuiPlugin = spec.delivery {
+        return match plugin_update(existing.as_deref(), &path)? {
+            Some(source) => write_atomic(&path, source),
+            None => Ok(()),
+        };
+    }
 
-    let merged = merge_hooks(existing, spec);
+    let merged = merge_hooks(existing_config(existing.as_deref(), &path)?, spec);
     let out = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
     write_atomic(&path, &out)
 }
@@ -192,15 +318,10 @@ pub fn agent_hooks_status(agent: String) -> bool {
     let Ok(spec) = find(&agent) else {
         return false;
     };
-    let Some(content) = settings_path(spec)
+    settings_path(spec)
         .ok()
         .and_then(|p| std::fs::read_to_string(p).ok())
-    else {
-        return false;
-    };
-    spec.events
-        .iter()
-        .all(|(_, m)| content.contains(&status_needle(spec, m)))
+        .is_some_and(|content| is_installed(spec, &content))
 }
 
 #[cfg(test)]
@@ -319,6 +440,51 @@ mod tests {
         let p = std::path::Path::new("/x/settings.json");
         assert_eq!(existing_config(None, p).unwrap(), json!({}));
         assert_eq!(existing_config(Some("   \n"), p).unwrap(), json!({}));
+    }
+
+    #[test]
+    fn opencode_plugin_emits_every_four_field_marker_behind_the_env_gate() {
+        let s = spec("opencode");
+        for (_, marker) in s.events {
+            assert!(OPENCODE_PLUGIN.contains(&status_needle(s, marker)), "{marker}");
+        }
+        assert!(OPENCODE_PLUGIN.starts_with(PLUGIN_OWNER));
+        assert!(OPENCODE_PLUGIN.contains(r#"if (!process.env.TERRA_TERMINAL) return"#));
+        assert!(OPENCODE_PLUGIN.contains(r#"openSync("/dev/tty", "w")"#));
+        for (event, _) in s.events {
+            assert!(OPENCODE_PLUGIN.contains(&format!("on(\"{event}\"")), "{event}");
+        }
+    }
+
+    #[test]
+    fn opencode_plugin_install_is_idempotent_and_never_clobbers_a_foreign_file() {
+        let p = std::path::Path::new("/x/opencode/plugins/terra/tui.js");
+        assert_eq!(plugin_update(None, p).unwrap(), Some(OPENCODE_PLUGIN));
+        assert_eq!(plugin_update(Some(OPENCODE_PLUGIN), p).unwrap(), None);
+        let older = format!("{PLUGIN_OWNER} an older Terra\nexport default {{}}\n");
+        assert_eq!(plugin_update(Some(&older), p).unwrap(), Some(OPENCODE_PLUGIN));
+        for foreign in ["", "export default { id: \"mine\" }", "// terra\n", " // terra-opencode-notify:"] {
+            assert!(plugin_update(Some(foreign), p).is_err(), "{foreign:?} must be left alone");
+        }
+    }
+
+    #[test]
+    fn opencode_status_requires_the_current_plugin() {
+        let s = spec("opencode");
+        assert!(is_installed(s, OPENCODE_PLUGIN));
+        assert!(!is_installed(s, &OPENCODE_PLUGIN.replace("session.idle", "session.gone")));
+        // The markers alone, in a file that is not ours, do not count.
+        let lookalike = "notify;Terra;opencode;working notify;Terra;opencode;attention notify;Terra;opencode;finished";
+        assert!(!is_installed(s, lookalike));
+        assert!(!is_installed(s, ""));
+    }
+
+    #[test]
+    fn plugin_lives_under_the_config_dir_not_home() {
+        let s = spec("opencode");
+        let path = settings_path(s).unwrap();
+        assert!(path.ends_with("opencode/plugins/terra/tui.js"));
+        assert!(path.starts_with(dirs::config_dir().unwrap()));
     }
 
     #[test]

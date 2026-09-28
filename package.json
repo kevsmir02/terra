@@ -4,7 +4,7 @@
   "version": "0.9.4",
   "license": "Apache-2.0",
   "type": "module",
-  "packageManager": "pnpm@11.9.0+sha512.bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
+  "packageManager": "pnpm@12.5.1",
   "engines": {
     "node": ">=22"
   },
@@ -27,6 +27,9 @@
     "size": "size-limit",
     "knip": "knip",
     "theme:sync-tokens": "node scripts/theme-token-reference-sync.mjs",
+    "version:bump": "node scripts/version.mjs bump",
+    "version:check": "node scripts/version.mjs check",
+    "changelog": "node scripts/changelog.mjs",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath scripts/git-hooks || true"
   },
   "dependencies": {
@@ -63,7 +66,6 @@
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-os": "~2.3.2",
     "@tauri-apps/plugin-process": "~2.3.1",
-    "@tauri-apps/plugin-store": "~2.4.4",
     "@tauri-apps/plugin-window-state": "~2.4.1",
     "@uiw/codemirror-theme-atomone": "^4.25.11",
     "@uiw/codemirror-theme-aura": "^4.25.11",

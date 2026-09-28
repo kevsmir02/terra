@@ -108,4 +108,214 @@ mod tests {
              modules::blocking, or add them to SYNC_BY_DESIGN with a reason: {offenders:#?}"
         );
     }
+
+    /// Async commands whose body touches `std::fs` directly on purpose. Each
+    /// entry is a promise that the call is bounded and small.
+    const INLINE_FS_BY_DESIGN: &[(&str, &str)] = &[];
+
+    /// Source with every string literal and line comment blanked out, so a
+    /// brace or a `fs::` inside either cannot confuse the scan.
+    fn code_only(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => {
+                    out.push('"');
+                    while let Some(s) = chars.next() {
+                        match s {
+                            '\\' => {
+                                chars.next();
+                            }
+                            '"' => break,
+                            '\n' => out.push('\n'),
+                            _ => {}
+                        }
+                    }
+                    out.push('"');
+                }
+                '/' if chars.peek() == Some(&'/') => {
+                    for s in chars.by_ref() {
+                        if s == '\n' {
+                            out.push('\n');
+                            break;
+                        }
+                    }
+                }
+                _ => out.push(c),
+            }
+        }
+        out
+    }
+
+    /// `(name, body)` for every `async fn` marked `#[tauri::command]`.
+    fn async_command_bodies(text: &str) -> Vec<(String, String)> {
+        let code = code_only(text);
+        let mut out = Vec::new();
+        let mut rest = code.as_str();
+        while let Some(at) = rest.find("#[tauri::command]") {
+            rest = &rest[at + "#[tauri::command]".len()..];
+            let Some(fn_at) = rest.find("fn ") else { break };
+            let head = &rest[..fn_at];
+            let after = &rest[fn_at + 3..];
+            if !head.trim_end().ends_with("async") {
+                continue;
+            }
+            let name = after
+                .split(['(', '<'])
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let Some(open) = after
+                .find(')')
+                .and_then(|close| after[close..].find('{').map(|b| close + b))
+            else {
+                continue;
+            };
+            let mut depth = 0usize;
+            let mut end = open;
+            for (i, c) in after[open..].char_indices() {
+                match c {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = open + i;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            out.push((name, after[open..=end].to_string()));
+        }
+        out
+    }
+
+    /// The body with the arguments of every hop to the pool removed: IO inside
+    /// a `spawn_blocking` or `on_app` closure is exactly where it belongs.
+    fn outside_hops(body: &str) -> String {
+        const HOPS: &[&str] = &["spawn_blocking(", "on_app(", "on_registry(", "blocking("];
+        let mut out = String::with_capacity(body.len());
+        let mut i = 0;
+        while i < body.len() {
+            let hop = HOPS.iter().find(|h| body[i..].starts_with(**h));
+            let Some(hop) = hop else {
+                let c = body[i..].chars().next().expect("in bounds");
+                out.push(c);
+                i += c.len_utf8();
+                continue;
+            };
+            let mut depth = 0usize;
+            let mut j = i + hop.len() - 1;
+            for (k, c) in body[j..].char_indices() {
+                match c {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            j += k;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            out.push_str("hop()");
+            i = j + 1;
+        }
+        out
+    }
+
+    fn touches_std_fs(body: &str, file_imports_std_fs: bool) -> bool {
+        let body = &outside_hops(body);
+        if body.contains("std::fs::") {
+            return true;
+        }
+        file_imports_std_fs
+            && body.match_indices("fs::").any(|(i, _)| {
+                body[..i]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|p| !(p == ':' || p == '_' || p.is_alphanumeric()))
+            })
+    }
+
+    #[test]
+    fn the_std_fs_scan_catches_inline_calls_and_ignores_the_hop() {
+        let src = r#"
+            use std::fs;
+            #[tauri::command]
+            pub async fn inline_read(path: String, s: State<'_, X>) -> Result<(), String> {
+                let _ = format!("{}", "}");
+                fs::read(&path).map(drop).map_err(|e| e.to_string())
+            }
+            #[tauri::command]
+            pub async fn hopped(path: String, app: AppHandle) -> Result<(), String> {
+                // std::fs::read here would be fine, it is a comment
+                blocking(app, move |r| core(r, &path)).await
+            }
+            #[tauri::command]
+            pub async fn module_path(app: AppHandle) -> Result<String, String> {
+                Ok(crate::modules::fs::to_canon("/"))
+            }
+            #[tauri::command]
+            pub async fn spawned(path: String) -> Result<Vec<u8>, String> {
+                let bytes = tauri::async_runtime::spawn_blocking(move || {
+                    std::fs::read(&path).map_err(|e| e.to_string())
+                })
+                .await
+                .map_err(|e| e.to_string())??;
+                Ok(bytes)
+            }
+            #[tauri::command]
+            pub async fn after_the_hop(app: AppHandle) -> Result<u64, String> {
+                blocking(app, |_| Ok(())).await?;
+                Ok(std::fs::metadata("/").map(|m| m.len()).unwrap_or(0))
+            }
+        "#;
+        let bodies = async_command_bodies(src);
+        let names: Vec<_> = bodies.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            ["inline_read", "hopped", "module_path", "spawned", "after_the_hop"]
+        );
+        let flagged: Vec<_> = bodies
+            .iter()
+            .filter(|(_, b)| touches_std_fs(b, true))
+            .map(|(n, _)| n.as_str())
+            .collect();
+        assert_eq!(flagged, ["inline_read", "after_the_hop"]);
+    }
+
+    /// An async command body still runs on the async runtime's worker, so a
+    /// 50 MB read or a directory walk there stalls every other command queued
+    /// behind it. Disk IO goes through `on_registry` / `on_app` instead.
+    #[test]
+    fn async_commands_reach_the_disk_only_through_the_blocking_pool() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rs_files(&src, &mut files);
+
+        let mut offenders = Vec::new();
+        for file in &files {
+            let text = std::fs::read_to_string(file).expect("read source");
+            let imports = text.contains("use std::fs") || text.contains("use std::{fs");
+            for (name, body) in async_command_bodies(&text) {
+                if touches_std_fs(&body, imports)
+                    && !INLINE_FS_BY_DESIGN.iter().any(|(listed, _)| *listed == name)
+                {
+                    offenders.push(format!("{}: {name}", file.display()));
+                }
+            }
+        }
+
+        assert!(
+            offenders.is_empty(),
+            "async commands calling std::fs inline block a runtime worker. Move the \
+             IO into a core run through modules::blocking, or add them to \
+             INLINE_FS_BY_DESIGN with a reason: {offenders:#?}"
+        );
+    }
 }

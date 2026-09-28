@@ -10,7 +10,7 @@ The pool lives in `src/modules/terminal/lib/rendererPool.ts`.
 
 ## Slot lifecycle
 
-- `POOL_MAX_SIZE` is 5 (`rendererPool.ts:22`). Each slot owns one xterm `Terminal`, `FitAddon`, `SearchAddon`, `SerializeAddon`, and optionally a `WebglAddon`.
+- `POOL_SOFT_CAP` is 5 and `POOL_HARD_CAP` is 8 (`rendererPool.ts`). Each slot owns one xterm `Terminal`, `FitAddon`, `SerializeAddon`, a lazy search (`lazySearch.ts`, which fetches the `SearchAddon` on the slot's first query), and optionally a `WebglAddon`.
 - A slot is created on demand and assigned to a leaf on bind.
 - `releaseSlot` detaches a slot from a leaf. If the leaf is idle, the slot is parked with `display:none` so xterm stops rendering but keeps parsing PTY bytes.
 - After a grace period, idle slots may be reaped to keep the pool size down.
@@ -28,7 +28,15 @@ When the leaf becomes visible again, `acquireSlot` looks for:
 1. A slot already bound to this leaf.
 2. A retained slot for this leaf (`retainedLeafId === leafId`) - fast path, no snapshot replay.
 3. A clean idle slot.
-4. If the pool is at max size, the lowest-scoring slot is evicted. Eviction serializes the retained buffer to a snapshot via `SerializeAddon` before stealing the slot.
+4. Below the soft cap, a new slot.
+5. The oldest retained slot whose leaf is idle: its buffer is serialized to a snapshot via `SerializeAddon`, nothing is evicted.
+6. The lowest-scoring bound slot whose leaf is idle, hidden and not in alt-screen: the leaf is evicted and its buffer serialized.
+7. Below the hard cap, a new slot. A pool past the soft cap shrinks back as its leaves go idle and the reaper disposes surplus slots.
+8. At the hard cap, the lowest-scoring slot of all (visible counts 1000, alt-screen 100, busy 80, focused 10, then least recently used). This is the only step that can serialize a busy grid.
+
+The order is `pickSlot` in `slotPolicy.ts`, a pure function over a `SlotView` per slot, tested in `slotPolicy.test.ts`.
+
+The hard cap is a memory bound: each extra slot holds one xterm buffer (about 12 bytes per cell, so roughly 5 MB for a 200-column grid at the default 2000 lines of scrollback). A parked slot's WebGL context is reaped after `WEBGL_REAP_GRACE_MS`, so growth past the soft cap costs buffer memory, not GPU contexts. Eight covers two full four-pane tabs of agents running in the background.
 
 ## The DormantRing
 
@@ -52,8 +60,8 @@ WebGL addons are created when a slot becomes visible and reaped after a grace pe
 
 ## Invariants
 
-- Never allow the pool to grow without bound; max is `POOL_MAX_SIZE`.
-- Never serialize or evict a leaf that is mid-command or in alt-screen.
+- Never allow the pool to grow without bound; the ceiling is `POOL_HARD_CAP`.
+- Never serialize or evict a leaf that is mid-command or in alt-screen while the pool is below `POOL_HARD_CAP`; the reaper also skips a retained slot whose leaf went busy.
 - A hidden busy leaf keeps its live grid parked with `display:none`.
 - An idle hidden leaf releases its slot but the buffer continues parsing bytes.
 - The DormantRing only buffers bytes for leaves without any slot.

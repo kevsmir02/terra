@@ -3,8 +3,9 @@ import { homeDir } from "@tauri-apps/api/path";
 import { native } from "@/lib/native";
 
 /**
- * Owns the resolved home and launch cwd. adoptWorkspaceHome re-authorizes
- * home when a space is restored or activated and returns it.
+ * Owns the resolved home and launch cwd. adoptWorkspaceHome resets the launch
+ * cwd to home when a space is restored or activated and returns it. Home is a
+ * root from Rust's bootstrap, so nothing here grants anything.
  */
 export function useWorkspaceHome() {
   const [home, setHome] = useState<string | null>(null);
@@ -13,14 +14,7 @@ export function useWorkspaceHome() {
 
   useEffect(() => {
     homeDir()
-      .then(async (p) => {
-        setHome(p);
-        try {
-          await native.workspaceAuthorize(p);
-        } catch {
-          // Bootstrap already authorizes home from Rust; ignore.
-        }
-      })
+      .then(setHome)
       .catch(() => setHome(null));
   }, []);
 
@@ -41,11 +35,6 @@ export function useWorkspaceHome() {
     }
     setHome(nextHome);
     setLaunchCwd(nextHome);
-    try {
-      await native.workspaceAuthorize(nextHome);
-    } catch {
-      // Non-fatal; the git panel surfaces "not authorized" if it matters.
-    }
     return nextHome;
   }, []);
 

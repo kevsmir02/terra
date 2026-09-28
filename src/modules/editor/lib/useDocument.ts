@@ -1,4 +1,4 @@
-import { notifyDocumentSaved } from "@/modules/lsp";
+import { notifyDocumentSaved } from "@/modules/lsp/editor";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";

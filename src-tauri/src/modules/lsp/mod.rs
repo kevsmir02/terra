@@ -90,8 +90,7 @@ pub async fn lsp_spawn(
     // the id absent. Re-check so a dead session isn't stranded in the map.
     let exited = state
         .sessions
-        .read()
-        .unwrap()
+        .read_or_recover()
         .get(&id)
         .map(|s| s.exited.load(Ordering::Acquire))
         .unwrap_or(false);
@@ -141,8 +140,7 @@ pub async fn lsp_send(
 ) -> Result<(), String> {
     let session = state
         .sessions
-        .read()
-        .unwrap()
+        .read_or_recover()
         .get(&id)
         .cloned()
         .ok_or_else(|| format!("lsp_send: unknown id={id}"))?;

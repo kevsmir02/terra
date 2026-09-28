@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, lsp, pty, updater, workspace};
+use modules::{agent, app_store, device, fs, git, lsp, pty, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -168,6 +168,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_autostart::Builder::new().build())
+        // Driven from Rust only: no capability grants its path-taking commands.
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
@@ -201,6 +202,8 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
+        .manage(fs::replace::ReplacePreviewState::default())
+        .manage(git::checkpoint::CheckpointState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -247,6 +250,9 @@ pub fn run() {
             fs::grep::fs_grep,
             fs::grep::fs_grep_interactive,
             fs::grep::fs_glob,
+            fs::replace::fs_replace_preview,
+            fs::replace::fs_replace_apply,
+            fs::replace::fs_replace_cancel,
             git::commands::git_resolve_repo,
             git::commands::git_panel_snapshot,
             git::commands::git_status,
@@ -260,6 +266,7 @@ pub fn run() {
             git::commands::git_pull_ff_only,
             git::commands::git_push,
             git::commands::git_log,
+            git::commands::git_blame,
             git::commands::git_show_commit,
             git::commands::git_commit_files,
             git::commands::git_commit_file_diff,
@@ -271,10 +278,19 @@ pub fn run() {
             git::commands::git_stash_pop,
             git::commands::git_stash_list,
             git::commands::git_create_branch,
+            git::commands::git_operation_abort,
+            git::commands::git_operation_continue,
+            git::commands::git_mark_resolved,
+            git::commands::git_apply_hunk,
+            git::commands::git_checkpoint_create,
+            git::commands::git_checkpoint_changes,
+            git::commands::git_checkpoint_file_diff,
+            git::commands::git_checkpoint_revert,
             updater::updater_package_kind,
             updater::updater_download,
             updater::updater_install,
-            workspace::workspace_authorize,
+            workspace::workspace_grant_root,
+            workspace::workspace_restore_roots,
             workspace::workspace_current_dir,
             get_launch_dir,
             get_launch_files,
@@ -282,6 +298,11 @@ pub fn run() {
             open_preview_tab,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
+            app_store::app_store_entries,
+            app_store::app_store_get,
+            app_store::app_store_set,
+            app_store::app_store_delete,
+            app_store::app_store_save,
             device::commands::device_list,
             device::commands::device_list_avds,
             device::commands::device_launch_avd,
@@ -310,6 +331,10 @@ pub fn run() {
                     // Only tears down emulators Terra started; ones the
                     // user launched elsewhere are left running.
                     state.kill_launched_avds();
+                }
+                // Checkpoints are session-scoped (docs/adr/0008).
+                if let Some(state) = app.try_state::<git::checkpoint::CheckpointState>() {
+                    state.drop_all();
                 }
             }
         });

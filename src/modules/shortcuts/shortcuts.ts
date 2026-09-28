@@ -25,6 +25,7 @@ export type ShortcutId =
   | "pane.swapUp"
   | "pane.swapDown"
   | "pane.source"
+  | "pane.broadcast"
   | "terminal.clear"
   | "terminal.copy"
   | "terminal.paste"
@@ -34,6 +35,7 @@ export type ShortcutId =
   | "terminal.selectLastOutput"
   | "terminal.copyLastOutput"
   | "search.focus"
+  | "search.replace"
   | "explorer.search"
   | "explorer.focus"
   | "view.zoomIn"
@@ -41,8 +43,18 @@ export type ShortcutId =
   | "view.zoomReset"
   | "view.zenMode"
   | "agent.focusAttention"
+  | "agent.resume"
   | "settings.open"
   | "sidebar.toggle"
+  | "diff.nextChange"
+  | "diff.prevChange"
+  | "diff.nextFile"
+  | "diff.prevFile"
+  | "git.fileHistory"
+  | "git.toggleBlame"
+  | "git.openLineCommit"
+  | "diff.stageHunk"
+  | "diff.discardHunk"
   | "editor.undo"
   | "editor.redo"
   | "editor.codeComplete";
@@ -55,6 +67,7 @@ export type ShortcutGroup =
   | "Terminal"
   | "Search"
   | "View"
+  | "Git"
   | "Editor";
 
 export type KeyBinding = {
@@ -178,6 +191,12 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [{ ctrl: true, key: "g" }],
   },
   {
+    id: "pane.broadcast",
+    label: "Send input to all panes",
+    group: "Panes",
+    defaultBindings: [{ ctrl: true, alt: true, key: "b" }],
+  },
+  {
     id: "terminal.clear",
     label: "Clear terminal",
     group: "Terminal",
@@ -283,10 +302,22 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [{ ctrl: true, key: "f" }],
   },
   {
+    id: "search.replace",
+    label: "Search and replace in files",
+    group: "Search",
+    defaultBindings: [{ ctrl: true, shift: true, key: "h" }],
+  },
+  {
     id: "agent.focusAttention",
-    label: "Jump to agent needing attention",
+    label: "Jump to next waiting agent",
     group: "Terminal",
     defaultBindings: [{ ctrl: true, shift: true, key: "a" }],
+  },
+  {
+    id: "agent.resume",
+    label: "Resume this pane's agent",
+    group: "Terminal",
+    defaultBindings: [{ ctrl: true, shift: true, key: "r" }],
   },
   {
     id: "sidebar.toggle",
@@ -338,6 +369,67 @@ export const SHORTCUTS: Shortcut[] = [
     group: "View",
     defaultBindings: [{ ctrl: true, shift: true, key: "'" }],
   },
+  // F7 is the diff editor's next-difference key elsewhere. All four stay
+  // disabled, and so fall through to the terminal, while nothing is reviewable.
+  {
+    id: "diff.nextChange",
+    label: "Next change in diff",
+    group: "Git",
+    defaultBindings: [{ key: "F7" }],
+    allowRepeat: true,
+  },
+  {
+    id: "diff.prevChange",
+    label: "Previous change in diff",
+    group: "Git",
+    defaultBindings: [{ shift: true, key: "F7" }],
+    allowRepeat: true,
+  },
+  {
+    id: "diff.nextFile",
+    label: "Next changed file",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, key: "F7" }],
+  },
+  {
+    id: "diff.prevFile",
+    label: "Previous changed file",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, shift: true, key: "F7" }],
+  },
+  // Editor-only: disabled, so the chord reaches the terminal, elsewhere.
+  {
+    id: "git.fileHistory",
+    label: "File history",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "h" }],
+  },
+  {
+    id: "git.toggleBlame",
+    label: "Toggle blame annotations",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "g" }],
+  },
+  {
+    id: "git.openLineCommit",
+    label: "Open the current line's commit",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, shift: true, key: "g" }],
+  },
+  // Act on the change F7 selected: stage it on the unstaged side, unstage it
+  // on the staged side. Discard asks first.
+  {
+    id: "diff.stageHunk",
+    label: "Stage or unstage the selected change",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "s" }],
+  },
+  {
+    id: "diff.discardHunk",
+    label: "Discard the selected change",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "d" }],
+  },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface
   // them, they don't have App-level handlers, so `useGlobalShortcuts` falls
@@ -370,6 +462,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   "Terminal",
   "View",
   "Search",
+  "Git",
   "Editor",
 ];
 

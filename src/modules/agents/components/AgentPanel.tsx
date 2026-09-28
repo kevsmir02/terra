@@ -8,37 +8,62 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useState } from "react";
 import { AgentIcon } from "../lib/agentIcon";
 import { displayAgent } from "../lib/format";
-import type { AgentNotification, AgentStatus } from "../lib/types";
+import { formatDuration, runEnding, waitingOrder } from "../lib/sessions";
+import type {
+  AgentNotification,
+  AgentSession,
+  AgentStatus,
+  RecentAgentRun,
+} from "../lib/types";
+import { useNow } from "../lib/useNow";
 import { useAgentStore } from "../store/agentStore";
 
 type Props = {
   onActivate: (tabId: number, leafId: number) => void;
   onClose: () => void;
+  sessionExtra?: (leafId: number, close: () => void) => ReactNode;
 };
 
-function relativeTime(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
+// Durations show whole minutes, so a coarse tick is exact enough.
+const TICK_MS = 15_000;
+
+function relativeTime(ts: number, now: number): string {
+  const s = Math.floor((now - ts) / 1000);
   if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  return `${formatDuration(now - ts)} ago`;
 }
 
+const STATUS_LABEL: Record<AgentStatus, string> = {
+  attention: "needs input",
+  working: "working",
+  finished: "done",
+};
+
+const STATUS_TONE: Record<AgentStatus, string> = {
+  attention: "font-medium text-status-warning",
+  working: "text-muted-foreground",
+  finished: "text-status-ok",
+};
+
+const STATUS_DOT: Record<AgentStatus, string> = {
+  attention: "bg-status-warning",
+  working: "bg-status-renamed",
+  finished: "bg-status-ok",
+};
+
 function StatusRow({
-  agent,
-  status,
+  session,
+  now,
   onClick,
 }: {
-  agent: string;
-  status: AgentStatus;
+  session: AgentSession;
+  now: number;
   onClick: () => void;
 }) {
-  const waiting = status === "waiting";
+  const { agent, status, statusSince } = session;
   return (
     <button
       type="button"
@@ -54,15 +79,52 @@ function StatusRow({
         {displayAgent(agent)}
       </span>
       <span
-        className={cn(
-          "flex items-center gap-1.5 text-xs",
-          waiting ? "font-medium text-primary" : "text-muted-foreground",
-        )}
+        className={cn("flex items-center gap-1.5 text-xs", STATUS_TONE[status])}
       >
-        {waiting ? (
-          <span className="size-1.5 rounded-circle bg-primary" />
-        ) : null}
-        {waiting ? "waiting" : "working"}
+        <span
+          className={cn("size-1.5 rounded-circle", STATUS_DOT[status])}
+          aria-hidden
+        />
+        {STATUS_LABEL[status]}
+        <span className="tabular-nums text-muted-foreground">
+          {formatDuration(now - statusSince)}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function RecentRow({
+  run,
+  now,
+  onClick,
+}: {
+  run: RecentAgentRun;
+  now: number;
+  onClick: () => void;
+}) {
+  const failed = run.code !== null && run.code !== 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent"
+    >
+      <AgentIcon
+        agent={run.agent}
+        size={14}
+        className="shrink-0 text-muted-foreground"
+      />
+      <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">
+        {displayAgent(run.agent)}{" "}
+        <span className="text-muted-foreground">{run.label}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5 text-[10.5px] tabular-nums text-muted-foreground">
+        <span>{formatDuration(run.endedAt - run.startedAt)}</span>
+        <span className={cn(failed && "text-destructive")}>
+          {runEnding(run.code)}
+        </span>
+        <span>{relativeTime(run.endedAt, now)}</span>
       </span>
     </button>
   );
@@ -74,67 +136,78 @@ const NOTIF_LABEL: Record<AgentNotification["kind"], string> = {
   error: "failed",
 };
 
-const HOOK_AGENTS = ["claude", "codex"] as const;
+const HOOK_AGENTS = ["claude", "codex", "opencode"] as const;
 
 function HookAgentRow({
   id,
   label,
   ready,
   installing,
+  error,
   onEnable,
 }: {
   id: string;
   label: string;
   ready: boolean;
   installing: boolean;
+  error: string | null;
   onEnable: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 px-2 py-1">
-      <AgentIcon
-        agent={id}
-        size={14}
-        className="shrink-0 text-muted-foreground"
-      />
-      <span className="flex-1 truncate text-[12px] text-muted-foreground">
-        {label}
-      </span>
-      {ready ? (
-        <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
-          <HugeiconsIcon
-            icon={CheckmarkCircle02Icon}
-            size={13}
-            strokeWidth={1.75}
-          />
-          enabled
+    <div className="flex flex-col gap-0.5 px-2 py-1">
+      <div className="flex items-center gap-2">
+        <AgentIcon
+          agent={id}
+          size={14}
+          className="shrink-0 text-muted-foreground"
+        />
+        <span className="flex-1 truncate text-[12px] text-muted-foreground">
+          {label}
         </span>
-      ) : (
-        <button
-          type="button"
-          onClick={onEnable}
-          disabled={installing}
-          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
-        >
-          {installing ? (
+        {ready ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
             <HugeiconsIcon
-              icon={Loading03Icon}
-              size={12}
+              icon={CheckmarkCircle02Icon}
+              size={13}
               strokeWidth={1.75}
-              className="animate-spin"
             />
-          ) : null}
-          {installing ? "Enabling" : "Enable"}
-        </button>
-      )}
+            enabled
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onEnable}
+            disabled={installing}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-60"
+          >
+            {installing ? (
+              <HugeiconsIcon
+                icon={Loading03Icon}
+                size={12}
+                strokeWidth={1.75}
+                className="animate-spin"
+              />
+            ) : null}
+            {installing ? "Enabling" : "Enable"}
+          </button>
+        )}
+      </div>
+      {error ? (
+        <span className="pl-5.5 text-[10.5px] leading-snug text-destructive">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }
 
 function NotificationRow({
   n,
+  now,
   onClick,
 }: {
   n: AgentNotification;
+  now: number;
   onClick: () => void;
 }) {
   return (
@@ -149,13 +222,13 @@ function NotificationRow({
             icon={CheckmarkCircle02Icon}
             size={15}
             strokeWidth={1.75}
-            className="text-muted-foreground"
+            className="text-status-ok"
           />
         ) : (
           <span
             className={cn(
               "size-1.5 rounded-circle",
-              n.kind === "error" ? "bg-destructive" : "bg-primary",
+              n.kind === "error" ? "bg-destructive" : "bg-status-warning",
             )}
           />
         )}
@@ -165,26 +238,48 @@ function NotificationRow({
         <span className="text-muted-foreground">{NOTIF_LABEL[n.kind]}</span>
       </span>
       <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-        {relativeTime(n.at)}
+        {relativeTime(n.at, now)}
       </span>
     </button>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div className="terra-label px-2 pt-2 pb-1 text-[10px] font-medium text-muted-foreground/(--emph-strong)">
+      {children}
+    </div>
   );
 }
 
 /**
  * The cluster's management surface. Lazy on purpose: the hook installer, the
  * notification list and their icons are worth nothing until someone opens the
- * popover, and the statusbar chip reads the store on its own.
+ * popover, and the statusbar chip reads the store on its own. It is mounted
+ * only while the popover is open, so its clock ticks only then.
  */
-export default function AgentPanel({ onActivate, onClose }: Props) {
+export default function AgentPanel({
+  onActivate,
+  onClose,
+  sessionExtra,
+}: Props) {
   const [hooks, setHooks] = useState<Record<string, boolean>>({});
+  const [hookErrors, setHookErrors] = useState<Record<string, string>>({});
   const [installing, setInstalling] = useState<string | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const sessions = useAgentStore((s) => s.sessions);
   const notifications = useAgentStore((s) => s.notifications);
-  const clearNotifications = useAgentStore((s) => s.clearNotifications);
+  const recent = useAgentStore((s) => s.recent);
+  const clearHistory = useAgentStore((s) => s.clearHistory);
+  const now = useNow(TICK_MS);
 
-  const active = useMemo(() => Object.values(sessions), [sessions]);
+  const active = useMemo(() => {
+    const waiting = waitingOrder(sessions);
+    const working = Object.values(sessions)
+      .filter((s) => s.status === "working")
+      .sort((a, b) => a.statusSince - b.statusSince);
+    return [...waiting, ...working];
+  }, [sessions]);
   const activeCount = active.length;
   const enabledCount = HOOK_AGENTS.filter((id) => hooks[id] === true).length;
 
@@ -206,11 +301,17 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
 
   const enableHooks = async (id: string) => {
     setInstalling(id);
+    setHookErrors((errs) => {
+      const next = { ...errs };
+      delete next[id];
+      return next;
+    });
     try {
       await invoke("agent_enable_hooks", { agent: id });
       setHooks((h) => ({ ...h, [id]: true }));
-    } catch {
+    } catch (e) {
       setHooks((h) => ({ ...h, [id]: false }));
+      setHookErrors((errs) => ({ ...errs, [id]: String(e) }));
     } finally {
       setInstalling(null);
     }
@@ -221,7 +322,8 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
     onClose();
   };
 
-  const empty = activeCount === 0 && notifications.length === 0;
+  const hasHistory = notifications.length > 0 || recent.length > 0;
+  const empty = activeCount === 0 && !hasHistory;
 
   return (
     <>
@@ -235,10 +337,10 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
               {activeCount} active
             </span>
           ) : null}
-          {notifications.length > 0 ? (
+          {hasHistory ? (
             <button
               type="button"
-              onClick={clearNotifications}
+              onClick={clearHistory}
               className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               Clear
@@ -254,25 +356,48 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
           Run a coding agent to track it here.
         </div>
       ) : (
-        <div className="max-h-80 overflow-y-auto border-t border-border/(--emph-strong) p-1">
+        <div className="max-h-96 overflow-y-auto border-t border-border/(--emph-strong) p-1">
           {active.map((s) => (
-            <StatusRow
-              key={s.leafId}
-              agent={s.agent}
-              status={s.status}
-              onClick={() => activate(s.tabId, s.leafId)}
-            />
+            <Fragment key={s.leafId}>
+              <StatusRow
+                session={s}
+                now={now}
+                onClick={() => activate(s.tabId, s.leafId)}
+              />
+              {sessionExtra?.(s.leafId, onClose)}
+            </Fragment>
           ))}
-          {activeCount > 0 && notifications.length > 0 ? (
-            <div className="mx-2 my-1 h-0 border-t border-border/(--emph-medium)" />
+          {notifications.length > 0 ? (
+            <>
+              {activeCount > 0 ? <SectionLabel>Alerts</SectionLabel> : null}
+              {notifications.map((n) => (
+                <NotificationRow
+                  key={n.id}
+                  n={n}
+                  now={now}
+                  onClick={() => activate(n.tabId, n.leafId)}
+                />
+              ))}
+            </>
           ) : null}
-          {notifications.map((n) => (
-            <NotificationRow
-              key={n.id}
-              n={n}
-              onClick={() => activate(n.tabId, n.leafId)}
-            />
-          ))}
+          {recent.length > 0 ? (
+            <>
+              <SectionLabel>Recent runs</SectionLabel>
+              {recent.map((r, i) => (
+                <Fragment key={r.id}>
+                  <RecentRow
+                    run={r}
+                    now={now}
+                    onClick={() => activate(r.tabId, r.leafId)}
+                  />
+                  {sessions[r.leafId] ||
+                  recent.findIndex((x) => x.leafId === r.leafId) !== i
+                    ? null
+                    : sessionExtra?.(r.leafId, onClose)}
+                </Fragment>
+              ))}
+            </>
+          ) : null}
         </div>
       )}
 
@@ -306,6 +431,7 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
                 label={displayAgent(id)}
                 ready={hooks[id] === true}
                 installing={installing === id}
+                error={hookErrors[id] ?? null}
                 onEnable={() => enableHooks(id)}
               />
             ))

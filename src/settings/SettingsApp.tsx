@@ -3,6 +3,7 @@ import { WindowControls } from "@/components/WindowControls";
 import type { SettingsTab } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
+  AiBrain01Icon,
   InformationCircleIcon,
   KeyboardIcon,
   PaintBoardIcon,
@@ -21,6 +22,11 @@ import { GeneralSection } from "./sections/GeneralSection";
 const EditorSection = lazy(() =>
   import("./sections/EditorSection").then((m) => ({
     default: m.EditorSection,
+  })),
+);
+const AgentsSection = lazy(() =>
+  import("./sections/AgentsSection").then((m) => ({
+    default: m.AgentsSection,
   })),
 );
 const ThemesSection = lazy(() =>
@@ -56,6 +62,12 @@ const TABS: {
     component: EditorSection,
   },
   {
+    id: "agents",
+    label: "Agents",
+    icon: AiBrain01Icon,
+    component: AgentsSection,
+  },
+  {
     id: "themes",
     label: "Themes",
     icon: PaintBoardIcon,
@@ -78,6 +90,7 @@ const TABS: {
 const VALID_TABS: SettingsTab[] = [
   "general",
   "editor",
+  "agents",
   "themes",
   "shortcuts",
   "about",
