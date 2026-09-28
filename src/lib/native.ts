@@ -44,8 +44,17 @@ export type GitChangedFile = {
   staged: boolean;
   unstaged: boolean;
   untracked: boolean;
+  /** An unmerged path; git's XY alone misses both-added and deleted-by-them. */
+  conflicted: boolean;
   statusLabel: string;
 };
+
+export type GitRepoOperation =
+  | "merge"
+  | "rebase"
+  | "cherry-pick"
+  | "revert"
+  | "am";
 
 export type GitStatusSnapshot = {
   repoRoot: string;
@@ -55,6 +64,8 @@ export type GitStatusSnapshot = {
   behind: number;
   isDetached: boolean;
   truncated: boolean;
+  /** The operation the repo is stopped in, read from the git dir markers. */
+  operation: GitRepoOperation | null;
   changedFiles: GitChangedFile[];
 };
 
@@ -72,6 +83,8 @@ export type GitDiffContentResult = {
   truncated: boolean;
   /** A side is over the content cap: both contents are empty, use the patch. */
   tooLarge: boolean;
+  /** Unmerged path: original is ours (stage 2), modified is theirs (stage 3). */
+  conflict: boolean;
 };
 
 export type GitCommitResult = {

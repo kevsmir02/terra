@@ -2,6 +2,7 @@ use tauri::AppHandle;
 
 use crate::modules::blocking::on_registry as blocking;
 use crate::modules::git::operations;
+use crate::modules::git::review::OperationStep;
 use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
     GitDiffContentResult, GitDiffResult, GitLogEntry, GitPanelSnapshot, GitPushResult,
@@ -310,6 +311,44 @@ pub async fn git_create_branch(
 ) -> Result<(), String> {
     blocking(app, move |r| {
         operations::create_branch(r, &repo_root, &name).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_abort(
+    repo_root: String,
+    operation: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::step_operation(r, &repo_root, &operation, OperationStep::Abort)
+            .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_continue(
+    repo_root: String,
+    operation: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::step_operation(r, &repo_root, &operation, OperationStep::Continue)
+            .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_mark_resolved(
+    repo_root: String,
+    path: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::mark_resolved(r, &repo_root, &path).map_err(Into::into)
     })
     .await
 }

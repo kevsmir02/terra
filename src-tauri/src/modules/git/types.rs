@@ -26,6 +26,7 @@ pub struct GitChangedFile {
     pub staged: bool,
     pub unstaged: bool,
     pub untracked: bool,
+    pub conflicted: bool,
     pub status_label: String,
 }
 
@@ -39,9 +40,44 @@ pub struct GitStatusSnapshot {
     pub behind: u32,
     pub is_detached: bool,
     pub truncated: bool,
+    pub operation: Option<RepoOperation>,
     pub changed_files: Vec<GitChangedFile>,
 }
 
+/// A multi-step operation git has stopped in the middle of, read from the
+/// marker files it leaves in the git dir.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RepoOperation {
+    Merge,
+    Rebase,
+    CherryPick,
+    Revert,
+    Am,
+}
+
+impl RepoOperation {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "merge" => Some(Self::Merge),
+            "rebase" => Some(Self::Rebase),
+            "cherry-pick" => Some(Self::CherryPick),
+            "revert" => Some(Self::Revert),
+            "am" => Some(Self::Am),
+            _ => None,
+        }
+    }
+
+    pub fn subcommand(self) -> &'static str {
+        match self {
+            Self::Merge => "merge",
+            Self::Rebase => "rebase",
+            Self::CherryPick => "cherry-pick",
+            Self::Revert => "revert",
+            Self::Am => "am",
+        }
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +111,8 @@ pub struct GitDiffContentResult {
     /// A side exceeded the content cap, so both contents are empty and the
     /// patch is the only view.
     pub too_large: bool,
+    /// The path is unmerged: original is stage 2 (ours), modified stage 3 (theirs).
+    pub conflict: bool,
 }
 
 #[derive(Serialize)]

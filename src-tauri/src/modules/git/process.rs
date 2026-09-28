@@ -226,6 +226,9 @@ where
         .env("GCM_INTERACTIVE", "Never")
         .env("GCM_PROVIDER", "")
         .env("LC_ALL", "C")
+        // stdin is null, so an editor could only hang until the timeout; a
+        // continued merge or rebase keeps the message git prepared.
+        .env("GIT_EDITOR", "true")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

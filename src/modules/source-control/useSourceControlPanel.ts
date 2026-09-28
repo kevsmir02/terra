@@ -11,6 +11,11 @@ import {
   workingDiffKey,
 } from "@/modules/editor/lib/diffCache";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type OperationBannerView,
+  operationBanner,
+  repoOperation,
+} from "./lib/repoOperation";
 import type { SourceControlSummary } from "./useSourceControl";
 
 type PanelState = "closed" | "loading" | "no-repo" | "ready" | "error";
@@ -49,6 +54,7 @@ export type SourceControlFileEntry = {
   staged: boolean;
   unstaged: boolean;
   untracked: boolean;
+  conflicted: boolean;
 };
 
 export type PendingDiscard = {
@@ -82,6 +88,13 @@ type SourceControlPanelState = {
   stagedEmptyText: string;
   unstagedEmptyText: string;
   pendingDiscard: PendingDiscard | null;
+  operation: OperationBannerView | null;
+  pendingAbort: boolean;
+  requestAbortOperation: () => void;
+  cancelAbortOperation: () => void;
+  confirmAbortOperation: () => Promise<void>;
+  continueOperation: () => Promise<void>;
+  markResolved: (entry: SourceControlFileEntry) => Promise<void>;
   setCommitMessage: (value: string) => void;
   refresh: () => Promise<void>;
   selectEntry: (entry: SourceControlEntry) => Promise<void>;
@@ -219,6 +232,7 @@ function optimisticUnstage(
         staged: false,
         unstaged: true,
         untracked: false,
+        conflicted: false,
         statusLabel: "Deleted",
       });
       next.push({
@@ -229,6 +243,7 @@ function optimisticUnstage(
         staged: false,
         unstaged: true,
         untracked: true,
+        conflicted: false,
         statusLabel: "Untracked",
       });
       continue;
@@ -303,6 +318,7 @@ export function useSourceControlPanel(
     | { scope: "all"; entries: SourceControlEntry[] }
     | null
   >(null);
+  const [pendingAbort, setPendingAbort] = useState(false);
   const selectedRef = useRef<DiffSelection | null>(null);
   const reconcileTimerRef = useRef(0);
 
@@ -338,9 +354,11 @@ export function useSourceControlPanel(
           : file.staged
             ? "checked"
             : "unchecked";
-      const statusCode = file.unstaged
-        ? statusCodeForMode("-", file)
-        : statusCodeForMode("+", file);
+      const statusCode = file.conflicted
+        ? "U"
+        : file.unstaged
+          ? statusCodeForMode("-", file)
+          : statusCodeForMode("+", file);
       out.push({
         key: file.path,
         path: file.path,
@@ -351,10 +369,22 @@ export function useSourceControlPanel(
         staged: file.staged,
         unstaged: file.unstaged,
         untracked: file.untracked,
+        conflicted: file.conflicted,
       });
     }
     return out;
   }, [status]);
+
+  const conflictCount = useMemo(
+    () => fileEntries.filter((e) => e.conflicted).length,
+    [fileEntries],
+  );
+  const operationKind = status?.operation ?? null;
+  const operation = useMemo(
+    () =>
+      operationKind ? operationBanner(operationKind, conflictCount) : null,
+    [operationKind, conflictCount],
+  );
 
   const headerCheckState = useMemo<CheckState>(() => {
     if (fileEntries.length === 0) return "unchecked";
@@ -665,9 +695,27 @@ export function useSourceControlPanel(
     [openSelection, repo, selected, status],
   );
 
+  const markResolved = useCallback(
+    async (entry: SourceControlFileEntry) => {
+      if (!repo || !entry.conflicted) return;
+      const root = repo.repoRoot;
+      await runMutation(
+        `resolve:${entry.path}`,
+        null,
+        () => repoOperation.markResolved(root, entry.path),
+        [entry.path],
+      );
+    },
+    [repo, runMutation],
+  );
+
   const toggleStageFile = useCallback(
     async (entry: SourceControlFileEntry) => {
       if (!repo) return;
+      if (entry.conflicted) {
+        await markResolved(entry);
+        return;
+      }
       const paths = new Set([entry.path]);
       if (entry.checkState === "checked") {
         await runMutation(
@@ -685,7 +733,7 @@ export function useSourceControlPanel(
         );
       }
     },
-    [repo, runMutation],
+    [markResolved, repo, runMutation],
   );
 
   const toggleAll = useCallback(async () => {
@@ -793,6 +841,33 @@ export function useSourceControlPanel(
     [repo, runTreeAction],
   );
 
+  const requestAbortOperation = useCallback(() => {
+    if (operationKind && !summary.busyAction) setPendingAbort(true);
+  }, [operationKind, summary.busyAction]);
+
+  const cancelAbortOperation = useCallback(() => setPendingAbort(false), []);
+
+  const confirmAbortOperation = useCallback(async () => {
+    setPendingAbort(false);
+    if (!repo || !operationKind) return;
+    const root = repo.repoRoot;
+    const kind = operationKind;
+    await runTreeAction("operation", async () => {
+      await repoOperation.abort(root, kind);
+      return `Aborted the ${kind}`;
+    });
+  }, [operationKind, repo, runTreeAction]);
+
+  const continueOperation = useCallback(async () => {
+    if (!repo || !operationKind || operation?.continueBlocked) return;
+    const root = repo.repoRoot;
+    const kind = operationKind;
+    await runTreeAction("operation", async () => {
+      await repoOperation.continue(root, kind);
+      return `Continued the ${kind}`;
+    });
+  }, [operation, operationKind, repo, runTreeAction]);
+
   const push = useCallback(async () => {
     if (!repo) return;
     setActionMessage(null);
@@ -852,6 +927,13 @@ export function useSourceControlPanel(
     stagedEmptyText,
     unstagedEmptyText,
     pendingDiscard: pendingDiscardView,
+    operation,
+    pendingAbort,
+    requestAbortOperation,
+    cancelAbortOperation,
+    confirmAbortOperation,
+    continueOperation,
+    markResolved,
     setCommitMessage,
     refresh,
     selectEntry,

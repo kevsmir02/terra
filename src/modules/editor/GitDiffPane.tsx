@@ -182,6 +182,7 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
   const isBinary = loaded?.diff.isBinary ?? false;
   const fallbackPatch = loaded?.diff.fallbackPatch ?? "";
   const patchTruncated = loaded?.diff.truncated ?? false;
+  const isConflict = loaded?.diff.conflict ?? false;
 
   const isTooLarge =
     (loaded?.diff.tooLarge ?? false) ||
@@ -235,6 +236,14 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
           <Badge variant="outline" className="text-[10px] terra-label">
             {chipLabel ?? mode}
           </Badge>
+          {isConflict ? (
+            <Badge
+              variant="outline"
+              className="border-status-conflict/(--emph-strong) text-[10px] text-status-conflict"
+            >
+              Conflict: ours → theirs
+            </Badge>
+          ) : null}
           {isBinary ? (
             <Badge variant="secondary" className="text-[10px]">
               Binary / patch fallback
@@ -290,22 +299,33 @@ export function GitDiffPane({ source, chipLabel, active }: Props) {
             </ScrollArea>
           </div>
         ) : (
-          <CodeMirror
-            ref={cmRef}
-            value={modifiedContent}
-            theme={themeExt}
-            extensions={extensions}
-            editable={false}
-            height="100%"
-            className="h-full"
-            basicSetup={{
-              lineNumbers: true,
-              foldGutter: true,
-              highlightActiveLine: false,
-              highlightActiveLineGutter: false,
-              searchKeymap: true,
-            }}
-          />
+          <div className="flex h-full min-h-0 flex-col">
+            {isConflict ? (
+              <DiffNotice>
+                Unmerged. Removed lines are ours (stage 2), added lines are
+                theirs (stage 3). Resolve the file, then mark it resolved in
+                Source Control.
+              </DiffNotice>
+            ) : null}
+            <div className="min-h-0 flex-1">
+              <CodeMirror
+                ref={cmRef}
+                value={modifiedContent}
+                theme={themeExt}
+                extensions={extensions}
+                editable={false}
+                height="100%"
+                className="h-full"
+                basicSetup={{
+                  lineNumbers: true,
+                  foldGutter: true,
+                  highlightActiveLine: false,
+                  highlightActiveLineGutter: false,
+                  searchKeymap: true,
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

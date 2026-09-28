@@ -79,6 +79,7 @@ import {
   type ReactNode,
 } from "react";
 import type { SourceControlSummary } from "./useSourceControl";
+import type { OperationBannerView } from "./lib/repoOperation";
 import {
   useSourceControlPanel,
   type CheckState,
@@ -719,7 +720,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
         case "D": {
           if (meta) break;
           const entry = focusedEntry();
-          if (entry?.unstaged) {
+          if (entry?.unstaged && !entry.conflicted) {
             event.preventDefault();
             scm.requestDiscardFile(entry);
           }
@@ -893,6 +894,14 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
         {scm.panelState === "ready" && scm.status ? (
           <>
+            {scm.operation ? (
+              <OperationBanner
+                view={scm.operation}
+                busy={!!scm.actionBusy}
+                onContinue={() => void scm.continueOperation()}
+                onAbort={scm.requestAbortOperation}
+              />
+            ) : null}
             <div className="relative shrink-0 space-y-2 border-b border-border/(--emph-soft) bg-gradient-to-b from-card/65 to-card/30 px-2.5 pb-2.5 pt-2.5">
               <div
                 className={cn(
@@ -1099,6 +1108,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                             onSelectFile={scm.selectFile}
                             onToggleStageFile={scm.toggleStageFile}
                             onDiscardFile={scm.requestDiscardFile}
+                            onMarkResolved={scm.markResolved}
                             onOpenFile={onOpenFile}
                           />
                         </div>
@@ -1111,6 +1121,35 @@ export const SourceControlPanel = memo(function SourceControlPanel({
           </>
         ) : null}
       </aside>
+
+      <AlertDialog
+        open={scm.pendingAbort}
+        onOpenChange={(o) => {
+          if (!o) scm.cancelAbortOperation();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {scm.operation
+                ? `Abort: ${scm.operation.title.toLowerCase()}?`
+                : "Abort?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The repository goes back to where it was before the operation
+              started, and any conflict resolutions made so far are lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => scm.cancelAbortOperation()}>
+              Keep going
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => void scm.confirmAbortOperation()}>
+              Abort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={scm.pendingDiscard !== null}
@@ -1200,6 +1239,7 @@ type RowRendererProps = {
   onSelectFile: (entry: SourceControlFileEntry) => Promise<void>;
   onToggleStageFile: (entry: SourceControlFileEntry) => Promise<void>;
   onDiscardFile: (entry: SourceControlFileEntry) => void;
+  onMarkResolved: (entry: SourceControlFileEntry) => Promise<void>;
   onOpenFile?: (absolutePath: string) => void;
 };
 
@@ -1232,6 +1272,57 @@ function DivergedBanner() {
         </span>
         <span className="ml-1 opacity-75">- resolve in terminal</span>
       </span>
+    </div>
+  );
+}
+
+function OperationBanner({
+  view,
+  busy,
+  onContinue,
+  onAbort,
+}: {
+  view: OperationBannerView;
+  busy: boolean;
+  onContinue: () => void;
+  onAbort: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      className="mx-2.5 mt-2.5 flex shrink-0 items-center gap-1.5 rounded-md border border-status-conflict/(--emph-soft) bg-status-conflict/(--emph-faint) py-1 pl-2 pr-1 text-[10.5px] leading-none"
+    >
+      <HugeiconsIcon
+        icon={Alert02Icon}
+        size={11}
+        strokeWidth={1.9}
+        className="shrink-0 text-status-conflict"
+      />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium text-foreground/(--emph-bold)">
+          {view.title}
+        </span>
+        <span className="ml-1 text-muted-foreground">{view.detail}</span>
+      </span>
+      <Button
+        size="xs"
+        variant="secondary"
+        className="h-6 cursor-pointer px-2 text-[10.5px] disabled:cursor-not-allowed"
+        disabled={busy || view.continueBlocked !== null}
+        title={view.continueBlocked ?? "Continue with the resolved files"}
+        onClick={onContinue}
+      >
+        Continue
+      </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        className="h-6 cursor-pointer px-2 text-[10.5px] text-destructive disabled:cursor-not-allowed"
+        disabled={busy}
+        onClick={onAbort}
+      >
+        Abort
+      </Button>
     </div>
   );
 }
@@ -1303,6 +1394,7 @@ const EntryRow = memo(function EntryRow({
   onSelectFile,
   onToggleStageFile,
   onDiscardFile,
+  onMarkResolved,
   onOpenFile,
 }: RowRendererProps & {
   row: Extract<RowDescriptor, { kind: "entry" }>;
@@ -1312,10 +1404,12 @@ const EntryRow = memo(function EntryRow({
   const fileName = basename(entry.path);
   const icons = useIconProvider();
   const pathLabel = entryPathLabel(entry);
-  const showDiscard = entry.unstaged;
+  const conflicted = entry.conflicted;
+  const showDiscard = entry.unstaged && !conflicted;
   const isStageBusy =
     actionBusy === `stage:${entry.path}` ||
-    actionBusy === `unstage:${entry.path}`;
+    actionBusy === `unstage:${entry.path}` ||
+    actionBusy === `resolve:${entry.path}`;
   const isDiscardBusy = actionBusy === `discard:${entry.path}`;
   const disabled = actionBusy !== null;
 
@@ -1408,6 +1502,15 @@ const EntryRow = memo(function EntryRow({
           <span className="flex size-5 shrink-0 items-center justify-center">
             {isStageBusy ? (
               <Spinner className="size-3" />
+            ) : conflicted ? (
+              <IconActionButton
+                label={`Mark ${entry.path} resolved`}
+                disabled={disabled}
+                side="top"
+                onClick={() => void onMarkResolved(entry)}
+              >
+                <HugeiconsIcon icon={Tick02Icon} size={12} strokeWidth={2} />
+              </IconActionButton>
             ) : (
               <Checkbox
                 aria-label={`Stage ${entry.path}`}
@@ -1447,11 +1550,17 @@ const EntryRow = memo(function EntryRow({
         <ContextMenuItem
           className={COMPACT_ITEM}
           disabled={disabled}
-          onSelect={() => void onToggleStageFile(entry)}
+          onSelect={() =>
+            void (conflicted ? onMarkResolved(entry) : onToggleStageFile(entry))
+          }
         >
-          {entry.checkState === "checked" ? "Unstage" : "Stage"}
+          {conflicted
+            ? "Mark Resolved"
+            : entry.checkState === "checked"
+              ? "Unstage"
+              : "Stage"}
         </ContextMenuItem>
-        {entry.unstaged ? (
+        {showDiscard ? (
           <ContextMenuItem
             className={COMPACT_ITEM}
             variant="destructive"
