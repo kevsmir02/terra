@@ -99,6 +99,13 @@ describe("on-demand panels stay lazy", () => {
     expect(files).toContain("src/modules/header/SearchInline.tsx");
     expect(files).not.toContain("src/modules/header/SearchPanel.tsx");
   });
+
+  it("reaches the replace view wrapper but not the view or its engine", () => {
+    expect(files).toContain("src/modules/search/SearchViewLazy.tsx");
+    expect(files).not.toContain("src/modules/search/SearchView.tsx");
+    expect(files).not.toContain("src/modules/search/lib/replace.ts");
+    expect(files).not.toContain("src/modules/search/lib/useReplaceSearch.ts");
+  });
 });
 
 // Desktop alerts are live state of the agents module: the notification

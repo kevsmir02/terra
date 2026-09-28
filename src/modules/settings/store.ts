@@ -1,3 +1,4 @@
+import { appStore } from "@/lib/appStore";
 import {
   DEFAULT_TERMINAL_FONT,
   migrateTerminalFont,
@@ -6,7 +7,6 @@ import {
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { normalizeAgentCommands } from "./agentCommands";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { LazyStore } from "@tauri-apps/plugin-store";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -150,7 +150,6 @@ export type LspCustomServer = {
   rootMarkers: string[];
 };
 
-const STORE_PATH = "terra-settings.json";
 const KEY_THEME = "theme";
 const KEY_THEME_ID = "themeId";
 const KEY_BG_KIND = "backgroundKind";
@@ -245,9 +244,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   lspCustomServers: [],
 };
 
-const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
+const store = appStore("settings");
 
-// LazyStore.onChange only fires within the writing process. The settings
+// store.onChange only fires within the writing process. The settings
 // page lives in a separate webview, so writes there never reach the main
 // window's subscribers. Mirror every setter through a Tauri event so any
 // window can listen.

@@ -52,8 +52,10 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   SidebarRail,
+  type SidebarViewId,
   useSidebarPanel,
 } from "@/modules/sidebar";
+import { SearchView } from "@/modules/search";
 import {
   SourceControlPanel,
   useSourceControlContext,
@@ -274,9 +276,30 @@ export default function App() {
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
+    revealSidebarView,
     persistSidebarWidth,
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
+
+  const [searchFocusToken, setSearchFocusToken] = useState(0);
+  const openSearchReplace = useCallback(() => {
+    revealSidebarView("search");
+    setSearchFocusToken((n) => n + 1);
+  }, [revealSidebarView]);
+  const selectSidebarView = useCallback(
+    (view: SidebarViewId) => {
+      const open = (sidebarRef.current?.getSize().asPercentage ?? 0) > 0;
+      if (view === "search" && !(open && sidebarView === "search")) {
+        setSearchFocusToken((n) => n + 1);
+      }
+      cycleSidebarView(view);
+    },
+    [cycleSidebarView, sidebarRef, sidebarView],
+  );
+  const dirtyEditorPaths = useMemo(
+    () => tabs.flatMap((t) => (t.kind === "editor" && t.dirty ? [t.path] : [])),
+    [tabs],
+  );
 
   const {
     dockRef,
@@ -749,6 +772,7 @@ export default function App() {
         if (activeLeafId !== null)
           terminalRefs.current.get(activeLeafId)?.copyLastOutput();
       },
+      "search.replace": openSearchReplace,
       "search.focus": () => {
         const editor = editorRefs.current.get(activeId);
         if (editor) editor.openSearch();
@@ -793,6 +817,7 @@ export default function App() {
       focusNextPaneInTab,
       swapActivePane,
       toggleSourceControl,
+      openSearchReplace,
       toggleSidebar,
       toggleExplorerFocus,
       zoomIn,
@@ -1100,6 +1125,7 @@ export default function App() {
             canStepFile,
             stepChange: stepDiffChunk,
             stepFile,
+            openSearchReplace,
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
@@ -1128,6 +1154,7 @@ export default function App() {
       openPreviewTab,
       openGitGraphFromContext,
       toggleSourceControl,
+      openSearchReplace,
       handleCloseTabOrPane,
       splitActivePaneInActiveTab,
       toggleSidebar,
@@ -1204,7 +1231,7 @@ export default function App() {
             {!zenMode && (
               <SidebarRail
                 activeView={sidebarView}
-                onSelectView={cycleSidebarView}
+                onSelectView={selectSidebarView}
                 changedCount={sourceControl.changedCount}
                 onOpenCommandPalette={() => openCommandPalette("commands")}
                 onOpenSettings={() => void openSettingsWindow()}
@@ -1257,6 +1284,13 @@ export default function App() {
                         }
                         onDropToTerminal={pastePathIntoLeaf}
                         onTerminalHover={setTerminalDropTarget}
+                      />
+                    ) : sidebarView === "search" ? (
+                      <SearchView
+                        root={explorerRoot}
+                        dirtyPaths={dirtyEditorPaths}
+                        focusToken={searchFocusToken}
+                        onOpenMatch={openContentHit}
                       />
                     ) : sidebarView === "source-control" ? (
                       <SourceControlPanel

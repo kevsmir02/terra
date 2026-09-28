@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod app_store;
 pub mod blocking;
 pub mod device;
 pub mod env;

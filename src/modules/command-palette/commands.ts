@@ -47,6 +47,7 @@ export type CommandPaletteActionContext = {
   canStepFile: boolean;
   stepChange: (dir: 1 | -1) => void;
   stepFile: (dir: 1 | -1) => void;
+  openSearchReplace: () => void;
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
@@ -270,6 +271,16 @@ export function createCommandItems(
       icon: FileSearchIcon,
       trailing: "#",
       run: noop,
+    },
+    {
+      id: "search.replace",
+      title: "Find and replace in files",
+      group: "Search",
+      keywords: ["replace", "substitute", "rename", "sed", "search in files"],
+      icon: FileSearchIcon,
+      shortcutId: "search.replace",
+      disabledReason: ctx.explorerRoot ? undefined : "No workspace root",
+      run: ctx.openSearchReplace,
     },
     {
       id: "search.focus",
