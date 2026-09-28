@@ -101,6 +101,7 @@ export function WorkspaceSurface({
           onDirtyChange={onEditorDirtyChange}
           onCloseTab={onEditorCloseTab}
           onSetMarkdownView={onSetMarkdownView}
+          onOpenCommitFile={onOpenCommitFile}
         />
       </div>
       <div

@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::modules::blocking::on_registry as blocking;
+use crate::modules::git::blame::{self, GitBlame};
 use crate::modules::git::operations;
 use crate::modules::git::review::OperationStep;
 use crate::modules::git::types::{
@@ -164,19 +165,24 @@ pub async fn git_log(
     limit: Option<u32>,
     skip: Option<u32>,
     anchor_sha: Option<String>,
+    path: Option<String>,
     app: AppHandle,
 ) -> Result<Vec<GitLogEntry>, String> {
     blocking(app, move |r| {
-        operations::log(
-            r,
-            &repo_root,
-            limit.unwrap_or(30),
-            skip.unwrap_or(0),
-            anchor_sha.as_deref(),
-        )
+        let limit = limit.unwrap_or(30);
+        let skip = skip.unwrap_or(0);
+        match path.as_deref().filter(|p| !p.is_empty()) {
+            Some(p) => operations::file_log(r, &repo_root, p, limit, skip, anchor_sha.as_deref()),
+            None => operations::log(r, &repo_root, limit, skip, anchor_sha.as_deref()),
+        }
         .map_err(Into::into)
     })
     .await
+}
+
+#[tauri::command]
+pub async fn git_blame(path: String, app: AppHandle) -> Result<GitBlame, String> {
+    blocking(app, move |r| blame::blame(r, &path).map_err(Into::into)).await
 }
 
 #[tauri::command]

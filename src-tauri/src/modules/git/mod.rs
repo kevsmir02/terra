@@ -1,5 +1,7 @@
+pub mod blame;
 pub mod commands;
 pub mod errors;
+pub mod history;
 pub mod operations;
 pub mod parser;
 mod process;

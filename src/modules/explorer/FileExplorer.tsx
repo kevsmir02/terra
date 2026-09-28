@@ -61,6 +61,7 @@ type Props = {
   onPastePath?: (path: string) => void;
   onDropToTerminal?: (leafId: number, path: string) => void;
   onTerminalHover?: (leafId: number | null) => void;
+  onShowHistory?: (path: string, isDir: boolean) => void;
   gitStatus?: GitStatusSnapshot | null;
 };
 
@@ -200,6 +201,7 @@ export const FileExplorer = memo(
       onPastePath,
       onDropToTerminal,
       onTerminalHover,
+      onShowHistory,
       gitStatus,
     },
     ref,
@@ -722,6 +724,16 @@ export const FileExplorer = memo(
                   >
                     Reveal in file manager
                   </ContextMenuItem>
+                  {onShowHistory && (
+                    <ContextMenuItem
+                      className={COMPACT_ITEM}
+                      onSelect={() =>
+                        onShowHistory(menuTarget.path, menuTarget.isDir)
+                      }
+                    >
+                      {menuTarget.isDir ? "Folder History" : "File History"}
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuSeparator />
                   <ContextMenuItem
                     className={COMPACT_ITEM}

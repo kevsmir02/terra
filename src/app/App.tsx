@@ -32,7 +32,10 @@ import {
   useEditorFileSync,
 } from "@/modules/editor";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
-import type { GitHistorySearchHandle } from "@/modules/git-history";
+import {
+  type GitHistorySearchHandle,
+  useFileHistoryOpener,
+} from "@/modules/git-history";
 import {
   Header,
   type SearchInlineHandle,
@@ -611,6 +614,8 @@ export default function App() {
       openCommitHistoryTab,
     });
   const refreshSourceControl = sourceControl.refresh;
+  const openFileHistory = useFileHistoryOpener(openCommitHistoryTab);
+  const activeEditorPath = activeTab?.kind === "editor" ? activeTab.path : null;
   const reviewStatus = sourceControl.status;
   const activeDiff = activeTab?.kind === "git-diff" ? activeTab : null;
   const canStepFile =
@@ -796,6 +801,12 @@ export default function App() {
       "diff.prevChange": () => stepDiffChunk(-1),
       "diff.nextFile": () => stepFile(1),
       "diff.prevFile": () => stepFile(-1),
+      "git.fileHistory": () => {
+        if (activeEditorPath) void openFileHistory(activeEditorPath);
+      },
+      "git.toggleBlame": () => editorRefs.current.get(activeId)?.toggleBlame(),
+      "git.openLineCommit": () =>
+        editorRefs.current.get(activeId)?.openLineCommit(),
       "editor.undo": () => editorRefs.current.get(activeId)?.undo(),
       "editor.redo": () => editorRefs.current.get(activeId)?.redo(),
       "editor.codeComplete": () =>
@@ -826,6 +837,8 @@ export default function App() {
       activateAgentTarget,
       openBroadcast,
       stepFile,
+      activeEditorPath,
+      openFileHistory,
     ],
   );
 
@@ -848,7 +861,10 @@ export default function App() {
       if (
         id === "editor.undo" ||
         id === "editor.redo" ||
-        id === "editor.codeComplete"
+        id === "editor.codeComplete" ||
+        id === "git.fileHistory" ||
+        id === "git.toggleBlame" ||
+        id === "git.openLineCommit"
       ) {
         return activeTab?.kind !== "editor";
       }
@@ -1126,6 +1142,12 @@ export default function App() {
             stepChange: stepDiffChunk,
             stepFile,
             openSearchReplace,
+            openFileHistory: () => {
+              if (activeEditorPath) void openFileHistory(activeEditorPath);
+            },
+            toggleBlame: () => editorRefs.current.get(activeId)?.toggleBlame(),
+            openLineCommit: () =>
+              void editorRefs.current.get(activeId)?.openLineCommit(),
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
@@ -1163,6 +1185,8 @@ export default function App() {
       openBroadcast,
       canStepFile,
       stepFile,
+      activeEditorPath,
+      openFileHistory,
     ],
   );
 
@@ -1284,6 +1308,7 @@ export default function App() {
                         }
                         onDropToTerminal={pastePathIntoLeaf}
                         onTerminalHover={setTerminalDropTarget}
+                        onShowHistory={openFileHistory}
                       />
                     ) : sidebarView === "search" ? (
                       <SearchView

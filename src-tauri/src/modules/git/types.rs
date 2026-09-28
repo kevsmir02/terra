@@ -154,6 +154,10 @@ pub struct GitLogEntry {
     pub files_changed: u32,
     pub insertions: u32,
     pub deletions: u32,
+    /// File history only: the followed file's name at this commit, and its
+    /// name before the commit when the commit renamed it.
+    pub path: Option<String>,
+    pub original_path: Option<String>,
 }
 
 #[derive(Serialize)]

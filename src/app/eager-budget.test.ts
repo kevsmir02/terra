@@ -118,3 +118,26 @@ describe("agent alerts load on demand", () => {
     expect([...hits.keys()]).toEqual([]);
   });
 });
+
+// Blame is a per-pane toggle: its CodeMirror extension, state field and git
+// call load on the first toggle, never with the editor stack.
+describe("blame loads on the first toggle", () => {
+  const LAZY = [
+    "src/modules/editor/lib/blame/blameExtension.ts",
+    "src/modules/editor/lib/blame/blameState.ts",
+  ];
+
+  it.each(["src/main.tsx", "src/modules/editor/EditorStack.tsx"])(
+    "%s does not reach the blame extension statically",
+    (entry) => {
+      const { files } = traceEager(entry, []);
+      expect(files).toContain(entry);
+      for (const file of LAZY) expect(files).not.toContain(file);
+    },
+  );
+
+  it("the editor stack does reach the toggle that imports it", () => {
+    const { files } = traceEager("src/modules/editor/EditorStack.tsx", []);
+    expect(files).toContain("src/modules/editor/lib/useBlame.ts");
+  });
+});

@@ -48,6 +48,9 @@ export type CommandPaletteActionContext = {
   stepChange: (dir: 1 | -1) => void;
   stepFile: (dir: 1 | -1) => void;
   openSearchReplace: () => void;
+  openFileHistory: () => void;
+  toggleBlame: () => void;
+  openLineCommit: () => void;
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
@@ -82,6 +85,7 @@ export function createCommandItems(
       ? "Pane limit"
       : undefined;
   const broadcastDisabled = !activeTerminalTab ? "No terminal tab" : undefined;
+  const noEditor = activeTab?.kind === "editor" ? undefined : "No editor tab";
   const closeDisabled =
     onlyOneTab && activePaneCount < 2 ? "Last tab" : undefined;
 
@@ -263,6 +267,36 @@ export function createCommandItems(
         run: () => (file ? ctx.stepFile : ctx.stepChange)(dir),
       };
     }),
+    {
+      id: "git.fileHistory",
+      title: "File history",
+      group: "Git",
+      keywords: ["git", "log", "history", "commits", "file", "follow"],
+      icon: SourceCodeIcon,
+      shortcutId: "git.fileHistory",
+      disabledReason: noEditor,
+      run: ctx.openFileHistory,
+    },
+    {
+      id: "git.toggleBlame",
+      title: "Toggle blame annotations",
+      group: "Git",
+      keywords: ["git", "blame", "annotate", "author", "who"],
+      icon: SourceCodeIcon,
+      shortcutId: "git.toggleBlame",
+      disabledReason: noEditor,
+      run: ctx.toggleBlame,
+    },
+    {
+      id: "git.openLineCommit",
+      title: "Open the current line's commit",
+      group: "Git",
+      keywords: ["git", "blame", "commit", "diff", "line"],
+      icon: SourceCodeIcon,
+      shortcutId: "git.openLineCommit",
+      disabledReason: noEditor,
+      run: ctx.openLineCommit,
+    },
     {
       id: "search.content",
       title: "Find content in files",
