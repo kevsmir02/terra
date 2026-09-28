@@ -3,6 +3,9 @@ use std::path::Path;
 
 use crate::modules::git::errors::{GitError, Result};
 use crate::modules::git::parser::parse_porcelain_v2;
+use crate::modules::git::review::{
+    diff_sources, has_conflict_markers, operation_argv, operation_in, DiffSource, OperationStep,
+};
 use crate::modules::git::process::{
     ensure_git_available, ensure_success, git_show_text, git_stdout_line_opt, git_stdout_lines,
     read_text_file, run_git,
@@ -10,8 +13,8 @@ use crate::modules::git::process::{
 use crate::modules::git::types::{
     DiscardEntry, GitBranchEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
     GitDiffContentResult, GitDiffResult, GitLogEntry, GitOutput, GitPanelSnapshot,
-    GitPushResult, GitRepoInfo, GitStatusSnapshot, TextSource, DEFAULT_TIMEOUT_SECS,
-    NETWORK_TIMEOUT_SECS,
+    GitPushResult, GitRepoInfo, GitStatusSnapshot, RepoOperation, TextSource,
+    DEFAULT_TIMEOUT_SECS, NETWORK_TIMEOUT_SECS,
     GitStashEntry,
 };
 use crate::modules::git::utils::{
@@ -146,6 +149,7 @@ fn status_inner(repo_root: &ResolvedGitDirectory) -> Result<GitStatusSnapshot> {
         behind: parsed.behind,
         is_detached: parsed.is_detached,
         truncated: output.truncated,
+        operation: operation_in(&repo_root.local_path),
         changed_files: parsed.files,
     })
 }
@@ -215,37 +219,64 @@ pub fn diff_content(
         _ => None,
     };
 
-    let original = if staged {
-        let spec = original_rel.as_deref().unwrap_or(&rel_path);
-        git_show_text(
-            &repo_root.git_path,
-            &format!("HEAD:{spec}"),
-        )?
-    } else {
-        git_show_text(
-            &repo_root.git_path,
-            &format!(":{rel_path}"),
-        )?
-    };
-    let modified = if staged {
-        git_show_text(
-            &repo_root.git_path,
-            &format!(":{rel_path}"),
-        )?
-    } else {
-        read_text_file(&worktree_path)?
-    };
-    let patch = diff_inner(&repo_root, Some(&rel_path), staged)?;
+    let conflicted = is_unmerged(&repo_root.git_path, &rel_path)?;
+    let (original_src, modified_src) =
+        diff_sources(staged, conflicted, &rel_path, original_rel.as_deref());
+    let original = read_source(&repo_root.git_path, &worktree_path, &original_src)?;
+    let modified = read_source(&repo_root.git_path, &worktree_path, &modified_src)?;
+    let patch = diff_inner(&repo_root, Some(&rel_path), staged && !conflicted)?;
+    Ok(content_result(original, modified, patch.diff_text, patch.truncated, conflicted))
+}
+
+fn read_source(git_path: &str, worktree_path: &Path, source: &DiffSource) -> Result<TextSource> {
+    match source {
+        DiffSource::Blob(spec) => git_show_text(git_path, spec),
+        DiffSource::Worktree => read_text_file(worktree_path),
+    }
+}
+
+fn is_unmerged(git_path: &str, rel_path: &str) -> Result<bool> {
+    let output = run_git(
+        Some(git_path),
+        [
+            OsStr::new("ls-files"),
+            OsStr::new("--unmerged"),
+            OsStr::new("--"),
+            OsStr::new(rel_path),
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git ls-files --unmerged failed")?;
+    Ok(!output.stdout.is_empty())
+}
+
+fn content_result(
+    original: TextSource,
+    modified: TextSource,
+    fallback_patch: String,
+    truncated: bool,
+    conflict: bool,
+) -> GitDiffContentResult {
     let is_binary =
         matches!(original, TextSource::Binary) || matches!(modified, TextSource::Binary);
-
-    Ok(GitDiffContentResult {
-        original_content: original.into_text(),
-        modified_content: modified.into_text(),
+    let too_large =
+        matches!(original, TextSource::TooLarge) || matches!(modified, TextSource::TooLarge);
+    // Both sides go together: showing one side's content against an empty
+    // other would render as a whole-file add or delete.
+    let (original_content, modified_content) = if too_large || is_binary {
+        (String::new(), String::new())
+    } else {
+        (original.into_text(), modified.into_text())
+    };
+    GitDiffContentResult {
+        original_content,
+        modified_content,
         is_binary,
-        fallback_patch: patch.diff_text,
-        truncated: patch.truncated,
-    })
+        fallback_patch,
+        truncated,
+        too_large,
+        conflict,
+    }
 }
 
 pub fn stage(
@@ -507,6 +538,77 @@ pub fn create_branch(
     ensure_success(&output, "git switch -c failed")
 }
 
+/// Aborts or continues the operation the repo is stopped in. The caller names
+/// the operation it showed the user; if the repo has moved on since (finished
+/// in the terminal, or a different one started) nothing runs.
+pub fn step_operation(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    expected: &str,
+    step: OperationStep,
+) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let expected = RepoOperation::parse(expected)
+        .ok_or_else(|| GitError::command("git operation", "unknown operation"))?;
+    if operation_in(&repo_root.local_path) != Some(expected) {
+        return Err(GitError::command(
+            "git operation",
+            "the repository is no longer in that state; refresh and retry",
+        ));
+    }
+    if step == OperationStep::Continue && has_unmerged_paths(&repo_root.git_path)? {
+        return Err(GitError::command(
+            "git operation",
+            "resolve every conflicted file before continuing",
+        ));
+    }
+    let output = run_git(
+        Some(&repo_root.git_path),
+        operation_argv(expected, step),
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git operation failed")
+}
+
+fn has_unmerged_paths(git_path: &str) -> Result<bool> {
+    let output = run_git(Some(git_path), ["ls-files", "--unmerged"], DEFAULT_TIMEOUT_SECS)?;
+    ensure_success(&output, "git ls-files --unmerged failed")?;
+    Ok(!output.stdout.is_empty())
+}
+
+/// `git add` for one unmerged path, refused while the worktree copy still
+/// carries conflict markers so a half-resolved file is never recorded as done.
+pub fn mark_resolved(registry: &WorkspaceRegistry, repo_root: &str, path: &str) -> Result<()> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let worktree_path = resolve_within_repo(&repo_root.local_path, path)?;
+    let rel_path = pathspec(&repo_root.local_path, &worktree_path);
+    if !is_unmerged(&repo_root.git_path, &rel_path)? {
+        return Err(GitError::command("git add", "that file has no conflict to resolve"));
+    }
+    match read_text_file(&worktree_path)? {
+        TextSource::Text(text) if has_conflict_markers(&text) => {
+            return Err(GitError::command(
+                "git add",
+                "the file still contains conflict markers",
+            ));
+        }
+        _ => {}
+    }
+    let output = run_git(
+        Some(&repo_root.git_path),
+        [
+            OsStr::new("add"),
+            OsStr::new("--all"),
+            OsStr::new("--"),
+            OsStr::new(&rel_path),
+        ],
+        DEFAULT_TIMEOUT_SECS,
+    )?;
+    ensure_success(&output, "git add failed")
+}
+
 /// The shapes git check-ref-format --branch accepts, minus anything that
 /// could read as an argument: no leading dash, no whitespace or control
 /// bytes, none of git's reserved punctuation, no empty or dot-led components.
@@ -569,23 +671,30 @@ pub fn push(
 const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 const MAX_LOG_LIMIT: u32 = 200;
 
+/// Pages by offset from a fixed anchor. `<last shown>^` only walks the first
+/// parent of the last row, so when that row sits on a merged side branch every
+/// newer mainline commit is skipped; the same rev set and order with `--skip`
+/// resumes exactly where the previous page stopped, and pinning the anchor to
+/// the first page's head keeps a commit made in between from shifting pages.
 pub fn log(
     registry: &WorkspaceRegistry,
     repo_root: &str,
     limit: u32,
-    before_sha: Option<&str>,
+    skip: u32,
+    anchor_sha: Option<&str>,
 ) -> Result<Vec<GitLogEntry>> {
     let repo_root = authorized_repo_root(registry, repo_root)?;
     ensure_git_available()?;
     let bounded = limit.clamp(1, MAX_LOG_LIMIT);
     let count_arg = format!("--max-count={bounded}");
+    let skip_arg = format!("--skip={skip}");
     let format_arg = format!("--format={LOG_FORMAT}");
-    let cursor = match before_sha {
+    let anchor = match anchor_sha {
         Some(sha) if !sha.is_empty() => {
             if !sha_is_safe(sha) {
-                return Err(GitError::command("git log", "invalid cursor sha"));
+                return Err(GitError::command("git log", "invalid anchor sha"));
             }
-            Some(format!("{sha}^"))
+            Some(sha)
         }
         _ => None,
     };
@@ -596,8 +705,12 @@ pub fn log(
         OsStr::new(&count_arg),
         OsStr::new(&format_arg),
     ];
-    if let Some(spec) = cursor.as_deref() {
-        args.push(OsStr::new(spec));
+    if skip > 0 {
+        args.push(OsStr::new(&skip_arg));
+    }
+    if let Some(sha) = anchor {
+        args.push(OsStr::new(sha));
+        args.push(OsStr::new("--"));
     }
     let output = run_git(
         Some(&repo_root.git_path),
@@ -864,16 +977,13 @@ pub fn commit_file_diff(
         Err(e) => String::from_utf8_lossy(&e.into_bytes()).into_owned(),
     };
 
-    let is_binary =
-        matches!(original, TextSource::Binary) || matches!(modified, TextSource::Binary);
-
-    Ok(GitDiffContentResult {
-        original_content: original.into_text(),
-        modified_content: modified.into_text(),
-        is_binary,
-        fallback_patch: patch_text,
-        truncated: patch_output.truncated,
-    })
+    Ok(content_result(
+        original,
+        modified,
+        patch_text,
+        patch_output.truncated,
+        false,
+    ))
 }
 
 pub fn remote_url(

@@ -2,6 +2,7 @@ use tauri::AppHandle;
 
 use crate::modules::blocking::on_registry as blocking;
 use crate::modules::git::operations;
+use crate::modules::git::review::OperationStep;
 use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
     GitDiffContentResult, GitDiffResult, GitLogEntry, GitPanelSnapshot, GitPushResult,
@@ -161,7 +162,8 @@ pub async fn git_push(
 pub async fn git_log(
     repo_root: String,
     limit: Option<u32>,
-    before_sha: Option<String>,
+    skip: Option<u32>,
+    anchor_sha: Option<String>,
     app: AppHandle,
 ) -> Result<Vec<GitLogEntry>, String> {
     blocking(app, move |r| {
@@ -169,7 +171,8 @@ pub async fn git_log(
             r,
             &repo_root,
             limit.unwrap_or(30),
-            before_sha.as_deref(),
+            skip.unwrap_or(0),
+            anchor_sha.as_deref(),
         )
         .map_err(Into::into)
     })
@@ -308,6 +311,44 @@ pub async fn git_create_branch(
 ) -> Result<(), String> {
     blocking(app, move |r| {
         operations::create_branch(r, &repo_root, &name).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_abort(
+    repo_root: String,
+    operation: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::step_operation(r, &repo_root, &operation, OperationStep::Abort)
+            .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_operation_continue(
+    repo_root: String,
+    operation: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::step_operation(r, &repo_root, &operation, OperationStep::Continue)
+            .map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_mark_resolved(
+    repo_root: String,
+    path: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        operations::mark_resolved(r, &repo_root, &path).map_err(Into::into)
     })
     .await
 }

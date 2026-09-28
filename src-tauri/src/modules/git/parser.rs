@@ -93,7 +93,10 @@ fn parse_unmerged(rest: &str) -> Option<GitChangedFile> {
     let xy = rest.get(..2)?;
     let path = skip_fields(rest, 9)?;
     let (i, w) = xy_chars(xy);
-    Some(make_file(i, w, path, None))
+    Some(GitChangedFile {
+        conflicted: true,
+        ..make_file(i, w, path, None)
+    })
 }
 
 // porcelain v2 uses '.' to mean "unchanged"; downstream logic mirrors v1 spaces.
@@ -120,6 +123,7 @@ fn make_file(
         staged: is_staged(index_status, worktree_status),
         unstaged: is_unstaged(index_status, worktree_status),
         untracked: index_status == '?' && worktree_status == '?',
+        conflicted: false,
         status_label: status_label(index_status, worktree_status),
     }
 }
@@ -238,6 +242,20 @@ mod tests {
         assert_eq!(f.status_label, "Unmerged");
         assert!(f.staged);
         assert!(f.unstaged);
+        assert!(f.conflicted);
+    }
+
+    // Both-added and deleted-by-them carry no U in XY, so the record kind is
+    // the only reliable conflict signal.
+    #[test]
+    fn every_unmerged_record_is_conflicted_and_ordinary_ones_are_not() {
+        for xy in ["AA", "DD", "AU", "UD", "UA", "DU"] {
+            let line = format!("u {xy} N... 100644 100644 100644 100644 a b c f.rs\0");
+            assert!(parse_porcelain_v2(&line).files[0].conflicted, "{xy}");
+        }
+        for xy in ["MM", "A.", ".D"] {
+            assert!(!parse_porcelain_v2(&ordinary(xy, "f.rs")).files[0].conflicted, "{xy}");
+        }
     }
 
     #[test]

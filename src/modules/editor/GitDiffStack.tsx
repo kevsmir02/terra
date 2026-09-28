@@ -4,9 +4,10 @@ import { GitDiffPane } from "./GitDiffPane";
 type Props = {
   tabs: Tab[];
   activeId: number;
+  onRepoChanged?: () => void;
 };
 
-export function GitDiffStack({ tabs, activeId }: Props) {
+export function GitDiffStack({ tabs, activeId, onRepoChanged }: Props) {
   const active = tabs.find(
     (t): t is GitDiffTab | GitCommitFileDiffTab =>
       (t.kind === "git-diff" || t.kind === "git-commit-file") &&
@@ -19,6 +20,7 @@ export function GitDiffStack({ tabs, activeId }: Props) {
         <GitDiffPane
           key={active.id}
           active
+          onRepoChanged={onRepoChanged}
           source={{
             kind: "working",
             repoRoot: active.repoRoot,

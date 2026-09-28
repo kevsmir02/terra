@@ -122,6 +122,9 @@ pub fn git_show_text(repo_root: &str, spec: &str) -> Result<TextSource> {
     if output.exit_code != Some(0) {
         return Ok(TextSource::Missing);
     }
+    if output.truncated {
+        return Ok(TextSource::TooLarge);
+    }
     Ok(decode_text(output.stdout))
 }
 
@@ -181,13 +184,8 @@ pub fn read_text_file(path: &Path) -> Result<TextSource> {
     if !meta.is_file() {
         return Ok(TextSource::Missing);
     }
-    let size = meta.len();
-    if size > MAX_FILE_BYTES {
-        return Err(GitError::FileTooLarge {
-            path: path.to_path_buf(),
-            size,
-            max: MAX_FILE_BYTES,
-        });
+    if meta.len() > MAX_FILE_BYTES {
+        return Ok(TextSource::TooLarge);
     }
     let bytes = std::fs::read(path)?;
     Ok(decode_text(bytes))
@@ -227,6 +225,9 @@ where
         .env("GCM_INTERACTIVE", "Never")
         .env("GCM_PROVIDER", "")
         .env("LC_ALL", "C")
+        // stdin is null, so an editor could only hang until the timeout; a
+        // continued merge or rebase keeps the message git prepared.
+        .env("GIT_EDITOR", "true")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

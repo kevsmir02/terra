@@ -1,16 +1,22 @@
-import {
-  native,
-  type GitChangedFile,
-  type GitDiscardEntry,
-  type GitRepoInfo,
-  type GitStatusSnapshot,
+import type {
+  GitChangedFile,
+  GitDiscardEntry,
+  GitRepoInfo,
+  GitStatusSnapshot,
 } from "@/lib/native";
+import { gitIpc } from "./lib/gitIpc";
 import {
   invalidateDiff,
   invalidateRepoDiffs,
   workingDiffKey,
 } from "@/modules/editor/lib/diffCache";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type OperationBannerView,
+  operationBanner,
+  repoOperation,
+} from "./lib/repoOperation";
+import { useReviewAutoRefresh } from "./lib/reviewRefresh";
 import type { SourceControlSummary } from "./useSourceControl";
 
 type PanelState = "closed" | "loading" | "no-repo" | "ready" | "error";
@@ -49,6 +55,7 @@ export type SourceControlFileEntry = {
   staged: boolean;
   unstaged: boolean;
   untracked: boolean;
+  conflicted: boolean;
 };
 
 export type PendingDiscard = {
@@ -82,6 +89,13 @@ type SourceControlPanelState = {
   stagedEmptyText: string;
   unstagedEmptyText: string;
   pendingDiscard: PendingDiscard | null;
+  operation: OperationBannerView | null;
+  pendingAbort: boolean;
+  requestAbortOperation: () => void;
+  cancelAbortOperation: () => void;
+  confirmAbortOperation: () => Promise<void>;
+  continueOperation: () => Promise<void>;
+  markResolved: (entry: SourceControlFileEntry) => Promise<void>;
   setCommitMessage: (value: string) => void;
   refresh: () => Promise<void>;
   selectEntry: (entry: SourceControlEntry) => Promise<void>;
@@ -219,6 +233,7 @@ function optimisticUnstage(
         staged: false,
         unstaged: true,
         untracked: false,
+        conflicted: false,
         statusLabel: "Deleted",
       });
       next.push({
@@ -229,6 +244,7 @@ function optimisticUnstage(
         staged: false,
         unstaged: true,
         untracked: true,
+        conflicted: false,
         statusLabel: "Untracked",
       });
       continue;
@@ -276,6 +292,7 @@ function optimisticDiscard(
 
 export function useSourceControlPanel(
   isOpen: boolean,
+  visible: boolean,
   summary: SourceControlSummary,
   onOpenDiff:
     | ((input: {
@@ -284,8 +301,9 @@ export function useSourceControlPanel(
         mode: DiffMode;
         originalPath: string | null;
         title?: string;
-      }) => void)
+      }) => unknown)
     | null,
+  activeDiff: DiffSelection | null = null,
 ): SourceControlPanelState {
   const [panelState, setPanelState] = useState<PanelState>("closed");
   const [repo, setRepo] = useState<GitRepoInfo | null>(null);
@@ -303,12 +321,27 @@ export function useSourceControlPanel(
     | { scope: "all"; entries: SourceControlEntry[] }
     | null
   >(null);
+  const [pendingAbort, setPendingAbort] = useState(false);
   const selectedRef = useRef<DiffSelection | null>(null);
+  useReviewAutoRefresh(isOpen && visible && repo ? repo.repoRoot : null, () =>
+    summary.refresh({ remote: "never" }),
+  );
   const reconcileTimerRef = useRef(0);
 
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  const activePath = activeDiff?.path ?? null;
+  const activeMode = activeDiff?.mode ?? null;
+  useEffect(() => {
+    if (!activePath || !activeMode) return;
+    setSelected((cur) =>
+      cur?.path === activePath && cur.mode === activeMode
+        ? cur
+        : { path: activePath, mode: activeMode },
+    );
+  }, [activePath, activeMode]);
 
   const stagedEntries = useMemo(
     () =>
@@ -338,9 +371,11 @@ export function useSourceControlPanel(
           : file.staged
             ? "checked"
             : "unchecked";
-      const statusCode = file.unstaged
-        ? statusCodeForMode("-", file)
-        : statusCodeForMode("+", file);
+      const statusCode = file.conflicted
+        ? "U"
+        : file.unstaged
+          ? statusCodeForMode("-", file)
+          : statusCodeForMode("+", file);
       out.push({
         key: file.path,
         path: file.path,
@@ -351,10 +386,22 @@ export function useSourceControlPanel(
         staged: file.staged,
         unstaged: file.unstaged,
         untracked: file.untracked,
+        conflicted: file.conflicted,
       });
     }
     return out;
   }, [status]);
+
+  const conflictCount = useMemo(
+    () => fileEntries.filter((e) => e.conflicted).length,
+    [fileEntries],
+  );
+  const operationKind = status?.operation ?? null;
+  const operation = useMemo(
+    () =>
+      operationKind ? operationBanner(operationKind, conflictCount) : null,
+    [operationKind, conflictCount],
+  );
 
   const headerCheckState = useMemo<CheckState>(() => {
     if (fileEntries.length === 0) return "unchecked";
@@ -562,7 +609,7 @@ export function useSourceControlPanel(
       await runMutation(
         `stage:${entry.path}`,
         (s) => optimisticStage(s, paths),
-        () => native.gitStage(repo.repoRoot, [entry.path]),
+        () => gitIpc.gitStage(repo.repoRoot, [entry.path]),
         [entry.path],
       );
     },
@@ -576,7 +623,7 @@ export function useSourceControlPanel(
       await runMutation(
         `unstage:${entry.path}`,
         (s) => optimisticUnstage(s, paths),
-        () => native.gitUnstage(repo.repoRoot, [entry.path]),
+        () => gitIpc.gitUnstage(repo.repoRoot, [entry.path]),
         [entry.path],
       );
     },
@@ -617,7 +664,7 @@ export function useSourceControlPanel(
         ? `discard:${list[0].path}`
         : "discard:all",
       (s) => optimisticDiscard(s, paths),
-      () => native.gitDiscard(repo.repoRoot, entries),
+      () => gitIpc.gitDiscard(repo.repoRoot, entries),
       [...paths],
     );
   }, [pendingDiscard, repo, runMutation]);
@@ -628,7 +675,7 @@ export function useSourceControlPanel(
     await runMutation(
       "stage:all",
       (s) => optimisticStage(s, paths),
-      () => native.gitStage(repo.repoRoot, [...paths]),
+      () => gitIpc.gitStage(repo.repoRoot, [...paths]),
       [...paths],
     );
   }, [repo, runMutation, unstagedEntries]);
@@ -639,7 +686,7 @@ export function useSourceControlPanel(
     await runMutation(
       "unstage:all",
       (s) => optimisticUnstage(s, paths),
-      () => native.gitUnstage(repo.repoRoot, [...paths]),
+      () => gitIpc.gitUnstage(repo.repoRoot, [...paths]),
       [...paths],
     );
   }, [repo, runMutation, stagedEntries]);
@@ -665,27 +712,45 @@ export function useSourceControlPanel(
     [openSelection, repo, selected, status],
   );
 
+  const markResolved = useCallback(
+    async (entry: SourceControlFileEntry) => {
+      if (!repo || !entry.conflicted) return;
+      const root = repo.repoRoot;
+      await runMutation(
+        `resolve:${entry.path}`,
+        null,
+        () => repoOperation.markResolved(root, entry.path),
+        [entry.path],
+      );
+    },
+    [repo, runMutation],
+  );
+
   const toggleStageFile = useCallback(
     async (entry: SourceControlFileEntry) => {
       if (!repo) return;
+      if (entry.conflicted) {
+        await markResolved(entry);
+        return;
+      }
       const paths = new Set([entry.path]);
       if (entry.checkState === "checked") {
         await runMutation(
           `unstage:${entry.path}`,
           (s) => optimisticUnstage(s, paths),
-          () => native.gitUnstage(repo.repoRoot, [entry.path]),
+          () => gitIpc.gitUnstage(repo.repoRoot, [entry.path]),
           [entry.path],
         );
       } else {
         await runMutation(
           `stage:${entry.path}`,
           (s) => optimisticStage(s, paths),
-          () => native.gitStage(repo.repoRoot, [entry.path]),
+          () => gitIpc.gitStage(repo.repoRoot, [entry.path]),
           [entry.path],
         );
       }
     },
-    [repo, runMutation],
+    [markResolved, repo, runMutation],
   );
 
   const toggleAll = useCallback(async () => {
@@ -725,8 +790,8 @@ export function useSourceControlPanel(
     setActionError(null);
     try {
       const result = amend
-        ? await native.gitCommitAmend(repo.repoRoot, commitMessage)
-        : await native.gitCommit(repo.repoRoot, commitMessage);
+        ? await gitIpc.gitCommitAmend(repo.repoRoot, commitMessage)
+        : await gitIpc.gitCommit(repo.repoRoot, commitMessage);
       setCommitMessage("");
       setAmend(false);
       setActionMessage(
@@ -766,7 +831,7 @@ export function useSourceControlPanel(
     if (!repo) return;
     const root = repo.repoRoot;
     await runTreeAction("stash", async () =>
-      (await native.gitStashPush(root, ""))
+      (await gitIpc.gitStashPush(root, ""))
         ? "Stashed the working tree"
         : "Nothing to stash",
     );
@@ -776,7 +841,7 @@ export function useSourceControlPanel(
     if (!repo) return;
     const root = repo.repoRoot;
     await runTreeAction("stash", async () => {
-      await native.gitStashPop(root);
+      await gitIpc.gitStashPop(root);
       return "Applied the latest stash";
     });
   }, [repo, runTreeAction]);
@@ -786,12 +851,39 @@ export function useSourceControlPanel(
       if (!repo) return false;
       const root = repo.repoRoot;
       return runTreeAction("branch", async () => {
-        await native.gitCreateBranch(root, name);
+        await gitIpc.gitCreateBranch(root, name);
         return `Switched to new branch ${name}`;
       });
     },
     [repo, runTreeAction],
   );
+
+  const requestAbortOperation = useCallback(() => {
+    if (operationKind && !summary.busyAction) setPendingAbort(true);
+  }, [operationKind, summary.busyAction]);
+
+  const cancelAbortOperation = useCallback(() => setPendingAbort(false), []);
+
+  const confirmAbortOperation = useCallback(async () => {
+    setPendingAbort(false);
+    if (!repo || !operationKind) return;
+    const root = repo.repoRoot;
+    const kind = operationKind;
+    await runTreeAction("operation", async () => {
+      await repoOperation.abort(root, kind);
+      return `Aborted the ${kind}`;
+    });
+  }, [operationKind, repo, runTreeAction]);
+
+  const continueOperation = useCallback(async () => {
+    if (!repo || !operationKind || operation?.continueBlocked) return;
+    const root = repo.repoRoot;
+    const kind = operationKind;
+    await runTreeAction("operation", async () => {
+      await repoOperation.continue(root, kind);
+      return `Continued the ${kind}`;
+    });
+  }, [operation, operationKind, repo, runTreeAction]);
 
   const push = useCallback(async () => {
     if (!repo) return;
@@ -852,6 +944,13 @@ export function useSourceControlPanel(
     stagedEmptyText,
     unstagedEmptyText,
     pendingDiscard: pendingDiscardView,
+    operation,
+    pendingAbort,
+    requestAbortOperation,
+    cancelAbortOperation,
+    confirmAbortOperation,
+    continueOperation,
+    markResolved,
     setCommitMessage,
     refresh,
     selectEntry,

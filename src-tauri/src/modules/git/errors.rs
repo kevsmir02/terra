@@ -11,11 +11,6 @@ pub enum GitError {
     NotADirectory(String),
     PathOutsideWorkspace(PathBuf),
     InvalidPath(String),
-    FileTooLarge {
-        path: PathBuf,
-        size: u64,
-        max: u64,
-    },
     SymlinkRejected(PathBuf),
     NoUpstream,
     AuthRequired(String),
@@ -57,11 +52,6 @@ impl Display for GitError {
                 p.display()
             ),
             GitError::InvalidPath(p) => write!(f, "invalid path: {p}"),
-            GitError::FileTooLarge { path, size, max } => write!(
-                f,
-                "file too large to diff ({size} bytes, max {max}): {}",
-                path.display()
-            ),
             GitError::SymlinkRejected(p) => {
                 write!(f, "refusing to follow symlink: {}", p.display())
             }

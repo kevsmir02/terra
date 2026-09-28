@@ -3,6 +3,7 @@ import {
   getBindingTokens,
   type KeyBinding,
   matchBinding,
+  SHORTCUT_GROUPS,
   SHORTCUTS,
   type ShortcutId,
 } from "./shortcuts";
@@ -154,5 +155,34 @@ describe("terminal key shortcuts", () => {
         byId("terminal.copy").defaultBindings[0],
       ),
     ).toBe(false);
+  });
+});
+
+describe("diff review defaults", () => {
+  const ids = [
+    "diff.nextChange",
+    "diff.prevChange",
+    "diff.nextFile",
+    "diff.prevFile",
+  ] as const;
+
+  it("are listed under a group the settings page renders", () => {
+    for (const id of ids) {
+      expect(SHORTCUT_GROUPS).toContain(byId(id).group);
+    }
+  });
+
+  it("tell the change and file steps apart by modifier alone", () => {
+    const hits = (e: KeyboardEvent) =>
+      ids.filter((id) =>
+        byId(id).defaultBindings.some((b) => matchBinding(e, b, id)),
+      );
+    expect(hits(event({ key: "F7", code: "F7" }))).toEqual(["diff.nextChange"]);
+    expect(hits(event({ key: "F7", code: "F7", shiftKey: true }))).toEqual([
+      "diff.prevChange",
+    ]);
+    expect(hits(event({ key: "F7", code: "F7", ctrlKey: true }))).toEqual([
+      "diff.nextFile",
+    ]);
   });
 });

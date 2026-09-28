@@ -59,6 +59,10 @@ import {
   useSourceControlContext,
 } from "@/modules/source-control";
 import {
+  canStepDiffChunk,
+  stepDiffChunk,
+} from "@/modules/editor/lib/diffNavigation";
+import {
   SpaceSwitcher,
   useSpacePersistence,
   useSpaceStartup,
@@ -583,6 +587,28 @@ export default function App() {
       cycleSidebarView,
       openCommitHistoryTab,
     });
+  const refreshSourceControl = sourceControl.refresh;
+  const reviewStatus = sourceControl.status;
+  const activeDiff = activeTab?.kind === "git-diff" ? activeTab : null;
+  const canStepFile =
+    (!!activeDiff || sidebarView === "source-control") &&
+    !!reviewStatus?.changedFiles.length;
+  // Stepping replaces the diff tab it starts from, the way a review walks one
+  // file at a time instead of leaving a tab per file behind.
+  const stepFile = useCallback(
+    (dir: 1 | -1) => {
+      if (!canStepFile || !reviewStatus) return;
+      const root = reviewStatus.repoRoot;
+      const from = activeDiff?.repoRoot === root ? activeDiff : null;
+      void import("@/modules/source-control/lib/reviewNav").then((m) => {
+        const next = m.stepChangedFile(reviewStatus.changedFiles, from, dir);
+        if (!next) return;
+        const id = openGitDiffTab({ repoRoot: root, ...next });
+        if (from && id !== from.id) disposeTab(from.id);
+      });
+    },
+    [canStepFile, reviewStatus, activeDiff, openGitDiffTab, disposeTab],
+  );
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
@@ -742,6 +768,10 @@ export default function App() {
       "view.zoomOut": zoomOut,
       "view.zoomReset": zoomReset,
       "view.zenMode": () => setZenMode((v) => !v),
+      "diff.nextChange": () => stepDiffChunk(1),
+      "diff.prevChange": () => stepDiffChunk(-1),
+      "diff.nextFile": () => stepFile(1),
+      "diff.prevFile": () => stepFile(-1),
       "editor.undo": () => editorRefs.current.get(activeId)?.undo(),
       "editor.redo": () => editorRefs.current.get(activeId)?.redo(),
       "editor.codeComplete": () =>
@@ -770,6 +800,7 @@ export default function App() {
       zoomReset,
       activateAgentTarget,
       openBroadcast,
+      stepFile,
     ],
   );
 
@@ -783,6 +814,12 @@ export default function App() {
       // With nothing to resume the chord falls through to the shell.
       if (id === "agent.resume")
         return activeLeafId === null || !hasResumeOffer(activeLeafId);
+      if (id === "diff.nextChange" || id === "diff.prevChange") {
+        return !canStepDiffChunk();
+      }
+      if (id === "diff.nextFile" || id === "diff.prevFile") {
+        return !canStepFile;
+      }
       if (
         id === "editor.undo" ||
         id === "editor.redo" ||
@@ -821,7 +858,7 @@ export default function App() {
       }
       return false;
     },
-    [activeTab, activeLeafId],
+    [activeTab, activeLeafId, canStepFile],
   );
 
   useGlobalShortcuts(shortcutHandlers, { isDisabled: shortcutsDisabled });
@@ -1059,6 +1096,10 @@ export default function App() {
             openNewPreview: () => openPreviewTab(""),
             openGitGraph: openGitGraphFromContext,
             toggleSourceControl,
+            canStepChange: canStepDiffChunk(),
+            canStepFile,
+            stepChange: stepDiffChunk,
+            stepFile,
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
@@ -1093,6 +1134,8 @@ export default function App() {
       activeSpaceId,
       handleNewSpace,
       openBroadcast,
+      canStepFile,
+      stepFile,
     ],
   );
 
@@ -1218,6 +1261,7 @@ export default function App() {
                     ) : sidebarView === "source-control" ? (
                       <SourceControlPanel
                         open
+                        activeDiff={activeDiff}
                         sourceControl={sourceControl}
                         onOpenDiff={openGitDiffTab}
                         onOpenGitGraph={openGitGraphFromContext}
@@ -1253,6 +1297,7 @@ export default function App() {
                       registerPreviewHandle={registerPreviewHandle}
                       onPreviewUrlChange={handlePreviewUrl}
                       onOpenCommitFile={openCommitFileDiffTab}
+                      onRepoChanged={refreshSourceControl}
                       onGitHistorySearchHandle={setGitHistoryHandle}
                       onSetMarkdownView={setMarkdownView}
                     />

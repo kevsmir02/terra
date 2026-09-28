@@ -36,7 +36,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { type GitBranchEntry, type GitStashEntry, native } from "@/lib/native";
+import type { GitBranchEntry, GitStashEntry } from "@/lib/native";
+import { gitIpc } from "./lib/gitIpc";
 import {
   copyToClipboard,
   revealInFinder,
@@ -79,6 +80,7 @@ import {
   type ReactNode,
 } from "react";
 import type { SourceControlSummary } from "./useSourceControl";
+import type { OperationBannerView } from "./lib/repoOperation";
 import {
   useSourceControlPanel,
   type CheckState,
@@ -87,6 +89,8 @@ import {
 
 type Props = {
   open: boolean;
+  /** The working-tree diff tab in front, so the list follows keyboard review. */
+  activeDiff?: { path: string; mode: "+" | "-" } | null;
   sourceControl: SourceControlSummary;
   onOpenGitGraph?: () => void;
   onOpenDiff: (input: {
@@ -111,6 +115,7 @@ const ROW_HEIGHTS = {
 
 type RowDescriptor =
   | { kind: "banner-diverged"; key: string }
+  | { kind: "banner-truncated"; key: string }
   | { kind: "list-header"; key: string; count: number }
   | { kind: "entry"; key: string; entry: SourceControlFileEntry };
 
@@ -192,7 +197,7 @@ function BranchDropdown({
     setLoading(true);
     setError(null);
     try {
-      const result = await native.gitListBranches(repoRoot);
+      const result = await gitIpc.gitListBranches(repoRoot);
       if (id !== requestRef.current) return;
       setBranches(result.branches);
     } catch (e) {
@@ -218,7 +223,7 @@ function BranchDropdown({
       checkoutInFlight.current = true;
       setCheckingOut(true);
       try {
-        await native.gitCheckoutBranch(repoRoot, branch);
+        await gitIpc.gitCheckoutBranch(repoRoot, branch);
         setBranches([]);
         setOpen(false);
         onRefresh();
@@ -388,7 +393,7 @@ function StashDropdown({
     if (!open || !repoRoot) return;
     let alive = true;
     setStashes(null);
-    native
+    gitIpc
       .gitStashList(repoRoot)
       .then((list) => {
         if (alive) setStashes(list);
@@ -457,13 +462,37 @@ function StashDropdown({
 
 export const SourceControlPanel = memo(function SourceControlPanel({
   open,
+  activeDiff,
   sourceControl,
   onOpenGitGraph,
   onOpenDiff,
   onOpenFile,
   onNavigateToPath,
 }: Props) {
-  const scm = useSourceControlPanel(open, sourceControl, onOpenDiff);
+  const [visible, setVisible] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  // The panel stays mounted while the sidebar is collapsed to zero width; the
+  // auto refresh should only run while it can actually be seen.
+  const asideRef = useCallback((el: HTMLElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) {
+      setVisible(false);
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setVisible((entry?.contentRect.width ?? 0) > 0);
+    });
+    observer.observe(el);
+    observerRef.current = observer;
+  }, []);
+  const scm = useSourceControlPanel(
+    open,
+    visible,
+    sourceControl,
+    onOpenDiff,
+    activeDiff ?? null,
+  );
   const refreshAnimationRef = useRef<number | null>(null);
   const [refreshAnimating, setRefreshAnimating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -510,6 +539,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   const hasUpstream = !!scm.status?.upstream;
   const isDiverged =
     !!scm.status && scm.status.ahead > 0 && scm.status.behind > 0;
+  const statusTruncated = !!scm.status?.truncated;
 
   const canPull =
     hasUpstream &&
@@ -576,6 +606,9 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     if (isDiverged) {
       result.push({ kind: "banner-diverged", key: "banner-diverged" });
     }
+    if (statusTruncated) {
+      result.push({ kind: "banner-truncated", key: "banner-truncated" });
+    }
     if (changedCount > 0) {
       result.push({
         kind: "list-header",
@@ -587,7 +620,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
       }
     }
     return result;
-  }, [changedCount, isDiverged, scm.fileEntries]);
+  }, [changedCount, isDiverged, statusTruncated, scm.fileEntries]);
 
   const rowKeyToIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -618,6 +651,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
       if (!row) return ROW_HEIGHTS.entry;
       switch (row.kind) {
         case "banner-diverged":
+        case "banner-truncated":
           return ROW_HEIGHTS.banner;
         case "list-header":
           return ROW_HEIGHTS.header;
@@ -635,6 +669,18 @@ export const SourceControlPanel = memo(function SourceControlPanel({
     overscan: 12,
     getItemKey: (index) => rows[index]?.key ?? index,
   });
+
+  const selectedPath = scm.selected?.path ?? null;
+  const scrollTargetRef = useRef({ rowKeyToIndex, virtualizer });
+  scrollTargetRef.current = { rowKeyToIndex, virtualizer };
+  // Follows the selection only when it moves: a refresh that reshuffles the
+  // rows must not yank the list away from where the user scrolled it.
+  useEffect(() => {
+    if (!selectedPath) return;
+    const { rowKeyToIndex: index, virtualizer: v } = scrollTargetRef.current;
+    const at = index.get(selectedPath);
+    if (at !== undefined) v.scrollToIndex(at, { align: "auto" });
+  }, [selectedPath]);
 
   const moveFocus = useCallback(
     (direction: 1 | -1) => {
@@ -713,7 +759,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
         case "D": {
           if (meta) break;
           const entry = focusedEntry();
-          if (entry?.unstaged) {
+          if (entry?.unstaged && !entry.conflicted) {
             event.preventDefault();
             scm.requestDiscardFile(entry);
           }
@@ -731,7 +777,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
   return (
     <TooltipProvider delayDuration={800} skipDelayDuration={300}>
-      <aside className="flex h-full min-w-0 flex-col bg-card/(--emph-bold) backdrop-blur [contain:layout_style]">
+      <aside
+        ref={asideRef}
+        className="flex h-full min-w-0 flex-col bg-card/(--emph-bold) backdrop-blur [contain:layout_style]"
+      >
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/(--emph-medium) px-3 pb-2.5 pt-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <BranchDropdown
@@ -887,6 +936,14 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
         {scm.panelState === "ready" && scm.status ? (
           <>
+            {scm.operation ? (
+              <OperationBanner
+                view={scm.operation}
+                busy={!!scm.actionBusy}
+                onContinue={() => void scm.continueOperation()}
+                onAbort={scm.requestAbortOperation}
+              />
+            ) : null}
             <div className="relative shrink-0 space-y-2 border-b border-border/(--emph-soft) bg-gradient-to-b from-card/65 to-card/30 px-2.5 pb-2.5 pt-2.5">
               <div
                 className={cn(
@@ -1093,6 +1150,7 @@ export const SourceControlPanel = memo(function SourceControlPanel({
                             onSelectFile={scm.selectFile}
                             onToggleStageFile={scm.toggleStageFile}
                             onDiscardFile={scm.requestDiscardFile}
+                            onMarkResolved={scm.markResolved}
                             onOpenFile={onOpenFile}
                           />
                         </div>
@@ -1105,6 +1163,35 @@ export const SourceControlPanel = memo(function SourceControlPanel({
           </>
         ) : null}
       </aside>
+
+      <AlertDialog
+        open={scm.pendingAbort}
+        onOpenChange={(o) => {
+          if (!o) scm.cancelAbortOperation();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {scm.operation
+                ? `Abort: ${scm.operation.title.toLowerCase()}?`
+                : "Abort?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The repository goes back to where it was before the operation
+              started, and any conflict resolutions made so far are lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => scm.cancelAbortOperation()}>
+              Keep going
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => void scm.confirmAbortOperation()}>
+              Abort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={scm.pendingDiscard !== null}
@@ -1194,6 +1281,7 @@ type RowRendererProps = {
   onSelectFile: (entry: SourceControlFileEntry) => Promise<void>;
   onToggleStageFile: (entry: SourceControlFileEntry) => Promise<void>;
   onDiscardFile: (entry: SourceControlFileEntry) => void;
+  onMarkResolved: (entry: SourceControlFileEntry) => Promise<void>;
   onOpenFile?: (absolutePath: string) => void;
 };
 
@@ -1202,6 +1290,8 @@ const RowRenderer = memo(function RowRenderer(props: RowRendererProps) {
   switch (row.kind) {
     case "banner-diverged":
       return <DivergedBanner />;
+    case "banner-truncated":
+      return <TruncatedBanner />;
     case "list-header":
       return <ListHeader {...props} row={row} />;
     case "entry":
@@ -1223,6 +1313,80 @@ function DivergedBanner() {
           Diverged from upstream
         </span>
         <span className="ml-1 opacity-75">- resolve in terminal</span>
+      </span>
+    </div>
+  );
+}
+
+function OperationBanner({
+  view,
+  busy,
+  onContinue,
+  onAbort,
+}: {
+  view: OperationBannerView;
+  busy: boolean;
+  onContinue: () => void;
+  onAbort: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      className="mx-2.5 mt-2.5 flex shrink-0 items-center gap-1.5 rounded-md border border-status-conflict/(--emph-soft) bg-status-conflict/(--emph-faint) py-1 pl-2 pr-1 text-[10.5px] leading-none"
+    >
+      <HugeiconsIcon
+        icon={Alert02Icon}
+        size={11}
+        strokeWidth={1.9}
+        className="shrink-0 text-status-conflict"
+      />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium text-foreground/(--emph-bold)">
+          {view.title}
+        </span>
+        <span className="ml-1 text-muted-foreground">{view.detail}</span>
+      </span>
+      <Button
+        size="xs"
+        variant="secondary"
+        className="h-6 cursor-pointer px-2 text-[10.5px] disabled:cursor-not-allowed"
+        disabled={busy || view.continueBlocked !== null}
+        title={view.continueBlocked ?? "Continue with the resolved files"}
+        onClick={onContinue}
+      >
+        Continue
+      </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        className="h-6 cursor-pointer px-2 text-[10.5px] text-destructive disabled:cursor-not-allowed"
+        disabled={busy}
+        onClick={onAbort}
+      >
+        Abort
+      </Button>
+    </div>
+  );
+}
+
+function TruncatedBanner() {
+  return (
+    <div
+      role="status"
+      title="Status output passed the 2 MiB cap. Run status in the terminal for the full list."
+      className="mx-2 mt-1 flex h-7 items-center gap-1.5 rounded-md border border-border/(--emph-strong) bg-foreground/[0.04] px-2 text-[10.5px] leading-none text-muted-foreground"
+    >
+      <HugeiconsIcon
+        icon={Alert02Icon}
+        size={11}
+        strokeWidth={1.9}
+        className="shrink-0"
+      />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium text-foreground/(--emph-bold)">
+          List incomplete
+        </span>
+        <span className="ml-1 opacity-75">- status output was cut short</span>
       </span>
     </div>
   );
@@ -1272,6 +1436,7 @@ const EntryRow = memo(function EntryRow({
   onSelectFile,
   onToggleStageFile,
   onDiscardFile,
+  onMarkResolved,
   onOpenFile,
 }: RowRendererProps & {
   row: Extract<RowDescriptor, { kind: "entry" }>;
@@ -1281,10 +1446,12 @@ const EntryRow = memo(function EntryRow({
   const fileName = basename(entry.path);
   const icons = useIconProvider();
   const pathLabel = entryPathLabel(entry);
-  const showDiscard = entry.unstaged;
+  const conflicted = entry.conflicted;
+  const showDiscard = entry.unstaged && !conflicted;
   const isStageBusy =
     actionBusy === `stage:${entry.path}` ||
-    actionBusy === `unstage:${entry.path}`;
+    actionBusy === `unstage:${entry.path}` ||
+    actionBusy === `resolve:${entry.path}`;
   const isDiscardBusy = actionBusy === `discard:${entry.path}`;
   const disabled = actionBusy !== null;
 
@@ -1377,6 +1544,15 @@ const EntryRow = memo(function EntryRow({
           <span className="flex size-5 shrink-0 items-center justify-center">
             {isStageBusy ? (
               <Spinner className="size-3" />
+            ) : conflicted ? (
+              <IconActionButton
+                label={`Mark ${entry.path} resolved`}
+                disabled={disabled}
+                side="top"
+                onClick={() => void onMarkResolved(entry)}
+              >
+                <HugeiconsIcon icon={Tick02Icon} size={12} strokeWidth={2} />
+              </IconActionButton>
             ) : (
               <Checkbox
                 aria-label={`Stage ${entry.path}`}
@@ -1416,11 +1592,17 @@ const EntryRow = memo(function EntryRow({
         <ContextMenuItem
           className={COMPACT_ITEM}
           disabled={disabled}
-          onSelect={() => void onToggleStageFile(entry)}
+          onSelect={() =>
+            void (conflicted ? onMarkResolved(entry) : onToggleStageFile(entry))
+          }
         >
-          {entry.checkState === "checked" ? "Unstage" : "Stage"}
+          {conflicted
+            ? "Mark Resolved"
+            : entry.checkState === "checked"
+              ? "Unstage"
+              : "Stage"}
         </ContextMenuItem>
-        {entry.unstaged ? (
+        {showDiscard ? (
           <ContextMenuItem
             className={COMPACT_ITEM}
             variant="destructive"
