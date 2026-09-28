@@ -186,3 +186,28 @@ describe("diff review defaults", () => {
     ]);
   });
 });
+
+describe("blame and file history defaults", () => {
+  const ids = [
+    "git.fileHistory",
+    "git.toggleBlame",
+    "git.openLineCommit",
+  ] as const;
+
+  it("claim chords no other shortcut uses", () => {
+    for (const id of ids) {
+      const [binding] = byId(id).defaultBindings;
+      const e = event({
+        key: binding.key,
+        ctrlKey: !!binding.ctrl,
+        shiftKey: !!binding.shift,
+        altKey: !!binding.alt,
+        metaKey: !!binding.meta,
+      });
+      const claimants = SHORTCUTS.filter((s) =>
+        s.defaultBindings.some((b) => matchBinding(e, b, s.id)),
+      ).map((s) => s.id);
+      expect(claimants).toEqual([id]);
+    }
+  });
+});

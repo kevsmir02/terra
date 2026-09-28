@@ -49,6 +49,9 @@ export type ShortcutId =
   | "diff.prevChange"
   | "diff.nextFile"
   | "diff.prevFile"
+  | "git.fileHistory"
+  | "git.toggleBlame"
+  | "git.openLineCommit"
   | "editor.undo"
   | "editor.redo"
   | "editor.codeComplete";
@@ -384,6 +387,25 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Previous changed file",
     group: "Git",
     defaultBindings: [{ ctrl: true, shift: true, key: "F7" }],
+  },
+  // Editor-only: disabled, so the chord reaches the terminal, elsewhere.
+  {
+    id: "git.fileHistory",
+    label: "File history",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "h" }],
+  },
+  {
+    id: "git.toggleBlame",
+    label: "Toggle blame annotations",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "g" }],
+  },
+  {
+    id: "git.openLineCommit",
+    label: "Open the current line's commit",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, shift: true, key: "g" }],
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface

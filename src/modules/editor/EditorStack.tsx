@@ -3,6 +3,7 @@ import { MarkdownViewToggle } from "@/modules/markdown";
 import type { EditorTab, Tab } from "@/modules/tabs";
 import { useEffect, useRef } from "react";
 import { EditorPane, type EditorPaneHandle } from "./EditorPane";
+import type { OpenCommitFile } from "./lib/useBlame";
 
 type Props = {
   tabs: Tab[];
@@ -11,6 +12,7 @@ type Props = {
   registerHandle: (id: number, handle: EditorPaneHandle | null) => void;
   onCloseTab: (id: number) => void;
   onSetMarkdownView: (id: number, mode: "rendered" | "raw") => void;
+  onOpenCommitFile?: OpenCommitFile;
 };
 
 export function EditorStack({
@@ -20,6 +22,7 @@ export function EditorStack({
   registerHandle,
   onCloseTab,
   onSetMarkdownView,
+  onOpenCommitFile,
 }: Props) {
   const editors = tabs.filter(
     (t): t is EditorTab => t.kind === "editor" && !t.cold,
@@ -117,6 +120,7 @@ export function EditorStack({
                 overrideLanguage={t.overrideLanguage}
                 onDirtyChange={getDirtyCallback(t.id)}
                 onClose={getCloseCallback(t.id)}
+                onOpenCommitFile={onOpenCommitFile}
               />
             </div>
           </div>
