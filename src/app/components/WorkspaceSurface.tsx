@@ -28,6 +28,7 @@ type Props = {
   registerPreviewHandle: PreviewStackProps["registerHandle"];
   onPreviewUrlChange: PreviewStackProps["onUrlChange"];
   onOpenCommitFile: GitHistoryStackProps["onOpenCommitFile"];
+  onRepoChanged: () => void;
   onGitHistorySearchHandle: GitHistoryStackProps["onSearchHandle"];
   onSetMarkdownView: EditorStackProps["onSetMarkdownView"];
 };
@@ -52,6 +53,7 @@ export function WorkspaceSurface({
   registerPreviewHandle,
   onPreviewUrlChange,
   onOpenCommitFile,
+  onRepoChanged,
   onGitHistorySearchHandle,
   onSetMarkdownView,
 }: Props) {
@@ -136,7 +138,11 @@ export function WorkspaceSurface({
         )}
         aria-hidden={!isGitDiffTab}
       >
-        <GitDiffStack tabs={tabs} activeId={activeId} />
+        <GitDiffStack
+          tabs={tabs}
+          activeId={activeId}
+          onRepoChanged={onRepoChanged}
+        />
       </div>
       <div
         className={cn(

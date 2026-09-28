@@ -5,15 +5,16 @@ import type { GitDiffContentResult } from "@/lib/native";
 import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { Alert02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useReviewAutoRefresh } from "@/modules/source-control/lib/reviewRefresh";
 import {
   commitDiffKey,
   fetchCommitDiff,
   fetchWorkingDiff,
   getCachedDiff,
+  sameDiff,
+  subscribeDiffInvalidation,
   workingDiffKey,
 } from "./lib/diffCache";
 import {
@@ -45,6 +46,8 @@ type Props = {
   source: WorkingSource | CommitSource;
   chipLabel?: string;
   active: boolean;
+  /** A working diff saw the repo change under it; the status should follow. */
+  onRepoChanged?: () => void;
 };
 
 const LARGE_FILE_THRESHOLD = 256 * 1024;
@@ -120,58 +123,88 @@ function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
   };
 }
 
-export function GitDiffPane({ source, chipLabel, active }: Props) {
+function errorMessage(err: unknown): string {
+  return err && typeof err === "object" && "message" in err
+    ? String((err as { message: unknown }).message)
+    : String(err);
+}
+
+export function GitDiffPane({
+  source,
+  chipLabel,
+  active,
+  onRepoChanged,
+}: Props) {
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const themeExt = useEditorThemeExt();
   const [state, setState] = useState<LoadState>(() =>
     active ? loadStateFromCache(source) : { kind: "idle" },
   );
+  const [revision, setRevision] = useState(0);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
 
   const key = cacheKey(source);
+  const isWorking = source.kind === "working";
+  const watchedRoot = active && isWorking ? source.repoRoot : null;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: `key` is the cache identity the fetch is keyed on
+  useEffect(() => {
+    if (!watchedRoot) return;
+    return subscribeDiffInvalidation((root) => {
+      if (root === watchedRoot) setRevision((r) => r + 1);
+    });
+  }, [watchedRoot]);
+
+  useReviewAutoRefresh(watchedRoot, () => onRepoChanged?.());
+
+  // Keyed on the fetch identity only: the stack rebuilds `source` on every
+  // render, and a working diff revalidates, so depending on it would refetch
+  // on every parent render.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` and `revision` are the re-run triggers; `source` is read through a ref
   useEffect(() => {
     if (!active) return;
-    const cached = loadStateFromCache(source);
-    if (cached.kind === "loaded") {
-      setState(cached);
-      return;
+    const src = sourceRef.current;
+    const cached = loadStateFromCache(src);
+    const hasCached = cached.kind === "loaded";
+    if (hasCached) {
+      setState((prev) =>
+        prev.kind === "loaded" && sameDiff(prev.diff, cached.diff)
+          ? prev
+          : cached,
+      );
+      // A commit's diff never changes; a working diff is shown from the
+      // cache and revalidated, since it may predate the last agent turn.
+      if (src.kind === "commit") return;
     }
     let cancelled = false;
-    setState({ kind: "loading" });
+    setState((prev) => (prev.kind === "loaded" ? prev : { kind: "loading" }));
     const promise =
-      source.kind === "working"
+      src.kind === "working"
         ? fetchWorkingDiff(
-            source.repoRoot,
-            source.path,
-            source.mode,
-            source.originalPath,
+            src.repoRoot,
+            src.path,
+            src.mode,
+            src.originalPath,
+            hasCached,
           )
-        : fetchCommitDiff(
-            source.repoRoot,
-            source.sha,
-            source.path,
-            source.originalPath,
-          );
-    Promise.all([promise, resolveLanguage(source.path).catch(() => null)])
+        : fetchCommitDiff(src.repoRoot, src.sha, src.path, src.originalPath);
+    Promise.all([promise, resolveLanguage(src.path).catch(() => null)])
       .then(([res, lang]) => {
         if (cancelled) return;
-        setState({ kind: "loaded", diff: res, langExt: lang?.ext ?? null });
+        setState((prev) =>
+          prev.kind === "loaded" && sameDiff(prev.diff, res)
+            ? prev
+            : { kind: "loaded", diff: res, langExt: lang?.ext ?? null },
+        );
       })
       .catch((err) => {
         if (cancelled) return;
-        setState({
-          kind: "error",
-          message:
-            err && typeof err === "object" && "message" in err
-              ? String((err as { message: unknown }).message)
-              : String(err),
-        });
+        setState({ kind: "error", message: errorMessage(err) });
       });
     return () => {
       cancelled = true;
     };
-  }, [active, key, source]);
+  }, [active, key, revision]);
 
   const path = source.path;
   const repoRoot = source.repoRoot;
@@ -338,12 +371,7 @@ function DiffNotice({ children }: { children: ReactNode }) {
       role="status"
       className="flex shrink-0 items-center gap-2 border-b border-border/(--emph-soft) bg-foreground/[0.04] px-3 py-1.5 text-[10.5px] leading-snug text-muted-foreground"
     >
-      <HugeiconsIcon
-        icon={Alert02Icon}
-        size={11}
-        strokeWidth={1.9}
-        className="shrink-0"
-      />
+      <span className="size-1.5 shrink-0 rounded-circle bg-muted-foreground/(--emph-strong)" />
       <span className="min-w-0">{children}</span>
     </div>
   );

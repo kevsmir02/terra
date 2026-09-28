@@ -16,6 +16,7 @@ import {
   operationBanner,
   repoOperation,
 } from "./lib/repoOperation";
+import { useReviewAutoRefresh } from "./lib/reviewRefresh";
 import type { SourceControlSummary } from "./useSourceControl";
 
 type PanelState = "closed" | "loading" | "no-repo" | "ready" | "error";
@@ -291,6 +292,7 @@ function optimisticDiscard(
 
 export function useSourceControlPanel(
   isOpen: boolean,
+  visible: boolean,
   summary: SourceControlSummary,
   onOpenDiff:
     | ((input: {
@@ -320,6 +322,9 @@ export function useSourceControlPanel(
   >(null);
   const [pendingAbort, setPendingAbort] = useState(false);
   const selectedRef = useRef<DiffSelection | null>(null);
+  useReviewAutoRefresh(isOpen && visible && repo ? repo.repoRoot : null, () =>
+    summary.refresh({ remote: "never" }),
+  );
   const reconcileTimerRef = useRef(0);
 
   useEffect(() => {

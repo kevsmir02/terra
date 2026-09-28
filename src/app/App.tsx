@@ -566,6 +566,7 @@ export default function App() {
       cycleSidebarView,
       openCommitHistoryTab,
     });
+  const refreshSourceControl = sourceControl.refresh;
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
@@ -1225,6 +1226,7 @@ export default function App() {
                       registerPreviewHandle={registerPreviewHandle}
                       onPreviewUrlChange={handlePreviewUrl}
                       onOpenCommitFile={openCommitFileDiffTab}
+                      onRepoChanged={refreshSourceControl}
                       onGitHistorySearchHandle={setGitHistoryHandle}
                       onSetMarkdownView={setMarkdownView}
                     />

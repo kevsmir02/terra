@@ -465,7 +465,24 @@ export const SourceControlPanel = memo(function SourceControlPanel({
   onOpenFile,
   onNavigateToPath,
 }: Props) {
-  const scm = useSourceControlPanel(open, sourceControl, onOpenDiff);
+  const [visible, setVisible] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  // The panel stays mounted while the sidebar is collapsed to zero width; the
+  // auto refresh should only run while it can actually be seen.
+  const asideRef = useCallback((el: HTMLElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) {
+      setVisible(false);
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setVisible((entry?.contentRect.width ?? 0) > 0);
+    });
+    observer.observe(el);
+    observerRef.current = observer;
+  }, []);
+  const scm = useSourceControlPanel(open, visible, sourceControl, onOpenDiff);
   const refreshAnimationRef = useRef<number | null>(null);
   const [refreshAnimating, setRefreshAnimating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -738,7 +755,10 @@ export const SourceControlPanel = memo(function SourceControlPanel({
 
   return (
     <TooltipProvider delayDuration={800} skipDelayDuration={300}>
-      <aside className="flex h-full min-w-0 flex-col bg-card/(--emph-bold) backdrop-blur [contain:layout_style]">
+      <aside
+        ref={asideRef}
+        className="flex h-full min-w-0 flex-col bg-card/(--emph-bold) backdrop-blur [contain:layout_style]"
+      >
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/(--emph-medium) px-3 pb-2.5 pt-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <BranchDropdown
