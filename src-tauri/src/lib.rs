@@ -202,6 +202,7 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
+        .manage(fs::replace::ReplacePreviewState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -248,6 +249,9 @@ pub fn run() {
             fs::grep::fs_grep,
             fs::grep::fs_grep_interactive,
             fs::grep::fs_glob,
+            fs::replace::fs_replace_preview,
+            fs::replace::fs_replace_apply,
+            fs::replace::fs_replace_cancel,
             git::commands::git_resolve_repo,
             git::commands::git_panel_snapshot,
             git::commands::git_status,
