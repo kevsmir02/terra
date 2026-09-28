@@ -2,6 +2,9 @@ use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
 use crate::modules::git::errors::{GitError, Result};
+use crate::modules::git::history::{
+    parse_file_log, parse_log_header, sha_is_safe, FILE_LOG_FORMAT, LOG_FORMAT,
+};
 use crate::modules::git::parser::parse_porcelain_v2;
 use crate::modules::git::review::{
     diff_sources, has_conflict_markers, operation_argv, operation_in, DiffSource, OperationStep,
@@ -668,7 +671,6 @@ pub fn push(
     })
 }
 
-const LOG_FORMAT: &str = "%H%x1f%an%x1f%ae%x1f%at%x1f%P%x1f%s";
 const MAX_LOG_LIMIT: u32 = 200;
 
 /// Pages by offset from a fixed anchor. `<last shown>^` only walks the first
@@ -685,54 +687,20 @@ pub fn log(
 ) -> Result<Vec<GitLogEntry>> {
     let repo_root = authorized_repo_root(registry, repo_root)?;
     ensure_git_available()?;
-    let bounded = limit.clamp(1, MAX_LOG_LIMIT);
-    let count_arg = format!("--max-count={bounded}");
-    let skip_arg = format!("--skip={skip}");
-    let format_arg = format!("--format={LOG_FORMAT}");
-    let anchor = match anchor_sha {
-        Some(sha) if !sha.is_empty() => {
-            if !sha_is_safe(sha) {
-                return Err(GitError::command("git log", "invalid anchor sha"));
-            }
-            Some(sha)
-        }
-        _ => None,
-    };
-    let mut args: Vec<&OsStr> = vec![
-        OsStr::new("log"),
-        OsStr::new("--no-color"),
-        OsStr::new("--shortstat"),
-        OsStr::new(&count_arg),
-        OsStr::new(&format_arg),
+    let anchor = checked_anchor(anchor_sha)?;
+    let mut args: Vec<OsString> = vec![
+        "log".into(),
+        "--no-color".into(),
+        "--shortstat".into(),
+        format!("--max-count={}", limit.clamp(1, MAX_LOG_LIMIT)).into(),
+        format!("--format={LOG_FORMAT}").into(),
     ];
-    if skip > 0 {
-        args.push(OsStr::new(&skip_arg));
-    }
-    if let Some(sha) = anchor {
-        args.push(OsStr::new(sha));
-        args.push(OsStr::new("--"));
-    }
-    let output = run_git(
-        Some(&repo_root.git_path),
-        args,
-        DEFAULT_TIMEOUT_SECS,
-    )?;
-    if output.timed_out {
-        return Err(GitError::TimedOut("git log"));
-    }
-    if output.exit_code != Some(0) {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
-        if stderr.contains("does not have any commits yet")
-            || stderr.contains("bad default revision")
-            || stderr.contains("unknown revision")
-            || stderr.contains("ambiguous argument 'head'")
-        {
-            return Ok(Vec::new());
-        }
-        return ensure_success(&output, "git log failed").map(|_| Vec::new());
-    }
+    push_page(&mut args, skip, anchor);
+    let Some(output) = run_log(&repo_root, args)? else {
+        return Ok(Vec::new());
+    };
     let stdout = std::str::from_utf8(&output.stdout).unwrap_or("");
-    let mut entries: Vec<GitLogEntry> = Vec::with_capacity(bounded as usize);
+    let mut entries: Vec<GitLogEntry> = Vec::new();
     // Lines we get back interleave:
     //   <sha>\x1f<author>\x1f<email>\x1f<ts>\x1f<parents>\x1f<subject>
     //   <blank>
@@ -746,33 +714,7 @@ pub fn log(
             continue;
         }
         if line.contains('\x1f') {
-            let mut fields = line.splitn(6, '\x1f');
-            let sha = fields.next().unwrap_or("").to_string();
-            if !sha_is_safe(&sha) {
-                continue;
-            }
-            let author = fields.next().unwrap_or("").to_string();
-            let author_email = fields.next().unwrap_or("").to_string();
-            let timestamp = fields.next().unwrap_or("0").parse::<i64>().unwrap_or(0);
-            let parents_raw = fields.next().unwrap_or("");
-            let parents: Vec<String> = parents_raw
-                .split_ascii_whitespace()
-                .map(|s| s.to_string())
-                .collect();
-            let subject = fields.next().unwrap_or("").to_string();
-            let short_sha = sha.chars().take(7).collect::<String>();
-            entries.push(GitLogEntry {
-                sha,
-                short_sha,
-                author,
-                author_email,
-                timestamp_secs: timestamp,
-                parents,
-                subject,
-                files_changed: 0,
-                insertions: 0,
-                deletions: 0,
-            });
+            entries.extend(parse_log_header(line));
             continue;
         }
         if let Some(current) = entries.last_mut() {
@@ -785,6 +727,117 @@ pub fn log(
         }
     }
     Ok(entries)
+}
+
+/// Deepest a followed file's history pages. `--follow` filters commits after
+/// the walk has counted them, so `--skip` lands on the wrong row (it repeats
+/// and drops commits); `--max-count` does count shown commits, so a page is
+/// read as the first `skip + limit` and cut here instead.
+const MAX_FOLLOW_DEPTH: u32 = 3000;
+
+/// History of one path, paged like [`log`]. The anchor must be the head the
+/// first page was read from, not the first row: the newest commit touching the
+/// path can sit on a merged side branch, and walking from it would drop every
+/// mainline commit after the branch point. A file is followed across renames;
+/// a directory cannot be (`--follow` takes a single file).
+pub fn file_log(
+    registry: &WorkspaceRegistry,
+    repo_root: &str,
+    path: &str,
+    limit: u32,
+    skip: u32,
+    anchor_sha: Option<&str>,
+) -> Result<Vec<GitLogEntry>> {
+    let repo_root = authorized_repo_root(registry, repo_root)?;
+    ensure_git_available()?;
+    let anchor = checked_anchor(anchor_sha)?;
+    let resolved = resolve_within_repo(&repo_root.local_path, path)?;
+    let rel = pathspec(&repo_root.local_path, &resolved);
+    if rel.is_empty() {
+        return log(registry, &repo_root.git_path, limit, skip, anchor);
+    }
+    let limit = limit.clamp(1, MAX_LOG_LIMIT);
+    let follow = !resolved.is_dir();
+    if follow && skip >= MAX_FOLLOW_DEPTH {
+        return Ok(Vec::new());
+    }
+    let (count, walk_skip) = if follow {
+        (skip.saturating_add(limit).min(MAX_FOLLOW_DEPTH), 0)
+    } else {
+        (limit, skip)
+    };
+    // A glob character in a real file name must not widen the filter.
+    let mut args: Vec<OsString> = vec![
+        "--literal-pathspecs".into(),
+        "log".into(),
+        "--no-color".into(),
+        "-z".into(),
+        "--numstat".into(),
+        format!("--max-count={count}").into(),
+        format!("--format={FILE_LOG_FORMAT}").into(),
+    ];
+    if follow {
+        args.push("--follow".into());
+    }
+    push_page(&mut args, walk_skip, anchor);
+    if anchor.is_none() {
+        args.push("--".into());
+    }
+    args.push(rel.into());
+    let Some(output) = run_log(&repo_root, args)? else {
+        return Ok(Vec::new());
+    };
+    let mut entries = parse_file_log(&output.stdout);
+    // The record cut by the output cap is incomplete.
+    if output.truncated {
+        entries.pop();
+    }
+    if follow {
+        entries.drain(..(skip as usize).min(entries.len()));
+    }
+    Ok(entries)
+}
+
+fn checked_anchor(anchor_sha: Option<&str>) -> Result<Option<&str>> {
+    match anchor_sha {
+        Some(sha) if !sha.is_empty() => {
+            if !sha_is_safe(sha) {
+                return Err(GitError::command("git log", "invalid anchor sha"));
+            }
+            Ok(Some(sha))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn push_page(args: &mut Vec<OsString>, skip: u32, anchor: Option<&str>) {
+    if skip > 0 {
+        args.push(format!("--skip={skip}").into());
+    }
+    if let Some(sha) = anchor {
+        args.push(sha.into());
+        args.push("--".into());
+    }
+}
+
+/// `None` for a repository with no commits yet.
+fn run_log(repo_root: &ResolvedGitDirectory, args: Vec<OsString>) -> Result<Option<GitOutput>> {
+    let output = run_git(Some(&repo_root.git_path), args, DEFAULT_TIMEOUT_SECS)?;
+    if output.timed_out {
+        return Err(GitError::TimedOut("git log"));
+    }
+    if output.exit_code != Some(0) {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+        if stderr.contains("does not have any commits yet")
+            || stderr.contains("bad default revision")
+            || stderr.contains("unknown revision")
+            || stderr.contains("ambiguous argument 'head'")
+        {
+            return Ok(None);
+        }
+        ensure_success(&output, "git log failed")?;
+    }
+    Ok(Some(output))
 }
 
 pub fn show_commit_diff(
@@ -845,10 +898,6 @@ fn parse_shortstat(tail: &str) -> (u32, u32, u32) {
         return (files, ins, del);
     }
     (0, 0, 0)
-}
-
-fn sha_is_safe(sha: &str) -> bool {
-    !sha.is_empty() && sha.len() <= 64 && sha.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 pub fn commit_files(
