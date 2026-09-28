@@ -6,7 +6,6 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { consumeLaunchFiles, getLaunchDir } from "@/lib/launchDir";
-import { native } from "@/lib/native";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { isMarkdownPath } from "@/lib/utils";
@@ -854,17 +853,10 @@ export default function App() {
     [updateTab],
   );
 
-  const authorizedCwds = useRef(new Set<string>());
+  // The PTY reader grants the new cwd from the same OSC 7 before these bytes
+  // arrive, so there is nothing to authorize here.
   const handleTerminalCwd = useCallback(
-    (leafId: number, cwd: string) => {
-      setLeafCwd(leafId, cwd);
-      if (cwd && !authorizedCwds.current.has(cwd)) {
-        authorizedCwds.current.add(cwd);
-        native.workspaceAuthorize(cwd).catch(() => {
-          authorizedCwds.current.delete(cwd);
-        });
-      }
-    },
+    (leafId: number, cwd: string) => setLeafCwd(leafId, cwd),
     [setLeafCwd],
   );
 

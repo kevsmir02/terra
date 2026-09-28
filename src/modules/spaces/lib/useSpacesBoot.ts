@@ -49,6 +49,14 @@ export function useSpacesBoot({
     if (!ready || done.current) return;
     done.current = true;
 
+    // The restore window shuts on its first call, so every path through boot
+    // spends it, even one that has nothing to restore.
+    let rootsRestored = false;
+    const restoreRoots = async (paths: string[]) => {
+      rootsRestored = true;
+      await native.workspaceRestoreRoots(paths).catch(() => []);
+    };
+
     void (async () => {
       try {
         const { spaces, activeId, states } = await loadAll();
@@ -93,9 +101,10 @@ export function useSpacesBoot({
           restored.push(freshTerminalTab(active, cwd, allocId));
         }
 
-        await Promise.allSettled(
-          uniqueCwds(restored).map((cwd) => native.workspaceAuthorize(cwd)),
-        );
+        await restoreRoots([
+          ...spaces.flatMap((s) => (s.root ? [s.root] : [])),
+          ...uniqueCwds(restored),
+        ]);
 
         const initialActiveIndex: Record<string, number> = {};
         const panelSizesBySpace: Record<string, number[]> = {};
@@ -116,6 +125,7 @@ export function useSpacesBoot({
       } catch (e) {
         console.error("[terra] spaces boot failed:", e);
       } finally {
+        if (!rootsRestored) await restoreRoots([]);
         markBooted();
       }
     })();

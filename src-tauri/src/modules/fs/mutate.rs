@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use tauri::AppHandle;
 
 use super::{authorized_entry, authorized_new, authorized_read, authorized_write};
@@ -15,13 +17,32 @@ pub fn create_file(
     path: &str,
 ) -> Result<(), String> {
     let p = authorized_new(registry, path)?;
-    if p.exists() {
-        return Err(format!("already exists: {}", p.display()));
-    }
-    std::fs::write(&p, "").map_err(|e| {
+    create_new_file(&p).map(drop).map_err(|e| {
         log::debug!("fs_create_file({}) failed: {e}", p.display());
-        e.to_string()
+        exists_or(&p, e)
     })
+}
+
+// O_CREAT|O_EXCL: fails on anything already at `p`, a dangling link included,
+// so the open can never follow a planted link out of the gated directory.
+fn create_new_file(p: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(p)
+}
+
+fn exists_or(p: &Path, e: std::io::Error) -> String {
+    if e.kind() == std::io::ErrorKind::AlreadyExists {
+        format!("already exists: {}", p.display())
+    } else {
+        e.to_string()
+    }
+}
+
+// `Path::exists` follows links, so a dangling one would read as free.
+fn occupied(p: &Path) -> bool {
+    p.symlink_metadata().is_ok()
 }
 
 /// Creates a new directory. Fails if the directory already exists.
@@ -37,7 +58,7 @@ pub fn create_dir(
     path: &str,
 ) -> Result<(), String> {
     let p = authorized_new(registry, path)?;
-    if p.exists() {
+    if occupied(&p) {
         return Err(format!("already exists: {}", p.display()));
     }
     std::fs::create_dir_all(&p).map_err(|e| {
@@ -62,7 +83,7 @@ pub fn rename(
     if from_p.symlink_metadata().is_err() {
         return Err(format!("not found: {}", from_p.display()));
     }
-    if to_p.exists() {
+    if occupied(&to_p) {
         return Err(format!("already exists: {}", to_p.display()));
     }
     std::fs::rename(&from_p, &to_p).map_err(|e| {
@@ -104,8 +125,14 @@ pub fn delete(
     })
 }
 
-fn copy_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    if src.is_dir() {
+// Nested links are recreated as links, never followed: only the top-level
+// source went through the gate, so dereferencing a link found inside it would
+// copy whatever it points at (anywhere on disk) into the workspace.
+fn copy_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    let meta = src.symlink_metadata()?;
+    if meta.file_type().is_symlink() {
+        std::os::unix::fs::symlink(std::fs::read_link(src)?, dst)
+    } else if meta.is_dir() {
         std::fs::create_dir(dst)?;
         for entry in std::fs::read_dir(src)? {
             let entry = entry?;
@@ -113,8 +140,17 @@ fn copy_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Resu
         }
         Ok(())
     } else {
-        std::fs::copy(src, dst).map(|_| ())
+        copy_file_new(src, dst)
     }
+}
+
+// `std::fs::copy` opens the destination with O_TRUNC and follows a link there.
+fn copy_file_new(src: &Path, dst: &Path) -> std::io::Result<()> {
+    let mut from = std::fs::File::open(src)?;
+    let permissions = from.metadata()?.permissions();
+    let mut to = create_new_file(dst)?;
+    std::io::copy(&mut from, &mut to)?;
+    to.set_permissions(permissions)
 }
 
 /// Copies external files/dirs into a destination directory, recursively for
@@ -144,7 +180,7 @@ pub fn copy_into(
             .file_name()
             .ok_or_else(|| format!("invalid source: {source}"))?;
         let target = dest.join(name);
-        if target.exists() {
+        if occupied(&target) {
             return Err(format!("already exists: {}", target.display()));
         }
         copy_recursive(&src, &target).map_err(|e| {
@@ -153,7 +189,7 @@ pub fn copy_into(
                 src.display(),
                 target.display()
             );
-            e.to_string()
+            exists_or(&target, e)
         })?;
     }
     Ok(())
