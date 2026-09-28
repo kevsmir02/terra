@@ -12,7 +12,10 @@ import { isMarkdownPath } from "@/lib/utils";
 import {
   AgentNotificationsBridge,
   AgentStatusCluster,
+  acceptResume,
+  hasResumeOffer,
   nextAttentionTarget,
+  persistedAgent,
 } from "@/modules/agents";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
@@ -222,7 +225,7 @@ export default function App() {
     activeSidebarPct,
   });
   const persistScrollback = useCallback(
-    () => flushWithScrollback(persistedScrollback),
+    () => flushWithScrollback(persistedScrollback, persistedAgent),
     [flushWithScrollback],
   );
 
@@ -661,7 +664,9 @@ export default function App() {
   const activateAgentTarget = useCallback(
     (tabId: number, leafId: number) => {
       const space = tabsRef.current.find((t) => t.id === tabId)?.spaceId;
-      if (space && space !== useSpaces.getState().activeId) {
+      // A recent run or an old alert can outlive its tab.
+      if (!space) return;
+      if (space !== useSpaces.getState().activeId) {
         useSpaces.getState().setActive(space);
       }
       setActiveId(tabId);
@@ -724,8 +729,11 @@ export default function App() {
         else searchInlineRef.current?.focus();
       },
       "agent.focusAttention": () => {
-        const t = nextAttentionTarget();
+        const t = nextAttentionTarget(activeLeafId);
         if (t) activateAgentTarget(t.tabId, t.leafId);
+      },
+      "agent.resume": () => {
+        if (activeLeafId !== null) acceptResume(activeLeafId);
       },
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
@@ -772,6 +780,9 @@ export default function App() {
           ? leafIds(activeTab.paneTree).length
           : null;
       if (shouldDisablePaneSwapShortcut(id, terminalPaneCount)) return true;
+      // With nothing to resume the chord falls through to the shell.
+      if (id === "agent.resume")
+        return activeLeafId === null || !hasResumeOffer(activeLeafId);
       if (
         id === "editor.undo" ||
         id === "editor.redo" ||
@@ -810,7 +821,7 @@ export default function App() {
       }
       return false;
     },
-    [activeTab],
+    [activeTab, activeLeafId],
   );
 
   useGlobalShortcuts(shortcutHandlers, { isDisabled: shortcutsDisabled });

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Tab } from "@/modules/tabs";
 import {
+  type AgentProvider,
   isSerializableTab,
+  type LeafExtras,
   type ScrollbackProvider,
   serializeTabs,
 } from "./serialize";
@@ -66,9 +68,9 @@ export function useSpacePersistence({
     async (
       snap: Snapshot,
       activeSidebarPct?: number,
-      scrollbackFor?: ScrollbackProvider,
+      extras?: LeafExtras,
     ): Promise<void> => {
-      if (closing.current && !scrollbackFor) return;
+      if (closing.current && !extras) return;
       const writes: Promise<void>[] = [];
       const groups = new Map<string, Tab[]>();
       for (const t of snap.tabs) {
@@ -79,7 +81,7 @@ export function useSpacePersistence({
 
       const setPct = useSpaces.getState().setPanelSizes;
       for (const [spaceId, group] of groups) {
-        const serialized = serializeTabs(group, scrollbackFor);
+        const serialized = serializeTabs(group, extras);
         const prev = last.current.get(spaceId);
         let activeTabIndex = prev?.activeTabIndex ?? 0;
         if (spaceId === snap.activeSpaceId) {
@@ -120,20 +122,22 @@ export function useSpacePersistence({
     [],
   );
 
-  // Exit path: every leaf's buffer rides along, then the store is forced to
-  // disk. Plain flushes are ignored from here on.
+  // Exit path: every leaf's buffer and resumable agent ride along, then the
+  // store is forced to disk. Plain flushes are ignored from here on.
   const flushWithScrollback = useCallback(
-    async (scrollbackFor: ScrollbackProvider): Promise<void> => {
+    async (
+      scrollbackFor: ScrollbackProvider,
+      agentFor?: AgentProvider,
+    ): Promise<void> => {
       if (!enabled) return;
       if (timer.current) {
         clearTimeout(timer.current);
         timer.current = null;
       }
-      await flush(
-        latest.current,
-        latest.current.activeSidebarPct,
-        scrollbackFor,
-      );
+      await flush(latest.current, latest.current.activeSidebarPct, {
+        scrollback: scrollbackFor,
+        agent: agentFor,
+      });
       closing.current = true;
       await saveNow();
     },

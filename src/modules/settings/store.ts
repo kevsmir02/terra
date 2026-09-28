@@ -4,6 +4,7 @@ import {
   type TerminalFontId,
 } from "@/lib/fonts";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
+import { normalizeAgentCommands } from "./agentCommands";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
 
@@ -127,6 +128,8 @@ export type Preferences = {
   terminalScrollback: number;
   zoomLevel: number;
   agentNotifications: boolean;
+  /** Extra agent command names the pty detector treats like the built-ins. */
+  agentCommands: string[];
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
@@ -176,6 +179,7 @@ const KEY_TERMINAL_FONT_SIZE = "terminalFontSize";
 const KEY_TERMINAL_SCROLLBACK = "terminalScrollback";
 const KEY_ZOOM_LEVEL = "zoomLevel";
 const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
+const KEY_AGENT_COMMANDS = "agentCommands";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
@@ -232,6 +236,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalScrollback: TERMINAL_SCROLLBACK_DEFAULT,
   zoomLevel: 1.0,
   agentNotifications: true,
+  agentCommands: [],
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
@@ -335,6 +340,7 @@ export async function loadPreferences(): Promise<Preferences> {
     agentNotifications:
       get<boolean>(KEY_AGENT_NOTIFICATIONS) ??
       DEFAULT_PREFERENCES.agentNotifications,
+    agentCommands: normalizeAgentCommands(get<unknown>(KEY_AGENT_COMMANDS)),
     shortcuts:
       get<Record<ShortcutId, KeyBinding[]>>(KEY_SHORTCUTS) ??
       DEFAULT_PREFERENCES.shortcuts,
@@ -552,6 +558,10 @@ export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
 }
 
+export async function setAgentCommands(value: string[]): Promise<void> {
+  await writePref(KEY_AGENT_COMMANDS, normalizeAgentCommands(value));
+}
+
 export async function setShortcuts(
   value: Record<ShortcutId, KeyBinding[]> | Record<string, never>,
 ): Promise<void> {
@@ -595,6 +605,7 @@ export async function onPreferencesChange(
     [KEY_TERMINAL_SCROLLBACK]: "terminalScrollback",
     [KEY_ZOOM_LEVEL]: "zoomLevel",
     [KEY_AGENT_NOTIFICATIONS]: "agentNotifications",
+    [KEY_AGENT_COMMANDS]: "agentCommands",
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",

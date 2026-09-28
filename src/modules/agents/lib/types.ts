@@ -1,4 +1,6 @@
-export type AgentStatus = "working" | "waiting";
+/** `attention`: the agent is blocked on the user. `finished`: its turn ended and
+ * it sits at its prompt. Distinct because only the first one is urgent. */
+export type AgentStatus = "working" | "attention" | "finished";
 
 export type AgentSource = "terminal" | "local";
 
@@ -13,6 +15,8 @@ export type AgentSignal = {
   id: number;
   kind: AgentSignalKind;
   agent: string | null;
+  /** Exit status on `exited`, when the shell reported one. */
+  code?: number | null;
 };
 
 export type AgentSession = {
@@ -21,8 +25,23 @@ export type AgentSession = {
   agent: string;
   status: AgentStatus;
   startedAt: number;
-  lastActivityAt: number;
+  /** When the current status began; what "working 12m" counts from. */
+  statusSince: number;
+  /** Last time the agent asked for input, refreshed on every ask. */
   attentionSince: number | null;
+};
+
+/** An agent run that ended, for the panel's recent list. */
+export type RecentAgentRun = {
+  id: string;
+  agent: string;
+  label: string;
+  tabId: number;
+  leafId: number;
+  startedAt: number;
+  endedAt: number;
+  /** null when the pane closed or the shell reported no status. */
+  code: number | null;
 };
 
 export type AgentNotification = {
@@ -33,7 +52,6 @@ export type AgentNotification = {
   agent: string;
   kind: NotificationKind;
   at: number;
-  read: boolean;
 };
 
 export type NotificationKind = "attention" | "finished" | "error";

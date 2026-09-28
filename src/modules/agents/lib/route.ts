@@ -1,7 +1,5 @@
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { showAgentToast } from "../components/AgentToast";
 import { useAgentStore } from "../store/agentStore";
-import { osNotify } from "./notify";
 import type { AgentSource, NotificationKind } from "./types";
 
 type RouteArgs = {
@@ -41,10 +39,16 @@ export function routeAgentNotification({
     .pushNotification({ source, agent, kind, tabId, leafId });
 
   if (!focused) {
-    void osNotify(title, body ?? agent);
+    // The notification plugin's client loads on the first desktop alert.
+    void import("./notify")
+      .then((m) => m.osNotify(title, body ?? agent))
+      .catch(() => undefined);
     return;
   }
   if (allowToast) {
-    showAgentToast({ agent, title, body, onActivate });
+    // The toast and its brand icons load with the first in-app alert.
+    void import("../components/AgentToast")
+      .then((m) => m.showAgentToast({ agent, title, body, onActivate }))
+      .catch(() => undefined);
   }
 }

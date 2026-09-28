@@ -109,6 +109,7 @@ pub fn spawn(
     rows: u16,
     cwd: Option<String>,
     shell: Option<String>,
+    agents: Vec<String>,
     on_data: Channel<Response>,
     on_exit: Channel<i32>,
 ) -> Result<(Arc<Session>, PtySize), String> {
@@ -165,7 +166,7 @@ pub fn spawn(
         let mut buf = [0u8; READ_BUF];
         let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
         let mut da_filter = DaFilter::new();
-        let mut agent_detect = AgentDetector::new();
+        let mut agent_detect = AgentDetector::with_agents(agents);
         let mut url_detect = UrlDetector::new();
         let mut cwd_detect = CwdDetector::new();
         let mut dropped_bytes: u64 = 0;

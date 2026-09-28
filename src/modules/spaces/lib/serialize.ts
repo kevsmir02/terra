@@ -1,4 +1,8 @@
 import {
+  isResumableAgent,
+  type ResumableAgent,
+} from "@/modules/agents/lib/resume";
+import {
   isLeaf,
   type PaneNode,
   type SplitDir,
@@ -14,7 +18,14 @@ import type {
 } from "@/modules/tabs/lib/useTabs";
 
 export type SerializedNode =
-  | { kind: "leaf"; cwd?: string; active?: boolean; scrollback?: string }
+  | {
+      kind: "leaf";
+      cwd?: string;
+      active?: boolean;
+      scrollback?: string;
+      /** The resumable agent the leaf ran at the last decided close. */
+      agent?: string;
+    }
   | {
       kind: "split";
       dir: SplitDir;
@@ -37,6 +48,18 @@ export type SerializedTab =
 export type ScrollbackProvider = (leafId: number) => string | null;
 /** Receives persisted text under the leaf id the restored tree allocated. */
 export type ScrollbackSink = (leafId: number, text: string) => void;
+/** Agent to persist for a leaf, or null to persist none. */
+export type AgentProvider = (leafId: number) => ResumableAgent | null;
+/** Receives a validated agent under the leaf id the restored tree allocated. */
+export type AgentSink = (leafId: number, agent: ResumableAgent) => void;
+
+/** What the exit flush persists per leaf beyond the tree itself. */
+export type LeafExtras = {
+  scrollback?: ScrollbackProvider;
+  agent?: AgentProvider;
+};
+/** Where restore hands each leaf's persisted extras. */
+export type LeafSinks = { scrollback?: ScrollbackSink; agent?: AgentSink };
 
 function basename(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -54,23 +77,23 @@ function titleFromUrl(url: string): string {
 function serializeNode(
   node: PaneNode,
   activeLeafId: number,
-  scrollbackFor?: ScrollbackProvider,
+  extras: LeafExtras,
 ): SerializedNode {
   if (isLeaf(node)) {
-    const scrollback = scrollbackFor?.(node.id) ?? null;
+    const scrollback = extras.scrollback?.(node.id) ?? null;
+    const agent = extras.agent?.(node.id) ?? null;
     return {
       kind: "leaf",
       ...(node.cwd !== undefined && { cwd: node.cwd }),
       ...(node.id === activeLeafId && { active: true }),
       ...(scrollback !== null && { scrollback }),
+      ...(isResumableAgent(agent) && { agent }),
     };
   }
   return {
     kind: "split",
     dir: node.dir,
-    children: node.children.map((c) =>
-      serializeNode(c, activeLeafId, scrollbackFor),
-    ),
+    children: node.children.map((c) => serializeNode(c, activeLeafId, extras)),
     ...(node.sizes !== undefined && { sizes: node.sizes }),
   };
 }
@@ -88,16 +111,13 @@ export function isSerializableTab(tab: Tab): boolean {
   }
 }
 
-function serializeTab(
-  tab: Tab,
-  scrollbackFor?: ScrollbackProvider,
-): SerializedTab | null {
+function serializeTab(tab: Tab, extras: LeafExtras): SerializedTab | null {
   if (!isSerializableTab(tab)) return null;
   switch (tab.kind) {
     case "terminal":
       return {
         kind: "terminal",
-        tree: serializeNode(tab.paneTree, tab.activeLeafId, scrollbackFor),
+        tree: serializeNode(tab.paneTree, tab.activeLeafId, extras),
         ...(tab.customTitle !== undefined && { customTitle: tab.customTitle }),
         ...(tab.color !== undefined && { color: tab.color }),
       };
@@ -114,11 +134,11 @@ function serializeTab(
 
 export function serializeTabs(
   tabs: Tab[],
-  scrollbackFor?: ScrollbackProvider,
+  extras: LeafExtras = {},
 ): SerializedTab[] {
   const out: SerializedTab[] = [];
   for (const tab of tabs) {
-    const s = serializeTab(tab, scrollbackFor);
+    const s = serializeTab(tab, extras);
     if (s) out.push(s);
   }
   return out;
@@ -134,12 +154,15 @@ function hydrateNode(
   node: SerializedNode,
   allocId: () => number,
   acc: { activeLeafId: number | null },
-  onScrollback?: ScrollbackSink,
+  sinks: LeafSinks,
 ): PaneNode {
   if (node.kind === "leaf") {
     const id = allocId();
     if (node.active && acc.activeLeafId === null) acc.activeLeafId = id;
-    if (node.scrollback && onScrollback) onScrollback(id, node.scrollback);
+    if (node.scrollback && sinks.scrollback)
+      sinks.scrollback(id, node.scrollback);
+    if (isResumableAgent(node.agent) && sinks.agent)
+      sinks.agent(id, node.agent);
     return {
       kind: "leaf",
       id,
@@ -147,7 +170,7 @@ function hydrateNode(
     };
   }
   const children = node.children.map((c) =>
-    hydrateNode(c, allocId, acc, onScrollback),
+    hydrateNode(c, allocId, acc, sinks),
   );
   if (children.length === 0) return { kind: "leaf", id: allocId() };
   if (children.length === 1) return children[0];
@@ -165,10 +188,10 @@ function hydrateNode(
 function hydrateTree(
   tree: SerializedNode,
   allocId: () => number,
-  onScrollback?: ScrollbackSink,
+  sinks: LeafSinks,
 ): HydratedTree {
   const acc: { activeLeafId: number | null } = { activeLeafId: null };
-  const paneTree = hydrateNode(tree, allocId, acc, onScrollback);
+  const paneTree = hydrateNode(tree, allocId, acc, sinks);
   const leaves = collectLeaves(paneTree);
   const activeLeafId = acc.activeLeafId ?? leaves[0]?.id ?? allocId();
   const firstLeafCwd =
@@ -185,14 +208,14 @@ function hydrateTab(
   s: SerializedTab,
   spaceId: string,
   allocId: () => number,
-  onScrollback?: ScrollbackSink,
+  sinks: LeafSinks,
 ): Tab | null {
   switch (s.kind) {
     case "terminal": {
       const { tree, activeLeafId, firstLeafCwd } = hydrateTree(
         s.tree,
         allocId,
-        onScrollback,
+        sinks,
       );
       const title =
         s.customTitle ?? (firstLeafCwd ? basename(firstLeafCwd) : "shell");
@@ -265,13 +288,13 @@ export function hydrateTabs(
   serialized: SerializedTab[],
   spaceId: string,
   allocId: () => number,
-  onScrollback?: ScrollbackSink,
+  sinks: LeafSinks = {},
 ): Tab[] {
   if (!Array.isArray(serialized)) return [];
   const out: Tab[] = [];
   for (const s of serialized) {
     try {
-      const tab = hydrateTab(s, spaceId, allocId, onScrollback);
+      const tab = hydrateTab(s, spaceId, allocId, sinks);
       if (tab) out.push(tab);
     } catch {
       // Skip corrupted entries rather than failing the whole restore.

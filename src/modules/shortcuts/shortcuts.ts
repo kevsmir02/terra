@@ -42,6 +42,7 @@ export type ShortcutId =
   | "view.zoomReset"
   | "view.zenMode"
   | "agent.focusAttention"
+  | "agent.resume"
   | "settings.open"
   | "sidebar.toggle"
   | "editor.undo"
@@ -291,9 +292,15 @@ export const SHORTCUTS: Shortcut[] = [
   },
   {
     id: "agent.focusAttention",
-    label: "Jump to agent needing attention",
+    label: "Jump to next waiting agent",
     group: "Terminal",
     defaultBindings: [{ ctrl: true, shift: true, key: "a" }],
+  },
+  {
+    id: "agent.resume",
+    label: "Resume this pane's agent",
+    group: "Terminal",
+    defaultBindings: [{ ctrl: true, shift: true, key: "r" }],
   },
   {
     id: "sidebar.toggle",

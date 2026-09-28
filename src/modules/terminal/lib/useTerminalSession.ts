@@ -504,6 +504,7 @@ async function openPtyForSession(
     },
     cwd,
     usePreferencesStore.getState().terminalShell || undefined,
+    usePreferencesStore.getState().agentCommands,
   );
   // Only resize if the bound dims changed during the spawn: a same-size
   // ResizePseudoConsole during conhost warmup is a known ConPTY trigger for
