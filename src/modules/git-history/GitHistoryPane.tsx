@@ -39,6 +39,7 @@ import {
   type GraphRow,
   type GraphState,
 } from "./lib/graph";
+import { fileAtCommit } from "./lib/fileHistory";
 import {
   commitWebUrl,
   hostLabel,
@@ -49,6 +50,9 @@ import {
 const RAIL_RESERVED_PX = railWidth(MAX_VISIBLE_LANES);
 // rail | sha | subject(capped) | spacer(absorbs slack) | author(hugs) | date | changes
 const GRID_TEMPLATE = `${RAIL_RESERVED_PX + 4}px 60px minmax(0, 560px) minmax(12px, 1fr) minmax(140px, max-content) 96px 116px`;
+// A path-filtered log has no parent links between its rows, so no rail.
+const FILE_GRID_TEMPLATE =
+  "4px 60px minmax(0, 560px) minmax(12px, 1fr) minmax(140px, max-content) 96px 116px";
 
 const PAGE_SIZE = 30;
 const ROW_HEIGHT = 32;
@@ -72,6 +76,11 @@ export type GitHistorySearchHandle = {
 
 type Props = {
   repoRoot: string;
+  /** Filters the log to this file (followed across renames) or directory;
+   * a row then opens the file's diff at that commit directly. */
+  path?: string | null;
+  /** The filter is a directory: rows keep the file picker. */
+  directory?: boolean;
   onOpenCommitFile: (input: CommitFileDiffOpenInput) => void;
   /** Lets the header search bar drive commit filtering for the active pane. */
   onSearchHandle?: (handle: GitHistorySearchHandle | null) => void;
@@ -191,9 +200,12 @@ function highlight(text: string, query: string): ReactNode {
 
 export function GitHistoryPane({
   repoRoot,
+  path = null,
+  directory = false,
   onOpenCommitFile,
   onSearchHandle,
 }: Props) {
+  const filePath = path || null;
   const [commits, setCommits] = useState<GitLogEntry[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -224,6 +236,7 @@ export function GitHistoryPane({
   const bumpFiles = useCallback(() => setFilesTick((n) => n + 1), []);
 
   const requestIdRef = useRef(0);
+  const anchorRef = useRef<string | null>(null);
   const inflightMoreRef = useRef(false);
   const filesInflightRef = useRef(new Set<string>());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -245,7 +258,7 @@ export function GitHistoryPane({
 
   const { graphByCommit, maxLaneCount } = useMemo(() => {
     const cache = graphCacheRef.current;
-    if (commits.length === 0) {
+    if (commits.length === 0 || filePath) {
       cache.rows = [];
       cache.byCommit = new Map();
       cache.tail = EMPTY_GRAPH_STATE;
@@ -287,8 +300,8 @@ export function GitHistoryPane({
       cache.maxLaneCount = max;
     }
     return { graphByCommit: cache.byCommit, maxLaneCount: cache.maxLaneCount };
-  }, [commits]);
-  const gridTemplate = GRID_TEMPLATE;
+  }, [commits, filePath]);
+  const gridTemplate = filePath ? FILE_GRID_TEMPLATE : GRID_TEMPLATE;
 
   const filtered = useMemo(() => {
     const q = activeSearch.toLowerCase();
@@ -320,7 +333,22 @@ export function GitHistoryPane({
     setError(null);
     setEndReached(false);
     try {
-      const entries = await gitIpc.gitLog(repoRoot, { limit: PAGE_SIZE });
+      let entries: GitLogEntry[];
+      if (filePath) {
+        // Anchored at the head, never the first row: see gitIpc.gitLog.
+        const [head] = await gitIpc.gitLog(repoRoot, { limit: 1 });
+        anchorRef.current = head?.sha ?? null;
+        entries = head
+          ? await gitIpc.gitLog(repoRoot, {
+              limit: PAGE_SIZE,
+              anchorSha: head.sha,
+              path: filePath,
+            })
+          : [];
+      } else {
+        entries = await gitIpc.gitLog(repoRoot, { limit: PAGE_SIZE });
+        anchorRef.current = entries[0]?.sha ?? null;
+      }
       if (requestId !== requestIdRef.current) return;
       setCommits(entries);
       setLoadStatus("idle");
@@ -330,20 +358,21 @@ export function GitHistoryPane({
       setError(normalizeError(err));
       setLoadStatus("error");
     }
-  }, [repoRoot]);
+  }, [repoRoot, filePath]);
 
   const loadMore = useCallback(async () => {
     if (inflightMoreRef.current || endReached) return;
     if (loadStatus !== "idle") return;
-    const head = commits[0];
-    if (!head) return;
+    const anchor = anchorRef.current;
+    if (!anchor || commits.length === 0) return;
     inflightMoreRef.current = true;
     setLoadStatus("more");
     try {
       const entries = await gitIpc.gitLog(repoRoot, {
         limit: PAGE_SIZE,
         skip: commits.length,
-        anchorSha: head.sha,
+        anchorSha: anchor,
+        path: filePath ?? undefined,
       });
       setCommits((prev) => {
         const seen = new Set(prev.map((c) => c.sha));
@@ -359,7 +388,7 @@ export function GitHistoryPane({
     } finally {
       inflightMoreRef.current = false;
     }
-  }, [commits, endReached, loadStatus, repoRoot]);
+  }, [commits, endReached, loadStatus, repoRoot, filePath]);
 
   useEffect(() => {
     filesInflightRef.current.clear();
@@ -451,8 +480,32 @@ export function GitHistoryPane({
     [repoRoot, bumpFiles],
   );
 
+  const openFileAtCommit = useCallback(
+    (sha: string) => {
+      const index = commits.findIndex((c) => c.sha === sha);
+      const file = fileAtCommit(commits, index);
+      const commit = commits[index];
+      if (!commit || !file) return;
+      onOpenCommitFile({
+        repoRoot,
+        sha: commit.sha,
+        shortSha: commit.shortSha,
+        subject: commit.subject,
+        path: file.path,
+        originalPath: file.originalPath,
+      });
+    },
+    [commits, onOpenCommitFile, repoRoot],
+  );
+
+  const opensFileDirectly = !!filePath && !directory;
+
   const handleRowClick = useCallback(
     (sha: string, event: React.MouseEvent<HTMLElement>) => {
+      if (opensFileDirectly) {
+        openFileAtCommit(sha);
+        return;
+      }
       if (openAnchor?.sha === sha) {
         setOpenAnchor(null);
         return;
@@ -472,7 +525,7 @@ export function GitHistoryPane({
       });
       void fetchFiles(sha);
     },
-    [fetchFiles, openAnchor?.sha],
+    [fetchFiles, openAnchor?.sha, opensFileDirectly, openFileAtCommit],
   );
 
   const closePopover = useCallback(() => setOpenAnchor(null), []);
@@ -530,9 +583,13 @@ export function GitHistoryPane({
           </CenterPlaceholder>
         ) : commits.length === 0 ? (
           <CenterPlaceholder>
-            <div className="text-[13px] font-medium">No commits yet</div>
+            <div className="text-[13px] font-medium">
+              {filePath ? "No history" : "No commits yet"}
+            </div>
             <div className="max-w-md text-[11px] leading-relaxed text-muted-foreground">
-              This branch has no commits.
+              {filePath
+                ? "No commit on this branch touches this path."
+                : "This branch has no commits."}
             </div>
           </CenterPlaceholder>
         ) : (

@@ -104,7 +104,40 @@ export type GitLogEntry = {
   filesChanged: number;
   insertions: number;
   deletions: number;
+  /** File history only: the file's name at this commit, and before it when
+   * the commit renamed it. */
+  path: string | null;
+  originalPath: string | null;
 };
+
+export type GitBlameCommit = {
+  sha: string;
+  shortSha: string;
+  author: string;
+  authorEmail: string;
+  authorTime: number;
+  summary: string;
+  /** The blamed file's repo-relative name in this commit. */
+  filename: string;
+  previousSha: string | null;
+  previousFilename: string | null;
+  boundary: boolean;
+  uncommitted: boolean;
+};
+
+/** `count` lines from 1-based `start` belong to `commits[commit]`. */
+export type GitBlameHunk = { start: number; count: number; commit: number };
+
+export type GitBlame =
+  | {
+      kind: "ready";
+      repoRoot: string;
+      commits: GitBlameCommit[];
+      hunks: GitBlameHunk[];
+    }
+  | { kind: "untracked" }
+  | { kind: "tooLarge" }
+  | { kind: "notInRepo" };
 
 export type GitCommitFileChange = {
   path: string;

@@ -89,6 +89,9 @@ export type GitHistoryTab = TabBase & {
   kind: "git-history";
   title: string;
   repoRoot: string;
+  /** Absolute path of the file or directory the history is filtered to. */
+  path?: string | null;
+  directory?: boolean;
 };
 
 export type GitCommitFileDiffTab = TabBase & {
@@ -684,12 +687,25 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   );
 
   const openCommitHistoryTab = useCallback(
-    (input: { repoRoot: string; branch?: string | null }) => {
+    (input: {
+      repoRoot: string;
+      branch?: string | null;
+      path?: string | null;
+      directory?: boolean;
+    }) => {
       const curr = tabsRef.current;
+      const path = input.path ?? null;
       const existing = curr.find(
-        (t) => t.kind === "git-history" && t.repoRoot === input.repoRoot,
+        (t) =>
+          t.kind === "git-history" &&
+          t.repoRoot === input.repoRoot &&
+          (t.path ?? null) === path,
       );
-      const title = input.branch ? `History · ${input.branch}` : "Git History";
+      const title = path
+        ? `History · ${basename(path)}`
+        : input.branch
+          ? `History · ${input.branch}`
+          : "Git History";
       if (existing) {
         const nextTabs = curr.map((t) =>
           t.id === existing.id ? { ...t, title } : t,
@@ -708,6 +724,8 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           spaceId: activeSpaceIdRef.current,
           title,
           repoRoot: input.repoRoot,
+          path,
+          directory: input.directory ?? false,
         } satisfies GitHistoryTab,
       ];
       tabsRef.current = nextTabs;

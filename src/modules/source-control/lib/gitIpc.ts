@@ -1,4 +1,5 @@
 import type {
+  GitBlame,
   GitBranchListResult,
   GitCommitFileChange,
   GitCommitResult,
@@ -46,17 +47,26 @@ export const gitIpc = {
       message,
     }),
   /** Pages by `skip` from `anchorSha`, the first page's head, so a merge or
-   * a commit made between pages can neither skip nor repeat a row. */
+   * a commit made between pages can neither skip nor repeat a row. With
+   * `path` the anchor must be the head, not the first row: the newest commit
+   * touching a file can sit on a merged side branch. */
   gitLog: (
     repoRoot: string,
-    options?: { limit?: number; skip?: number; anchorSha?: string },
+    options?: {
+      limit?: number;
+      skip?: number;
+      anchorSha?: string;
+      path?: string;
+    },
   ) =>
     invoke<GitLogEntry[]>("git_log", {
       repoRoot,
       limit: options?.limit ?? null,
       skip: options?.skip ?? null,
       anchorSha: options?.anchorSha ?? null,
+      path: options?.path ?? null,
     }),
+  gitBlame: (path: string) => invoke<GitBlame>("git_blame", { path }),
   gitCommitFiles: (repoRoot: string, sha: string) =>
     invoke<GitCommitFileChange[]>("git_commit_files", {
       repoRoot,
