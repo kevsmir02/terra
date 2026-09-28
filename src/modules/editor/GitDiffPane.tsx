@@ -26,11 +26,13 @@ import { HunkBar } from "./HunkBar";
 import {
   commitDiffKey,
   fetchCommitDiff,
+  fetchTurnDiff,
   fetchWorkingDiff,
   getCachedDiff,
   invalidateRepoDiffs,
   sameDiff,
   subscribeDiffInvalidation,
+  turnDiffKey,
   workingDiffKey,
 } from "./lib/diffCache";
 import {
@@ -69,8 +71,18 @@ type CommitSource = {
   originalPath: string | null;
 };
 
+/** A file as a turn's checkpoint had it, against the working tree now. */
+type TurnSource = {
+  kind: "turn";
+  repoRoot: string;
+  checkpoint: string;
+  path: string;
+};
+
+type Source = WorkingSource | CommitSource | TurnSource;
+
 type Props = {
-  source: WorkingSource | CommitSource;
+  source: Source;
   chipLabel?: string;
   active: boolean;
   /** A working diff saw the repo change under it; the status should follow. */
@@ -134,13 +146,35 @@ type LoadState =
     }
   | { kind: "error"; message: string };
 
-function cacheKey(source: WorkingSource | CommitSource): string {
-  return source.kind === "working"
-    ? workingDiffKey(source.repoRoot, source.path, source.mode)
-    : commitDiffKey(source.repoRoot, source.sha, source.path);
+function cacheKey(source: Source): string {
+  switch (source.kind) {
+    case "working":
+      return workingDiffKey(source.repoRoot, source.path, source.mode);
+    case "commit":
+      return commitDiffKey(source.repoRoot, source.sha, source.path);
+    case "turn":
+      return turnDiffKey(source.repoRoot, source.checkpoint, source.path);
+  }
 }
 
-function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
+function fetchDiff(src: Source, force: boolean) {
+  switch (src.kind) {
+    case "working":
+      return fetchWorkingDiff(
+        src.repoRoot,
+        src.path,
+        src.mode,
+        src.originalPath,
+        force,
+      );
+    case "commit":
+      return fetchCommitDiff(src.repoRoot, src.sha, src.path, src.originalPath);
+    case "turn":
+      return fetchTurnDiff(src.repoRoot, src.checkpoint, src.path, force);
+  }
+}
+
+function loadStateFromCache(source: Source): LoadState {
   const hit = getCachedDiff(cacheKey(source));
   if (!hit) return { kind: "idle" };
   return {
@@ -172,8 +206,8 @@ export function GitDiffPane({
   sourceRef.current = source;
 
   const key = cacheKey(source);
-  const isWorking = source.kind === "working";
-  const watchedRoot = active && isWorking ? source.repoRoot : null;
+  const followsWorktree = source.kind !== "commit";
+  const watchedRoot = active && followsWorktree ? source.repoRoot : null;
 
   useEffect(() => {
     if (!watchedRoot) return;
@@ -205,16 +239,7 @@ export function GitDiffPane({
     }
     let cancelled = false;
     setState((prev) => (prev.kind === "loaded" ? prev : { kind: "loading" }));
-    const promise =
-      src.kind === "working"
-        ? fetchWorkingDiff(
-            src.repoRoot,
-            src.path,
-            src.mode,
-            src.originalPath,
-            hasCached,
-          )
-        : fetchCommitDiff(src.repoRoot, src.sha, src.path, src.originalPath);
+    const promise = fetchDiff(src, hasCached);
     Promise.all([promise, resolveLanguage(src.path).catch(() => null)])
       .then(([res, lang]) => {
         if (cancelled) return;

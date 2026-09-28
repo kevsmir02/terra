@@ -49,6 +49,9 @@ export type CommandPaletteActionContext = {
   stepFile: (dir: 1 | -1) => void;
   canRunHunk: boolean;
   runHunk: (kind: "stage" | "discard") => void;
+  /** The focused pane's agent turn has a checkpoint to compare against. */
+  hasTurn: boolean;
+  openTurn: (revert: boolean) => void;
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
@@ -279,6 +282,22 @@ export function createCommandItems(
       disabledReason: ctx.canRunHunk ? undefined : "No working diff open",
       run: () => ctx.runHunk(kind),
     })),
+    // Absent, not disabled, outside a repo or with checkpoints off.
+    ...(ctx.hasTurn
+      ? (
+          [
+            ["agent.turnChanges", "Show changes this turn", false],
+            ["agent.turnRevert", "Revert this turn", true],
+          ] as const
+        ).map(([id, title, revert]) => ({
+          id,
+          title,
+          group: "Git" as const,
+          keywords: ["agent", "turn", "checkpoint", "changes", "undo", "diff"],
+          icon: SourceCodeIcon,
+          run: () => ctx.openTurn(revert),
+        }))
+      : []),
     {
       id: "search.content",
       title: "Find content in files",

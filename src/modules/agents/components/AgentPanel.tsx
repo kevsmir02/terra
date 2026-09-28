@@ -8,7 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useState } from "react";
 import { AgentIcon } from "../lib/agentIcon";
 import { displayAgent } from "../lib/format";
 import { formatDuration, runEnding, waitingOrder } from "../lib/sessions";
@@ -24,6 +24,7 @@ import { useAgentStore } from "../store/agentStore";
 type Props = {
   onActivate: (tabId: number, leafId: number) => void;
   onClose: () => void;
+  sessionExtra?: (leafId: number, close: () => void) => ReactNode;
 };
 
 // Durations show whole minutes, so a coarse tick is exact enough.
@@ -257,7 +258,11 @@ function SectionLabel({ children }: { children: string }) {
  * popover, and the statusbar chip reads the store on its own. It is mounted
  * only while the popover is open, so its clock ticks only then.
  */
-export default function AgentPanel({ onActivate, onClose }: Props) {
+export default function AgentPanel({
+  onActivate,
+  onClose,
+  sessionExtra,
+}: Props) {
   const [hooks, setHooks] = useState<Record<string, boolean>>({});
   const [hookErrors, setHookErrors] = useState<Record<string, string>>({});
   const [installing, setInstalling] = useState<string | null>(null);
@@ -353,12 +358,14 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
       ) : (
         <div className="max-h-96 overflow-y-auto border-t border-border/(--emph-strong) p-1">
           {active.map((s) => (
-            <StatusRow
-              key={s.leafId}
-              session={s}
-              now={now}
-              onClick={() => activate(s.tabId, s.leafId)}
-            />
+            <Fragment key={s.leafId}>
+              <StatusRow
+                session={s}
+                now={now}
+                onClick={() => activate(s.tabId, s.leafId)}
+              />
+              {sessionExtra?.(s.leafId, onClose)}
+            </Fragment>
           ))}
           {notifications.length > 0 ? (
             <>
@@ -376,13 +383,18 @@ export default function AgentPanel({ onActivate, onClose }: Props) {
           {recent.length > 0 ? (
             <>
               <SectionLabel>Recent runs</SectionLabel>
-              {recent.map((r) => (
-                <RecentRow
-                  key={r.id}
-                  run={r}
-                  now={now}
-                  onClick={() => activate(r.tabId, r.leafId)}
-                />
+              {recent.map((r, i) => (
+                <Fragment key={r.id}>
+                  <RecentRow
+                    run={r}
+                    now={now}
+                    onClick={() => activate(r.tabId, r.leafId)}
+                  />
+                  {sessions[r.leafId] ||
+                  recent.findIndex((x) => x.leafId === r.leafId) !== i
+                    ? null
+                    : sessionExtra?.(r.leafId, onClose)}
+                </Fragment>
               ))}
             </>
           ) : null}

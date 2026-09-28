@@ -14,6 +14,24 @@ export function GitDiffStack({ tabs, activeId, onRepoChanged }: Props) {
       t.id === activeId,
   );
   if (!active) return null;
+  if (active.kind === "git-diff" && active.checkpoint) {
+    return (
+      <div className="h-full w-full">
+        <GitDiffPane
+          key={active.id}
+          active
+          onRepoChanged={onRepoChanged}
+          chipLabel="turn"
+          source={{
+            kind: "turn",
+            repoRoot: active.repoRoot,
+            checkpoint: active.checkpoint,
+            path: active.path,
+          }}
+        />
+      </div>
+    );
+  }
   if (active.kind === "git-diff") {
     return (
       <div className="h-full w-full">

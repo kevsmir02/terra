@@ -85,6 +85,8 @@ export type GitDiffTab = TabBase & {
   /** Opened by stepping through changed files, so the next step replaces it.
    * Opening it on purpose clears the flag. */
   preview?: boolean;
+  /** Diffs against this turn checkpoint instead of the index. */
+  checkpoint?: string;
 };
 
 export type GitHistoryTab = TabBase & {
@@ -640,6 +642,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       originalPath?: string | null;
       title?: string;
       preview?: boolean;
+      checkpoint?: string;
     }) => {
       const curr = tabsRef.current;
       const existing = curr.find(
@@ -647,10 +650,12 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           t.kind === "git-diff" &&
           t.repoRoot === input.repoRoot &&
           t.path === input.path &&
-          t.mode === input.mode,
+          t.mode === input.mode &&
+          t.checkpoint === input.checkpoint,
       );
       const computedTitle =
-        input.title ?? `${basename(input.path)} (${input.mode})`;
+        input.title ??
+        `${basename(input.path)} (${input.checkpoint ? "turn" : input.mode})`;
       const originalPath = input.originalPath ?? null;
 
       if (existing) {
@@ -681,6 +686,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           mode: input.mode,
           originalPath,
           preview: input.preview ?? false,
+          ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
         } satisfies GitDiffTab,
       ];
       tabsRef.current = nextTabs;

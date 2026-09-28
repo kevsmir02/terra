@@ -17,6 +17,14 @@ import {
   nextAttentionTarget,
   persistedAgent,
 } from "@/modules/agents";
+import {
+  CheckpointBridge,
+  type Turn,
+  TurnActions,
+  TurnChangesDialog,
+  type TurnDialogView,
+  turnFor,
+} from "@/modules/checkpoints";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
   DeviceDock,
@@ -90,6 +98,7 @@ import {
   findLeafCwd,
   formatDroppedPaths,
   hasLeaf,
+  leafIdForPty,
   leafIds,
   type PaneBounds,
   pasteIntoLeaf,
@@ -302,6 +311,29 @@ export default function App() {
   });
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);
+  // Mounted on the first request and kept for the close animation.
+  const [turnDialog, setTurnDialog] = useState<{
+    turn: Turn;
+    view: TurnDialogView;
+    open: boolean;
+  } | null>(null);
+  const openTurn = useCallback((leafId: number, revert: boolean) => {
+    const turn = turnFor(leafId);
+    if (turn)
+      setTurnDialog({ turn, view: revert ? "revert" : "list", open: true });
+  }, []);
+  const turnSessionExtra = useCallback(
+    (leafId: number, close: () => void) => (
+      <TurnActions
+        leafId={leafId}
+        onOpen={(leaf, revert) => {
+          close();
+          openTurn(leaf, revert);
+        }}
+      />
+    ),
+    [openTurn],
+  );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   // Latches on first open so the palette chunk is fetched then, not at startup.
   // It stays mounted afterwards, keeping the dialog's exit animation.
@@ -1108,6 +1140,10 @@ export default function App() {
             stepChange: stepDiffChunk,
             stepFile,
             canRunHunk: canRunHunkShortcut(),
+            hasTurn: turnFor(activeLeafId) !== null,
+            openTurn: (revert) => {
+              if (activeLeafId !== null) openTurn(activeLeafId, revert);
+            },
             runHunk: (kind) => void runHunkShortcut(kind),
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
@@ -1145,6 +1181,8 @@ export default function App() {
       openBroadcast,
       canStepFile,
       stepFile,
+      activeLeafId,
+      openTurn,
     ],
   );
 
@@ -1357,7 +1395,12 @@ export default function App() {
                 behind: sourceControl.behind,
                 changedCount: sourceControl.changedCount,
               }}
-              agents={<AgentStatusCluster onActivate={onActivateAgent} />}
+              agents={
+                <AgentStatusCluster
+                  onActivate={onActivateAgent}
+                  sessionExtra={turnSessionExtra}
+                />
+              }
             />
           )}
 
@@ -1366,7 +1409,29 @@ export default function App() {
             activeId={activeId}
             onActivate={onActivateAgent}
           />
+          <CheckpointBridge
+            cwdForLeaf={cwdForLeaf}
+            leafIdForPty={leafIdForPty}
+          />
           <Toaster position="bottom-right" />
+
+          {turnDialog && (
+            <TurnChangesDialog
+              open={turnDialog.open}
+              onOpenChange={(open) =>
+                setTurnDialog((d) => (d ? { ...d, open } : d))
+              }
+              turn={turnDialog.turn}
+              view={turnDialog.view}
+              onViewChange={(view) =>
+                setTurnDialog((d) => (d ? { ...d, view } : d))
+              }
+              onOpenDiff={(repoRoot, checkpoint, path) =>
+                openGitDiffTab({ repoRoot, path, mode: "-", checkpoint })
+              }
+              onReverted={refreshSourceControl}
+            />
+          )}
 
           {switcherState && (
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />
