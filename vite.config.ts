@@ -90,6 +90,9 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
           )
             return "react";
 
+          // Loaded on the first terminal search (lazySearch.ts), so it must
+          // not ride along in the eager xterm chunk.
+          if (id.includes("@xterm/addon-search")) return "xterm-search";
           if (id.includes("/xterm/") || id.includes("@xterm/")) return "xterm";
           // Lang packs and legacy modes are dynamically imported by
           // languageResolver; give each its own named chunk so they load on

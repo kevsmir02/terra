@@ -65,6 +65,8 @@ import {
 } from "@/modules/spaces";
 import { StatusBar } from "@/modules/statusbar";
 import {
+  announceSplitCap,
+  splitCapReached,
   TabSwitcherHud,
   useTabSwitcher,
   useTabs,
@@ -75,6 +77,7 @@ import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import {
   clearFocusedTerminal,
   configureTerminalLinks,
+  BroadcastInput,
   disposeSession,
   findLeafCwd,
   formatDroppedPaths,
@@ -85,6 +88,7 @@ import {
   persistedScrollback,
   submitToNewTab,
   type TerminalPaneHandle,
+  type TerminalSearch,
   useTerminalDropStore,
   useTerminalFileDrop,
 } from "@/modules/terminal";
@@ -92,7 +96,6 @@ import { ThemeProvider } from "@/modules/theme";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
@@ -132,6 +135,7 @@ export default function App() {
     focusPane,
     focusNextPaneInTab,
     swapActivePaneInDirection,
+    resizeSplit,
     splitActivePane,
     closeActivePane,
     closePaneByLeaf,
@@ -156,9 +160,9 @@ export default function App() {
   }, [tabs, activeId]);
   const activeLeafId = activeTerminalTab?.activeLeafId ?? null;
 
-  const searchAddons = useRef<Map<number, SearchAddon>>(new Map());
+  const searchAddons = useRef<Map<number, TerminalSearch>>(new Map());
   const [activeSearchAddon, setActiveSearchAddon] =
-    useState<SearchAddon | null>(null);
+    useState<TerminalSearch | null>(null);
   const searchInlineRef = useRef<SearchInlineHandle | null>(null);
   const terminalRefs = useRef<Map<number, TerminalPaneHandle>>(new Map());
   const editorRefs = useRef<Map<number, EditorPaneHandle>>(new Map());
@@ -294,6 +298,13 @@ export default function App() {
   // Latches on first open so the palette chunk is fetched then, not at startup.
   // It stays mounted afterwards, keeping the dialog's exit animation.
   const [paletteMounted, setPaletteMounted] = useState(false);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  // Latched like the palette: the dialog chunk loads on first use only.
+  const [broadcastMounted, setBroadcastMounted] = useState(false);
+  const openBroadcast = useCallback(() => {
+    setBroadcastMounted(true);
+    setBroadcastOpen(true);
+  }, []);
   const [paletteInitialMode, setPaletteInitialMode] = useState<
     "commands" | "content"
   >("commands");
@@ -308,6 +319,10 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeId);
   const isTerminalTab = activeTab?.kind === "terminal";
+  const broadcastLeafIds = useMemo(
+    () => (activeTab?.kind === "terminal" ? leafIds(activeTab.paneTree) : []),
+    [activeTab],
+  );
   const isEditorTab = activeTab?.kind === "editor";
   const isGitHistoryTab = activeTab?.kind === "git-history";
 
@@ -331,7 +346,7 @@ export default function App() {
   }, [activeId, activeLeafId]);
 
   const handleSearchReady = useCallback(
-    (leafId: number, addon: SearchAddon) => {
+    (leafId: number, addon: TerminalSearch) => {
       searchAddons.current.set(leafId, addon);
       if (leafId === activeLeafId) setActiveSearchAddon(addon);
     },
@@ -600,6 +615,10 @@ export default function App() {
     (dir: "row" | "col") => {
       const t = tabsRef.current.find((x) => x.id === activeId);
       if (t?.kind !== "terminal") return;
+      if (splitCapReached(t.paneTree)) {
+        announceSplitCap();
+        return;
+      }
       splitActivePane(activeId, dir);
     },
     [activeId, splitActivePane],
@@ -680,6 +699,7 @@ export default function App() {
       "pane.swapUp": () => swapActivePane("up"),
       "pane.swapDown": () => swapActivePane("down"),
       "pane.source": toggleSourceControl,
+      "pane.broadcast": openBroadcast,
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
@@ -742,6 +762,7 @@ export default function App() {
       zoomOut,
       zoomReset,
       activateAgentTarget,
+      openBroadcast,
     ],
   );
 
@@ -763,7 +784,8 @@ export default function App() {
         id === "terminal.prevCommand" ||
         id === "terminal.nextCommand" ||
         id === "terminal.selectLastOutput" ||
-        id === "terminal.copyLastOutput"
+        id === "terminal.copyLastOutput" ||
+        id === "pane.broadcast"
       ) {
         return activeTab?.kind !== "terminal";
       }
@@ -1037,6 +1059,7 @@ export default function App() {
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
+            broadcastToPanes: openBroadcast,
             focusSearch: () => searchInlineRef.current?.focus(),
             focusExplorerSearch: () => explorerRef.current?.focusSearch(),
             toggleSidebar,
@@ -1066,6 +1089,7 @@ export default function App() {
       toggleSidebar,
       activeSpaceId,
       handleNewSpace,
+      openBroadcast,
     ],
   );
 
@@ -1219,6 +1243,7 @@ export default function App() {
                       onCwd={handleTerminalCwd}
                       onExit={handleLeafExit}
                       onFocusLeaf={handleFocusLeaf}
+                      onResizeSplit={resizeSplit}
                       registerEditorHandle={registerEditorHandle}
                       onEditorDirtyChange={handleEditorDirty}
                       onEditorCloseTab={disposeTab}
@@ -1288,6 +1313,14 @@ export default function App() {
 
           {switcherState && (
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />
+          )}
+
+          {broadcastMounted && (
+            <BroadcastInput
+              open={broadcastOpen}
+              onOpenChange={setBroadcastOpen}
+              leafIds={broadcastLeafIds}
+            />
           )}
 
           {paletteMounted && (

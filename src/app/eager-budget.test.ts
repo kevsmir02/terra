@@ -17,6 +17,8 @@ const HEAVY = [
   "@iconify-json/catppuccin",
   "mermaid",
   "@streamdown/mermaid",
+  // Fetched on the first terminal search by lazySearch.ts.
+  "@xterm/addon-search",
 ];
 
 function heavyEagerHits(entry: string): string[] {
@@ -80,5 +82,21 @@ describe("editor theme presets load on demand", () => {
   ])("%s does not statically import a preset theme", (entry) => {
     const { hits } = traceEager(entry, PRESETS);
     expect([...hits.keys()]).toEqual([]);
+  });
+});
+
+// Surfaces a user opens with one gesture: only the shell that offers them may
+// sit in the startup graph, never the surface itself.
+describe("on-demand panels stay lazy", () => {
+  const { files } = traceEager("src/main.tsx", []);
+
+  it("reaches the broadcast wrapper but not the dialog", () => {
+    expect(files).toContain("src/modules/terminal/BroadcastInputLazy.tsx");
+    expect(files).not.toContain("src/modules/terminal/BroadcastInput.tsx");
+  });
+
+  it("reaches the search button but not the open panel", () => {
+    expect(files).toContain("src/modules/header/SearchInline.tsx");
+    expect(files).not.toContain("src/modules/header/SearchPanel.tsx");
   });
 });

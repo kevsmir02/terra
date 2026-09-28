@@ -62,7 +62,7 @@ function pkgOf(spec, watch) {
   return watch.find((w) => spec === w || spec.startsWith(w + "/"));
 }
 
-/** @returns {{ moduleCount: number, hits: Map<string, {spec:string, file:string}> }} */
+/** @returns {{ moduleCount: number, files: string[], hits: Map<string, {spec:string, file:string}> }} */
 export function traceEager(entry, watch = DEFAULT_WATCH) {
   const entryFile = resolve(root, entry);
   const seen = new Set();

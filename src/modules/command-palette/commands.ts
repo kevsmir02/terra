@@ -3,6 +3,7 @@ import { MAX_PANES_PER_TAB, type Tab } from "@/modules/tabs";
 import { leafIds } from "@/modules/terminal";
 import {
   Cancel01Icon,
+  ComputerTerminal02Icon,
   DashboardSquare01Icon,
   FileEditIcon,
   FileSearchIcon,
@@ -45,6 +46,7 @@ export type CommandPaletteActionContext = {
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
+  broadcastToPanes: () => void;
   focusSearch: () => void;
   focusExplorerSearch: () => void;
   toggleSidebar: () => void;
@@ -74,6 +76,7 @@ export function createCommandItems(
     : activePaneCount >= MAX_PANES_PER_TAB
       ? "Pane limit"
       : undefined;
+  const broadcastDisabled = !activeTerminalTab ? "No terminal tab" : undefined;
   const closeDisabled =
     onlyOneTab && activePaneCount < 2 ? "Last tab" : undefined;
 
@@ -201,6 +204,16 @@ export function createCommandItems(
       shortcutId: "pane.splitDown",
       disabledReason: splitDisabled,
       run: ctx.splitPaneDown,
+    },
+    {
+      id: "pane.broadcast",
+      title: "Send input to all panes",
+      group: "Panes",
+      keywords: ["broadcast", "all panes", "type", "send", "agents", "sync"],
+      icon: ComputerTerminal02Icon,
+      shortcutId: "pane.broadcast",
+      disabledReason: broadcastDisabled,
+      run: ctx.broadcastToPanes,
     },
     {
       id: "git.graph",

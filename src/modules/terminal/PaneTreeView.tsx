@@ -3,19 +3,19 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import type { SearchAddon } from "@xterm/addon-search";
+import type { TerminalSearch } from "./lib/lazySearch";
 import { Fragment } from "react";
 import { DevServerChip } from "@/modules/preview/DevServerChip";
 import { cn } from "@/lib/utils";
 import { useAgentActivityStore } from "./lib/agentActivity";
 import { useTerminalDropStore } from "./lib/dropStore";
 import { ptyIdForLeaf } from "./lib/useTerminalSession";
-import { firstLeafSlotId, type PaneNode } from "./lib/panes";
+import { firstLeafSlotId, type PaneNode, splitSizes } from "./lib/panes";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
 type LeafBundle = {
   setRef: (h: TerminalPaneHandle | null) => void;
-  onSearchReady: (leafId: number, addon: SearchAddon) => void;
+  onSearchReady: (leafId: number, addon: TerminalSearch) => void;
   onCwd: (leafId: number, cwd: string) => void;
   onExit: (leafId: number, code: number) => void;
 };
@@ -28,6 +28,7 @@ type Props = {
    * next keystroke" stops being obvious and has to be drawn. */
   split: boolean;
   onFocusLeaf: (leafId: number) => void;
+  onResizeSplit: (splitId: number, sizes: number[]) => void;
   getBundle: (leafId: number) => LeafBundle;
 };
 
@@ -69,16 +70,34 @@ export function PaneTreeView(props: Props) {
     );
   }
 
+  const panelIds = node.children.map(
+    (child) => `pane-slot-${firstLeafSlotId(child)}`,
+  );
+  const shares = splitSizes(node);
+  // The group reads defaultLayout only when its panel set registers, never on
+  // a re-render, so tracking the tree here cannot drop a drag in flight. A
+  // panel-level defaultSize would re-register on every identity change.
+  const defaultLayout = Object.fromEntries(
+    panelIds.map((id, i) => [id, shares[i]]),
+  );
+
   return (
     <ResizablePanelGroup
       orientation={node.dir === "row" ? "horizontal" : "vertical"}
+      defaultLayout={defaultLayout}
+      onLayoutChanged={(layout) => {
+        const sizes = panelIds.map((id) => layout[id]);
+        if (sizes.every((v) => v !== undefined)) {
+          props.onResizeSplit(node.id, sizes);
+        }
+      }}
     >
       {node.children.map((child, i) => {
         const slotId = firstLeafSlotId(child);
         return (
           <Fragment key={slotId}>
             {i > 0 && <ResizableHandle />}
-            <ResizablePanel id={`pane-slot-${slotId}`} minSize="10%">
+            <ResizablePanel id={panelIds[i]} minSize="10%">
               <PaneTreeView {...props} node={child} />
             </ResizablePanel>
           </Fragment>

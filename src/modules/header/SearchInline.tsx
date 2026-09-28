@@ -1,14 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { KEY_SEP } from "@/lib/platform";
 import type { EditorPaneHandle } from "@/modules/editor";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { getBindingTokens, SHORTCUTS } from "@/modules/shortcuts/shortcuts";
-import { Cancel01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import type { TerminalSearch } from "@/modules/terminal/lib/lazySearch";
+import type { TerminalSearchFlags } from "@/modules/terminal/lib/terminalSearch";
+import { Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { SearchAddon } from "@xterm/addon-search";
 import {
   forwardRef,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -17,15 +19,18 @@ import {
   useState,
 } from "react";
 
-const TERM_DECORATIONS = {
-  matchBackground: "#515c6a",
-  activeMatchBackground: "#d18616",
-  matchOverviewRuler: "#d18616",
-  activeMatchColorOverviewRuler: "#d18616",
+const SearchPanel = lazy(() =>
+  import("./SearchPanel").then((m) => ({ default: m.SearchPanel })),
+);
+
+const NO_FLAGS: TerminalSearchFlags = {
+  caseSensitive: false,
+  regex: false,
+  wholeWord: false,
 };
 
 export type SearchTarget =
-  | { kind: "terminal"; addon: SearchAddon; focus: () => void }
+  | { kind: "terminal"; addon: TerminalSearch; focus: () => void }
   | { kind: "editor"; handle: EditorPaneHandle; focus: () => void }
   | {
       kind: "git-history";
@@ -47,6 +52,7 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
     // header widget: it opens on the shortcut or the button and closes on
     // Escape, so an empty box never taxes the width the tab strip needs.
     const [open, setOpen] = useState(false);
+    const [flags, setFlags] = useState<TerminalSearchFlags>(NO_FLAGS);
     const inputRef = useRef<HTMLInputElement>(null);
     const pendingFocusRef = useRef(false);
     const setInputRef = useCallback((el: HTMLInputElement | null) => {
@@ -103,42 +109,15 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
       else target.handle.clearQuery();
     }, [target]);
 
-    const restoreTargetFocus = useCallback(() => {
-      if (!target) return;
-      target.focus();
-    }, [target]);
-
     // Target switched (terminal ↔ editor) or removed → drop highlights.
     useEffect(() => clearTarget, [clearTarget]);
 
-    const applyIncremental = (next: string) => {
-      if (!target) return;
-      if (target.kind === "terminal") {
-        if (next) {
-          target.addon.findNext(next, {
-            incremental: true,
-            decorations: TERM_DECORATIONS,
-          });
-        } else {
-          target.addon.clearDecorations();
-        }
-      } else {
-        target.handle.setQuery(next);
-      }
-    };
-
-    const findDirection = (forward: boolean) => {
-      if (!target || !q) return;
-      if (target.kind === "terminal") {
-        const opts = { decorations: TERM_DECORATIONS };
-        if (forward) target.addon.findNext(q, opts);
-        else target.addon.findPrevious(q, opts);
-      } else if (target.kind === "editor") {
-        if (forward) target.handle.findNext();
-        else target.handle.findPrevious();
-      }
-      // git-history: the list filters live; Enter has no next/prev semantics.
-    };
+    const dismiss = useCallback(() => {
+      clearTarget();
+      setQ("");
+      setOpen(false);
+      target?.focus();
+    }, [clearTarget, target]);
 
     return (
       <div className="relative h-7 w-7 shrink-0">
@@ -154,68 +133,30 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
         </Button>
 
         {open ? (
-          <div className="terra-pop-in absolute top-full right-0 z-50 mt-1.5 w-80 rounded-lg border border-border/(--emph-soft) bg-popover/(--emph-bold) p-1.5 shadow-lg backdrop-blur-md">
-            <div className="relative">
-              <HugeiconsIcon
-                icon={Search01Icon}
-                size={13}
-                strokeWidth={1.75}
-                className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                ref={setInputRef}
-                value={q}
-                placeholder={placeholder}
-                className="h-7 w-full bg-muted/(--emph-bold) pr-7 pl-7 text-[13px]! placeholder:text-muted-foreground/(--emph-strong) focus-visible:ring-0"
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setQ(next);
-                  applyIncremental(next);
-                }}
-                onBlur={() => {
-                  if (!q) setOpen(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    findDirection(!e.shiftKey);
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    clearTarget();
-                    setQ("");
-                    setOpen(false);
-                    restoreTargetFocus();
-                  }
-                }}
-              />
-              {q && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQ("");
-                    clearTarget();
-                    inputRef.current?.focus();
-                  }}
-                  className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <HugeiconsIcon
-                    icon={Cancel01Icon}
-                    size={11}
-                    strokeWidth={2}
-                  />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2 px-1 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">
-              <span className="truncate">{scopeLabel}</span>
-              <span className="ml-auto shrink-0">
-                {hasDirection
-                  ? "Enter next \u00b7 Shift+Enter prev \u00b7 Esc close"
-                  : "Esc close"}
-              </span>
-            </div>
-          </div>
+          <Suspense fallback={null}>
+            <SearchPanel
+              target={target}
+              q={q}
+              setQ={setQ}
+              flags={flags}
+              setFlags={setFlags}
+              placeholder={placeholder}
+              scopeLabel={scopeLabel}
+              hasDirection={hasDirection}
+              leadingIcon={
+                <HugeiconsIcon
+                  icon={Search01Icon}
+                  size={13}
+                  strokeWidth={1.75}
+                  className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
+                />
+              }
+              inputRef={setInputRef}
+              clearTarget={clearTarget}
+              onIdleBlur={() => setOpen(false)}
+              onDismiss={dismiss}
+            />
+          </Suspense>
         ) : null}
       </div>
     );

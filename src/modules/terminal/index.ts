@@ -1,5 +1,6 @@
 export { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 export { TerminalStack } from "./TerminalStack";
+export { BroadcastInput } from "./BroadcastInputLazy";
 export {
   clearFocusedTerminal,
   disposeSession,
@@ -17,6 +18,7 @@ export {
   tabAgentStatus,
   useAgentActivityStore,
 } from "./lib/agentActivity";
+export type { TerminalSearch } from "./lib/lazySearch";
 export { useTerminalFileDrop } from "./lib/useTerminalFileDrop";
 export { useTerminalDropStore } from "./lib/dropStore";
 export { pasteIntoLeaf } from "./lib/rendererPool";
