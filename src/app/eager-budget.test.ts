@@ -46,3 +46,39 @@ describe("mermaid stays behind the fence check", () => {
     expect([...hits.keys()]).toEqual([]);
   });
 });
+
+// The session manager subscribes to the preferences store when it loads, and
+// no server can run before an editor asks for one, so it loads with the editor.
+describe("the LSP session manager stays dormant", () => {
+  it.each(["src/main.tsx", "src/settings/main.tsx"])(
+    "%s does not reach it eagerly",
+    (entry) => {
+      const { files } = traceEager(entry, []);
+      expect(files).toContain(entry);
+      expect(files).not.toContain("src/modules/lsp/lib/sessionManager.ts");
+    },
+  );
+});
+
+// Only the active editor theme is needed, and "auto" needs none of the
+// presets, so each loads behind its own dynamic import.
+describe("editor theme presets load on demand", () => {
+  const PRESETS = [
+    "@uiw/codemirror-theme-atomone",
+    "@uiw/codemirror-theme-aura",
+    "@uiw/codemirror-theme-copilot",
+    "@uiw/codemirror-theme-github",
+    "@uiw/codemirror-theme-gruvbox-dark",
+    "@uiw/codemirror-theme-nord",
+    "@uiw/codemirror-theme-tokyo-night",
+    "@uiw/codemirror-theme-xcode",
+  ];
+
+  it.each([
+    "src/modules/editor/EditorStack.tsx",
+    "src/modules/editor/GitDiffStack.tsx",
+  ])("%s does not statically import a preset theme", (entry) => {
+    const { hits } = traceEager(entry, PRESETS);
+    expect([...hits.keys()]).toEqual([]);
+  });
+});

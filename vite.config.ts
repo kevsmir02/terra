@@ -103,6 +103,9 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => ({
             const m = id.match(/@codemirror\/legacy-modes\/mode\/([\w-]+)/);
             if (m) return `cm-legacy-${m[1]}`;
           }
+          // Editor theme presets load one at a time behind themes.ts. A named
+          // group would also capture the shared createTheme they import.
+          if (id.includes("@uiw/codemirror-theme-")) return null;
           if (
             id.includes("@codemirror/") ||
             id.includes("@uiw/codemirror") ||

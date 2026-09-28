@@ -8,16 +8,22 @@ import { detectBinary } from "./detect";
 import { getLspNavigator } from "./navigator";
 import { type LspPreset, serverForLanguage } from "./presets";
 import { useLspRuntimeStore } from "./runtimeStore";
+import {
+  admitSession,
+  crashCooldownMs,
+  evictableSessions,
+  givenUpCrashes,
+  IDLE_SHUTDOWN_MS,
+  isCrashedOut,
+  isPresetKey,
+  recentCrashes,
+  type SessionView,
+  sessionKey,
+} from "./sessionPolicy";
 import type { TauriLspTransport } from "./transport";
 import { fileUriToPath, pathToFileUri } from "./uri";
 
-const IDLE_SHUTDOWN_MS = 3 * 60 * 1000;
-const CRASH_WINDOW_MS = 5 * 60 * 1000;
-const MAX_CRASHES = 3;
 const SHUTDOWN_TIMEOUT_MS = 2000;
-const MAX_SESSIONS_PER_PRESET = 4;
-const CRASH_COOLDOWN_MS = [2_000, 10_000, 30_000];
-const EVICTION_MIN_AGE_MS = 10_000;
 
 type Managed = {
   key: string;
@@ -37,8 +43,28 @@ export type LspDocHandle = {
 };
 
 const sessions = new Map<string, Managed>();
-const creating = new Map<string, Promise<Managed | null>>();
+const creating = new Map<
+  string,
+  { presetId: string; promise: Promise<Managed | null> }
+>();
 const crashTimes = new Map<string, number[]>();
+
+type LspRuntime = [typeof import("./transport"), typeof import("./client")];
+
+let runtimeModules: Promise<LspRuntime> | null = null;
+
+// One shared load for every concurrent acquire; a failed chunk load is not
+// cached, so the next open retries it.
+function loadRuntime(): Promise<LspRuntime> {
+  runtimeModules ??= Promise.all([
+    import("./transport"),
+    import("./client"),
+  ]).catch((e: unknown) => {
+    runtimeModules = null;
+    throw e;
+  });
+  return runtimeModules;
+}
 
 function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
@@ -46,11 +72,32 @@ function basename(path: string): string {
 
 function crashedOut(key: string): boolean {
   const now = Date.now();
-  const times = (crashTimes.get(key) ?? []).filter(
-    (t) => now - t < CRASH_WINDOW_MS,
-  );
+  const times = recentCrashes(crashTimes.get(key) ?? [], now);
   crashTimes.set(key, times);
-  return times.length >= MAX_CRASHES;
+  return isCrashedOut(times, now);
+}
+
+// In-flight creations count toward the cap, or a burst of opens across roots
+// would all pass the check before the first spawn lands.
+function sessionViews(): SessionView[] {
+  const views: SessionView[] = [...sessions.values()].map((m) => ({
+    key: m.key,
+    presetId: m.preset.id,
+    openDocs: m.refs.size,
+    closing: m.closing,
+    bornAt: m.bornAt,
+  }));
+  for (const [key, pending] of creating) {
+    if (sessions.has(key)) continue;
+    views.push({
+      key,
+      presetId: pending.presetId,
+      openDocs: 1,
+      closing: false,
+      bornAt: Date.now(),
+    });
+  }
+  return views;
 }
 
 function recordCrash(key: string): void {
@@ -81,33 +128,23 @@ export async function acquireDocExtension(
     markers,
   }).catch(() => null);
   if (!root) return null;
-  const key = `${preset.id}\u0000${root}`;
+  const key = sessionKey(preset.id, root);
   if (crashedOut(key)) return null;
-  if (
-    !sessions.has(key) &&
-    [...sessions.values()].filter((m) => m.preset.id === preset.id).length >=
-      MAX_SESSIONS_PER_PRESET
-  ) {
+
+  for (const evict of evictableSessions(
+    sessionViews(),
+    preset.id,
+    key,
+    Date.now(),
+  )) {
+    const m = sessions.get(evict);
+    if (m) void closeSession(m);
+  }
+  if (admitSession(sessionViews(), preset.id, key) === "refuse") {
     console.warn(
       `[lsp] session cap reached for ${preset.id}, skipping ${root}`,
     );
     return null;
-  }
-
-  // Evict idle sessions of other roots; the age guard keeps simultaneous
-  // multi-root opens from evicting each other's newborn sessions.
-  if (!sessions.has(key)) {
-    const now = Date.now();
-    for (const m of sessions.values()) {
-      if (
-        m.preset.id === preset.id &&
-        m.refs.size === 0 &&
-        !m.closing &&
-        now - m.bornAt > EVICTION_MIN_AGE_MS
-      ) {
-        void closeSession(m);
-      }
-    }
   }
 
   const managed =
@@ -116,7 +153,7 @@ export async function acquireDocExtension(
 
   const uri = pathToFileUri(path);
   const languageId = preset.languages[langId] ?? langId;
-  const mod = await import("./client");
+  const [, mod] = await loadRuntime();
   const extension: Extension = [
     mod.lspInteractions({
       client: managed.client,
@@ -158,14 +195,13 @@ function getOrCreateSession(
   preset: LspPreset,
   root: string,
 ): Promise<Managed | null> {
-  let inflight = creating.get(key);
-  if (!inflight) {
-    inflight = createSession(key, preset, root).finally(() =>
-      creating.delete(key),
-    );
-    creating.set(key, inflight);
-  }
-  return inflight;
+  const inflight = creating.get(key);
+  if (inflight) return inflight.promise;
+  const promise = createSession(key, preset, root).finally(() =>
+    creating.delete(key),
+  );
+  creating.set(key, { presetId: preset.id, promise });
+  return promise;
 }
 
 async function createSession(
@@ -179,10 +215,7 @@ async function createSession(
   const store = useLspRuntimeStore.getState();
   store.upsertSession({ key, presetId: preset.id, root, status: "starting" });
 
-  const [{ TauriLspTransport }, { TerraLspClient }] = await Promise.all([
-    import("./transport"),
-    import("./client"),
-  ]);
+  const [{ TauriLspTransport }, { TerraLspClient }] = await loadRuntime();
 
   if (TerraLspClient.hostPid === null) {
     TerraLspClient.hostPid = await invoke<number>("lsp_host_pid").catch(
@@ -268,10 +301,7 @@ function handleServerExit(key: string): void {
   // Budget kills don't respawn: reloading would repay the startup peak
   // that got the server killed. Restart from the pill is explicit.
   if (info?.reason) {
-    crashTimes.set(
-      key,
-      Array.from({ length: MAX_CRASHES }, () => Date.now()),
-    );
+    crashTimes.set(key, givenUpCrashes(Date.now()));
     useLspRuntimeStore.getState().setFailed(managed.preset.id, info.reason);
     toast.error(`${managed.preset.name} language server stopped`, {
       description: info.reason,
@@ -298,9 +328,7 @@ function handleServerExit(key: string): void {
   }
   // Delay the re-acquire trigger so an OOM-killed server doesn't respawn
   // into an instant second memory spike.
-  const crashes = crashTimes.get(key)?.length ?? 1;
-  const delay =
-    CRASH_COOLDOWN_MS[Math.min(crashes - 1, CRASH_COOLDOWN_MS.length - 1)];
+  const delay = crashCooldownMs(crashTimes.get(key)?.length ?? 1);
   setTimeout(
     () => useLspRuntimeStore.getState().bumpGeneration(managed.preset.id),
     delay,
@@ -359,7 +387,7 @@ export async function stopPresetSessions(presetId: string): Promise<void> {
   );
   await Promise.all(targets.map((m) => closeSession(m)));
   for (const key of crashTimes.keys()) {
-    if (key.startsWith(`${presetId}\u0000`)) crashTimes.delete(key);
+    if (isPresetKey(key, presetId)) crashTimes.delete(key);
   }
 }
 
@@ -367,7 +395,7 @@ export async function lspFormatDocument(
   view: EditorView,
 ): Promise<"done" | "unsupported"> {
   if (sessions.size === 0) return "unsupported";
-  const { formatDocumentAndWait } = await import("./client");
+  const [, { formatDocumentAndWait }] = await loadRuntime();
   return formatDocumentAndWait(view);
 }
 

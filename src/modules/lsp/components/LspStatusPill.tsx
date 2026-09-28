@@ -17,8 +17,14 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
 import { redetectBinary } from "../lib/detect";
 import type { LspPreset } from "../lib/presets";
-import { restartPresetSessions } from "../lib/sessionManager";
 import { useLspHint } from "../lib/useLspHint";
+
+// No session exists before an editor loads the manager, so a restart can load
+// it on demand rather than keep it in the startup graph.
+const restartPresetSessions = (presetId: string) =>
+  import("../lib/sessionManager").then((m) =>
+    m.restartPresetSessions(presetId),
+  );
 
 type Props = {
   filePath: string | null;

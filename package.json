@@ -27,6 +27,9 @@
     "size": "size-limit",
     "knip": "knip",
     "theme:sync-tokens": "node scripts/theme-token-reference-sync.mjs",
+    "version:bump": "node scripts/version.mjs bump",
+    "version:check": "node scripts/version.mjs check",
+    "changelog": "node scripts/changelog.mjs",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath scripts/git-hooks || true"
   },
   "dependencies": {

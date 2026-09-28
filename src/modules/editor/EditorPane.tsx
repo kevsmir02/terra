@@ -1,4 +1,4 @@
-import { lspFormatDocument, useLspExtension } from "@/modules/lsp";
+import { lspFormatDocument, useLspExtension } from "@/modules/lsp/editor";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { acceptCompletion, startCompletion } from "@codemirror/autocomplete";
 import { redo, undo } from "@codemirror/commands";

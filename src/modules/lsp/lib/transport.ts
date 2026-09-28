@@ -23,13 +23,49 @@ type ServerRequest = {
 };
 
 function isServerRequest(msg: unknown): msg is ServerRequest {
+  if (typeof msg !== "object" || msg === null) return false;
+  const { id, method } = msg as Partial<Record<"id" | "method", unknown>>;
   return (
-    typeof msg === "object" &&
-    msg !== null &&
-    "id" in msg &&
-    (msg as ServerRequest).id != null &&
-    "method" in msg
+    (typeof id === "number" || typeof id === "string") &&
+    typeof method === "string"
   );
+}
+
+/**
+ * The reply for a server-to-client request the client library would ignore,
+ * or null when `text` is not a request (notifications and responses).
+ */
+export function replyToServerRequest(text: string): string | null {
+  // Cheap pre-check: requests carry both markers; skips a redundant
+  // JSON.parse of large notification payloads like publishDiagnostics.
+  if (!text.includes('"id"') || !text.includes('"method"')) return null;
+  let msg: unknown;
+  try {
+    msg = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isServerRequest(msg)) return null;
+  const reply = (body: Record<string, unknown>) =>
+    JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body });
+  switch (msg.method) {
+    case "workspace/configuration": {
+      const items = (msg.params as { items?: unknown } | undefined)?.items;
+      return reply({
+        result: Array.isArray(items) ? items.map(() => null) : [],
+      });
+    }
+    case "window/workDoneProgress/create":
+    case "client/registerCapability":
+    case "client/unregisterCapability":
+    case "window/showMessageRequest":
+    case "workspace/workspaceFolders":
+      return reply({ result: null });
+    default:
+      return reply({
+        error: { code: -32601, message: `unhandled method ${msg.method}` },
+      });
+  }
 }
 
 export class TauriLspTransport implements Transport {
@@ -46,7 +82,8 @@ export class TauriLspTransport implements Transport {
     const onMessage = new Channel<ArrayBuffer>();
     onMessage.onmessage = (buf) => {
       const text = decoder.decode(buf);
-      this.answerServerRequest(text);
+      const reply = replyToServerRequest(text);
+      if (reply) this.send(reply);
       if (this.onMsg) this.onMsg(text);
       else this.backlog.push(text);
     };
@@ -65,41 +102,6 @@ export class TauriLspTransport implements Transport {
       onMessage,
       onExit,
     });
-  }
-
-  // The client library ignores server-to-client requests entirely.
-  private answerServerRequest(text: string): void {
-    // Cheap pre-check: requests carry both markers; skips a redundant
-    // JSON.parse of large notification payloads like publishDiagnostics.
-    if (!text.includes('"id"') || !text.includes('"method"')) return;
-    let msg: unknown;
-    try {
-      msg = JSON.parse(text);
-    } catch {
-      return;
-    }
-    if (!isServerRequest(msg)) return;
-    const reply = (body: Record<string, unknown>) =>
-      this.send(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }));
-    switch (msg.method) {
-      case "workspace/configuration": {
-        const items =
-          (msg.params as { items?: unknown[] } | undefined)?.items ?? [];
-        reply({ result: items.map(() => null) });
-        return;
-      }
-      case "window/workDoneProgress/create":
-      case "client/registerCapability":
-      case "client/unregisterCapability":
-      case "window/showMessageRequest":
-      case "workspace/workspaceFolders":
-        reply({ result: null });
-        return;
-      default:
-        reply({
-          error: { code: -32601, message: `unhandled method ${msg.method}` },
-        });
-    }
   }
 
   send(message: string): void {
