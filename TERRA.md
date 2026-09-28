@@ -124,7 +124,7 @@ Invariants to keep:
 
 ### Concurrency
 
-`modules/sync.rs` provides `lock_or_recover` / `read_or_recover` / `write_or_recover`. Use them for all long-lived shared state (`PtyState`, `WorkspaceRegistry`, `DeviceState`, `LspState`, ...) instead of `.lock().unwrap()`. A panic while a lock is held poisons it for the rest of the process, which would turn one bad frame into a permanently dead subsystem; every value behind these locks is plain data, so recovering the guard is strictly better than propagating the panic to every later caller.
+`modules/sync.rs` provides `lock_or_recover` / `read_or_recover` / `write_or_recover`. Use them for all long-lived shared state (`PtyState`, `WorkspaceRegistry`, `DeviceState`, `LspState`, ...) instead of `.lock().unwrap()`. A panic while a lock is held poisons it for the rest of the process, which would turn one bad frame into a permanently dead subsystem; every value behind these locks is plain data, so recovering the guard is strictly better than propagating the panic to every later caller. This only means something because the release profile unwinds (`panic = "unwind"` in `Cargo.toml`): under `abort` one panic in any thread ends the process and every terminal with it. A PTY session starts its threads with `thread::Builder`, and a refused spawn fails `pty_open` rather than panicking.
 
 ### Frontend (`src/`)
 

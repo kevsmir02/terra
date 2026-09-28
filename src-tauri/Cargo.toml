@@ -67,5 +67,7 @@ incremental = true
 codegen-units = 1
 lto = "fat"
 opt-level = "s"
-panic = "abort"
+# Unwind, not abort: sync.rs recovers poisoned locks so one panicking thread
+# (a PTY reader, an LSP pump) costs that session, not every terminal at once.
+panic = "unwind"
 strip = true
