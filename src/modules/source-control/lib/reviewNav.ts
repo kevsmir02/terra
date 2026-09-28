@@ -31,3 +31,12 @@ export function stepChangedFile(
   if (at === -1) return dir > 0 ? rows[0] : rows[rows.length - 1];
   return rows[at + dir] ?? null;
 }
+
+/** Stepping replaces the tab it starts from only when stepping opened that
+ * tab: a preview. A diff the user opened on purpose stays open. */
+export function stepReplaces(
+  from: { id: number; preview?: boolean } | null,
+  openedId: number,
+): boolean {
+  return !!from?.preview && from.id !== openedId;
+}

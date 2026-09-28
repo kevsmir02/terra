@@ -595,8 +595,8 @@ export default function App() {
   const canStepFile =
     (!!activeDiff || sidebarView === "source-control") &&
     !!reviewStatus?.changedFiles.length;
-  // Stepping replaces the diff tab it starts from, the way a review walks one
-  // file at a time instead of leaving a tab per file behind.
+  // Stepping opens previews and replaces the preview it starts from, so a
+  // review walks one file at a time; a diff opened on purpose stays.
   const stepFile = useCallback(
     (dir: 1 | -1) => {
       if (!canStepFile || !reviewStatus) return;
@@ -605,8 +605,8 @@ export default function App() {
       void import("@/modules/source-control/lib/reviewNav").then((m) => {
         const next = m.stepChangedFile(reviewStatus.changedFiles, from, dir);
         if (!next) return;
-        const id = openGitDiffTab({ repoRoot: root, ...next });
-        if (from && id !== from.id) disposeTab(from.id);
+        const id = openGitDiffTab({ repoRoot: root, ...next, preview: true });
+        if (from && m.stepReplaces(from, id)) disposeTab(from.id);
       });
     },
     [canStepFile, reviewStatus, activeDiff, openGitDiffTab, disposeTab],
