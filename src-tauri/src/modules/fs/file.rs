@@ -10,10 +10,10 @@ use super::{authorized_entry, authorized_new, authorized_read};
 use crate::modules::blocking::{on_app, on_registry as blocking};
 use crate::modules::workspace::WorkspaceRegistry;
 
-const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+pub(super) const MAX_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 /// Ceiling for explicit "open anyway"; mirrored as FORCE_READ_LIMIT in useDocument.ts.
 const FORCE_MAX_READ_BYTES: u64 = 50 * 1024 * 1024;
-const BINARY_SNIFF_BYTES: usize = 8 * 1024;
+pub(super) const BINARY_SNIFF_BYTES: usize = 8 * 1024;
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -48,7 +48,7 @@ pub struct FileStat {
     pub kind: StatKind,
 }
 
-fn mtime_millis(meta: &fs::Metadata) -> u64 {
+pub(super) fn mtime_millis(meta: &fs::Metadata) -> u64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
@@ -113,20 +113,25 @@ fn read_file_sync(p: &Path, force: bool) -> Result<ReadResult, String> {
 }
 
 #[derive(Serialize, Clone)]
-struct FileWrittenEvent {
-    path: String,
+pub(super) struct FileWrittenEvent {
+    pub(super) path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<String>,
+    pub(super) source: Option<String>,
 }
 
 /// Atomic write via O_EXCL tempfile in the target's parent, then rename.
-/// The random suffix is what blocks pre-staged symlink attacks.
-fn write_atomic(target: &Path, content: &[u8]) -> std::io::Result<()> {
+/// The random suffix is what blocks pre-staged symlink attacks. An existing
+/// target's mode goes onto the temp file before the rename, so the file is
+/// never visible with the temp file's 0600.
+pub(super) fn write_atomic(target: &Path, content: &[u8]) -> std::io::Result<()> {
     let parent = target.parent().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
     })?;
     let mut tmp = NamedTempFile::new_in(parent)?;
     tmp.as_file_mut().write_all(content)?;
+    if let Ok(meta) = fs::metadata(target) {
+        tmp.as_file().set_permissions(meta.permissions())?;
+    }
     tmp.as_file_mut().sync_all()?;
     tmp.persist(target).map_err(|e| e.error)?;
     Ok(())
@@ -155,14 +160,10 @@ pub fn write_file(
     // `authorized_new` covers both cases a save hits: an existing file, and a
     // first save into an already-authorized directory.
     let target = authorized_new(registry, path)?;
-    let original_permissions = fs::metadata(&target).ok().map(|m| m.permissions());
     write_atomic(&target, content).map_err(|e| {
         log::warn!("fs_write_file({}) failed: {e}", target.display());
         e.to_string()
     })?;
-    if let Some(perms) = original_permissions {
-        let _ = fs::set_permissions(&target, perms);
-    }
     Ok(fs::metadata(&target).map(|m| mtime_millis(&m)).unwrap_or(0))
 }
 
@@ -294,6 +295,18 @@ mod tests {
         std::fs::write(&target, b"old").unwrap();
         write_atomic(&target, b"new").unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
+    }
+
+    #[test]
+    fn overwrite_keeps_the_target_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("run.sh");
+        std::fs::write(&target, b"old").unwrap();
+        std::fs::set_permissions(&target, fs::Permissions::from_mode(0o755)).unwrap();
+        write_atomic(&target, b"new").unwrap();
+        let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755);
     }
 
     #[test]
