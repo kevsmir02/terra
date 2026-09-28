@@ -4,6 +4,7 @@ import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import { isLeaf, type PaneNode } from "@/modules/terminal/lib/panes";
 import { useEffect, useRef } from "react";
 import { freshTabCwd } from "./activeSpace";
+import { offerResume } from "@/modules/agents/store/resumeStore";
 import { stashRestoredScrollback } from "@/modules/terminal";
 import { freshTerminalTab, hydrateTabs } from "./serialize";
 import { loadAll, type SpaceMeta, saveActiveId, saveSpacesList } from "./store";
@@ -74,7 +75,10 @@ export function useSpacesBoot({
           const st = states.get(space.id);
           if (!st) continue;
           restored.push(
-            ...hydrateTabs(st.tabs, space.id, allocId, stashRestoredScrollback),
+            ...hydrateTabs(st.tabs, space.id, allocId, {
+              scrollback: stashRestoredScrollback,
+              agent: offerResume,
+            }),
           );
         }
 

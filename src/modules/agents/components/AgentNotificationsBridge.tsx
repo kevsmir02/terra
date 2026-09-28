@@ -8,6 +8,7 @@ import { routeAgentNotification } from "../lib/route";
 import type { AgentSession, AgentSignal } from "../lib/types";
 import { useWindowFocus } from "../lib/useWindowFocus";
 import { useAgentStore } from "../store/agentStore";
+import { useResumeStore } from "../store/resumeStore";
 
 type Activate = (tabId: number, leafId: number) => void;
 type Ctx = {
@@ -65,6 +66,7 @@ function handleSignal(sig: AgentSignal, ctx: Ctx): void {
       const info = tabInfo(ctx.tabs, leafId);
       if (!info) return;
       store.start(leafId, info.tabId, sig.agent ?? "agent");
+      useResumeStore.getState().dismiss(leafId);
       return;
     }
     case "working":

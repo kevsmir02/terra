@@ -6,6 +6,7 @@ import {
 import type { SearchAddon } from "@xterm/addon-search";
 import { Fragment } from "react";
 import { DevServerChip } from "@/modules/preview/DevServerChip";
+import { ResumeAgentChip } from "@/modules/agents/components/ResumeAgentChip";
 import { cn } from "@/lib/utils";
 import { useAgentActivityStore } from "./lib/agentActivity";
 import { useTerminalDropStore } from "./lib/dropStore";
@@ -65,6 +66,7 @@ export function PaneTreeView(props: Props) {
         <PaneAttentionEdge leafId={node.id} />
         <DropOverlay leafId={node.id} />
         <DevServerChip leafId={node.id} />
+        <ResumeAgentChip leafId={node.id} />
       </div>
     );
   }

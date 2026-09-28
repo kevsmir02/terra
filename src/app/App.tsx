@@ -13,7 +13,9 @@ import { isMarkdownPath } from "@/lib/utils";
 import {
   AgentNotificationsBridge,
   AgentStatusCluster,
+  acceptResume,
   nextAttentionTarget,
+  persistedAgent,
 } from "@/modules/agents";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
@@ -219,7 +221,7 @@ export default function App() {
     activeSidebarPct,
   });
   const persistScrollback = useCallback(
-    () => flushWithScrollback(persistedScrollback),
+    () => flushWithScrollback(persistedScrollback, persistedAgent),
     [flushWithScrollback],
   );
 
@@ -709,6 +711,9 @@ export default function App() {
       "agent.focusAttention": () => {
         const t = nextAttentionTarget(activeLeafId);
         if (t) activateAgentTarget(t.tabId, t.leafId);
+      },
+      "agent.resume": () => {
+        if (activeLeafId !== null) acceptResume(activeLeafId);
       },
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
