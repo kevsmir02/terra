@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/popover";
 import { Notification01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, type ReactNode, Suspense, useMemo, useState } from "react";
 import { clusterCounts } from "../lib/sessions";
 import { displayAgent } from "../lib/format";
 import { useAgentStore } from "../store/agentStore";
@@ -14,6 +14,8 @@ const AgentPanel = lazy(() => import("./AgentPanel"));
 
 type Props = {
   onActivate: (tabId: number, leafId: number) => void;
+  /** Rendered under a session's row, for actions other modules own. */
+  sessionExtra?: (leafId: number, close: () => void) => ReactNode;
 };
 
 /**
@@ -21,7 +23,7 @@ type Props = {
  * cannot grow unbounded. Needs-input leads in the warning role, then working,
  * then finished in the ok role; a state held by a single agent names it.
  */
-export function AgentStatusCluster({ onActivate }: Props) {
+export function AgentStatusCluster({ onActivate, sessionExtra }: Props) {
   const [open, setOpen] = useState(false);
   const sessions = useAgentStore((s) => s.sessions);
   const { attention, working, finished } = useMemo(
@@ -99,7 +101,11 @@ export function AgentStatusCluster({ onActivate }: Props) {
             </div>
           }
         >
-          <AgentPanel onActivate={onActivate} onClose={() => setOpen(false)} />
+          <AgentPanel
+            onActivate={onActivate}
+            onClose={() => setOpen(false)}
+            sessionExtra={sessionExtra}
+          />
         </Suspense>
       </PopoverContent>
     </Popover>

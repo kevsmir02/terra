@@ -1,6 +1,22 @@
 import type { GitChangedFile } from "@/lib/native";
 import { describe, expect, it } from "vitest";
-import { stepChangedFile } from "./reviewNav";
+import { stepChangedFile, stepReplaces } from "./reviewNav";
+
+describe("stepReplaces", () => {
+  it("closes a diff the stepper opened", () => {
+    expect(stepReplaces({ id: 3, preview: true }, 4)).toBe(true);
+  });
+
+  it("keeps a diff the user opened on purpose", () => {
+    expect(stepReplaces({ id: 3, preview: false }, 4)).toBe(false);
+    expect(stepReplaces({ id: 3 }, 4)).toBe(false);
+  });
+
+  it("never closes the tab it lands on or a missing origin", () => {
+    expect(stepReplaces({ id: 3, preview: true }, 3)).toBe(false);
+    expect(stepReplaces(null, 4)).toBe(false);
+  });
+});
 
 function file(
   path: string,

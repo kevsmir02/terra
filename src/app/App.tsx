@@ -17,6 +17,14 @@ import {
   nextAttentionTarget,
   persistedAgent,
 } from "@/modules/agents";
+import {
+  CheckpointBridge,
+  type Turn,
+  TurnActions,
+  TurnChangesDialog,
+  type TurnDialogView,
+  turnFor,
+} from "@/modules/checkpoints";
 import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
   DeviceDock,
@@ -64,7 +72,9 @@ import {
   useSourceControlContext,
 } from "@/modules/source-control";
 import {
+  canRunHunkShortcut,
   canStepDiffChunk,
+  runHunkShortcut,
   stepDiffChunk,
 } from "@/modules/editor/lib/diffNavigation";
 import {
@@ -93,6 +103,7 @@ import {
   findLeafCwd,
   formatDroppedPaths,
   hasLeaf,
+  leafIdForPty,
   leafIds,
   type PaneBounds,
   pasteIntoLeaf,
@@ -326,6 +337,29 @@ export default function App() {
   });
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);
+  // Mounted on the first request and kept for the close animation.
+  const [turnDialog, setTurnDialog] = useState<{
+    turn: Turn;
+    view: TurnDialogView;
+    open: boolean;
+  } | null>(null);
+  const openTurn = useCallback((leafId: number, revert: boolean) => {
+    const turn = turnFor(leafId);
+    if (turn)
+      setTurnDialog({ turn, view: revert ? "revert" : "list", open: true });
+  }, []);
+  const turnSessionExtra = useCallback(
+    (leafId: number, close: () => void) => (
+      <TurnActions
+        leafId={leafId}
+        onOpen={(leaf, revert) => {
+          close();
+          openTurn(leaf, revert);
+        }}
+      />
+    ),
+    [openTurn],
+  );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   // Latches on first open so the palette chunk is fetched then, not at startup.
   // It stays mounted afterwards, keeping the dialog's exit animation.
@@ -621,8 +655,8 @@ export default function App() {
   const canStepFile =
     (!!activeDiff || sidebarView === "source-control") &&
     !!reviewStatus?.changedFiles.length;
-  // Stepping replaces the diff tab it starts from, the way a review walks one
-  // file at a time instead of leaving a tab per file behind.
+  // Stepping opens previews and replaces the preview it starts from, so a
+  // review walks one file at a time; a diff opened on purpose stays.
   const stepFile = useCallback(
     (dir: 1 | -1) => {
       if (!canStepFile || !reviewStatus) return;
@@ -631,8 +665,8 @@ export default function App() {
       void import("@/modules/source-control/lib/reviewNav").then((m) => {
         const next = m.stepChangedFile(reviewStatus.changedFiles, from, dir);
         if (!next) return;
-        const id = openGitDiffTab({ repoRoot: root, ...next });
-        if (from && id !== from.id) disposeTab(from.id);
+        const id = openGitDiffTab({ repoRoot: root, ...next, preview: true });
+        if (from && m.stepReplaces(from, id)) disposeTab(from.id);
       });
     },
     [canStepFile, reviewStatus, activeDiff, openGitDiffTab, disposeTab],
@@ -807,6 +841,8 @@ export default function App() {
       "git.toggleBlame": () => editorRefs.current.get(activeId)?.toggleBlame(),
       "git.openLineCommit": () =>
         editorRefs.current.get(activeId)?.openLineCommit(),
+      "diff.stageHunk": () => runHunkShortcut("stage"),
+      "diff.discardHunk": () => runHunkShortcut("discard"),
       "editor.undo": () => editorRefs.current.get(activeId)?.undo(),
       "editor.redo": () => editorRefs.current.get(activeId)?.redo(),
       "editor.codeComplete": () =>
@@ -857,6 +893,9 @@ export default function App() {
       }
       if (id === "diff.nextFile" || id === "diff.prevFile") {
         return !canStepFile;
+      }
+      if (id === "diff.stageHunk" || id === "diff.discardHunk") {
+        return !canRunHunkShortcut();
       }
       if (
         id === "editor.undo" ||
@@ -1148,6 +1187,12 @@ export default function App() {
             toggleBlame: () => editorRefs.current.get(activeId)?.toggleBlame(),
             openLineCommit: () =>
               void editorRefs.current.get(activeId)?.openLineCommit(),
+            canRunHunk: canRunHunkShortcut(),
+            hasTurn: turnFor(activeLeafId) !== null,
+            openTurn: (revert) => {
+              if (activeLeafId !== null) openTurn(activeLeafId, revert);
+            },
+            runHunk: (kind) => void runHunkShortcut(kind),
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
@@ -1187,6 +1232,8 @@ export default function App() {
       stepFile,
       activeEditorPath,
       openFileHistory,
+      activeLeafId,
+      openTurn,
     ],
   );
 
@@ -1407,7 +1454,12 @@ export default function App() {
                 behind: sourceControl.behind,
                 changedCount: sourceControl.changedCount,
               }}
-              agents={<AgentStatusCluster onActivate={onActivateAgent} />}
+              agents={
+                <AgentStatusCluster
+                  onActivate={onActivateAgent}
+                  sessionExtra={turnSessionExtra}
+                />
+              }
             />
           )}
 
@@ -1416,7 +1468,29 @@ export default function App() {
             activeId={activeId}
             onActivate={onActivateAgent}
           />
+          <CheckpointBridge
+            cwdForLeaf={cwdForLeaf}
+            leafIdForPty={leafIdForPty}
+          />
           <Toaster position="bottom-right" />
+
+          {turnDialog && (
+            <TurnChangesDialog
+              open={turnDialog.open}
+              onOpenChange={(open) =>
+                setTurnDialog((d) => (d ? { ...d, open } : d))
+              }
+              turn={turnDialog.turn}
+              view={turnDialog.view}
+              onViewChange={(view) =>
+                setTurnDialog((d) => (d ? { ...d, view } : d))
+              }
+              onOpenDiff={(repoRoot, checkpoint, path) =>
+                openGitDiffTab({ repoRoot, path, mode: "-", checkpoint })
+              }
+              onReverted={refreshSourceControl}
+            />
+          )}
 
           {switcherState && (
             <TabSwitcherHud tabs={spaceTabs} state={switcherState} />

@@ -1,4 +1,5 @@
 import type { GitDiffContentResult } from "@/lib/native";
+import { checkpointIpc } from "@/modules/checkpoints/lib/checkpointIpc";
 import { gitIpc } from "@/modules/source-control/lib/gitIpc";
 
 const DIFF_CACHE_LIMIT = 6;
@@ -132,6 +133,30 @@ export function fetchCommitDiff(
 ): Promise<GitDiffContentResult> {
   return cachedFetch(repoRoot, commitDiffKey(repoRoot, sha, path), false, () =>
     gitIpc.gitCommitFileDiff(repoRoot, sha, path, originalPath),
+  );
+}
+
+export function turnDiffKey(
+  repoRoot: string,
+  checkpoint: string,
+  path: string,
+): string {
+  return `${repoRoot}|t|${checkpoint}|${path}`;
+}
+
+/** A file against the turn's checkpoint. Its worktree side moves with the
+ * agent, so it revalidates like a working diff. */
+export function fetchTurnDiff(
+  repoRoot: string,
+  checkpoint: string,
+  path: string,
+  force = false,
+): Promise<GitDiffContentResult> {
+  return cachedFetch(
+    repoRoot,
+    turnDiffKey(repoRoot, checkpoint, path),
+    force,
+    () => checkpointIpc.fileDiff(repoRoot, checkpoint, path),
   );
 }
 

@@ -82,6 +82,11 @@ export type GitDiffTab = TabBase & {
   repoRoot: string;
   mode: "-" | "+";
   originalPath: string | null;
+  /** Opened by stepping through changed files, so the next step replaces it.
+   * Opening it on purpose clears the flag. */
+  preview?: boolean;
+  /** Diffs against this turn checkpoint instead of the index. */
+  checkpoint?: string;
 };
 
 export type GitHistoryTab = TabBase & {
@@ -639,23 +644,30 @@ export function useTabs(initial?: Partial<TerminalTab>) {
       mode: "-" | "+";
       originalPath?: string | null;
       title?: string;
+      preview?: boolean;
+      checkpoint?: string;
     }) => {
       const curr = tabsRef.current;
       const existing = curr.find(
-        (t) =>
+        (t): t is GitDiffTab =>
           t.kind === "git-diff" &&
           t.repoRoot === input.repoRoot &&
           t.path === input.path &&
-          t.mode === input.mode,
+          t.mode === input.mode &&
+          t.checkpoint === input.checkpoint,
       );
       const computedTitle =
-        input.title ?? `${basename(input.path)} (${input.mode})`;
+        input.title ??
+        `${basename(input.path)} (${input.checkpoint ? "turn" : input.mode})`;
       const originalPath = input.originalPath ?? null;
 
       if (existing) {
+        // A step reusing a tab keeps whatever it was; a deliberate open
+        // promotes a preview so the next step leaves it alone.
+        const preview = input.preview ? existing.preview : false;
         const nextTabs = curr.map((t) =>
           t.id === existing.id
-            ? { ...t, title: computedTitle, originalPath }
+            ? { ...existing, title: computedTitle, originalPath, preview }
             : t,
         );
         tabsRef.current = nextTabs;
@@ -676,6 +688,8 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           repoRoot: input.repoRoot,
           mode: input.mode,
           originalPath,
+          preview: input.preview ?? false,
+          ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
         } satisfies GitDiffTab,
       ];
       tabsRef.current = nextTabs;

@@ -128,6 +128,7 @@ export type Preferences = {
   terminalScrollback: number;
   zoomLevel: number;
   agentNotifications: boolean;
+  agentCheckpoints: boolean;
   /** Extra agent command names the pty detector treats like the built-ins. */
   agentCommands: string[];
   shortcuts: Record<ShortcutId, KeyBinding[]>;
@@ -178,6 +179,7 @@ const KEY_TERMINAL_FONT_SIZE = "terminalFontSize";
 const KEY_TERMINAL_SCROLLBACK = "terminalScrollback";
 const KEY_ZOOM_LEVEL = "zoomLevel";
 const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
+const KEY_AGENT_CHECKPOINTS = "agentCheckpoints";
 const KEY_AGENT_COMMANDS = "agentCommands";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
@@ -235,6 +237,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalScrollback: TERMINAL_SCROLLBACK_DEFAULT,
   zoomLevel: 1.0,
   agentNotifications: true,
+  agentCheckpoints: true,
   agentCommands: [],
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
@@ -339,6 +342,9 @@ export async function loadPreferences(): Promise<Preferences> {
     agentNotifications:
       get<boolean>(KEY_AGENT_NOTIFICATIONS) ??
       DEFAULT_PREFERENCES.agentNotifications,
+    agentCheckpoints:
+      get<boolean>(KEY_AGENT_CHECKPOINTS) ??
+      DEFAULT_PREFERENCES.agentCheckpoints,
     agentCommands: normalizeAgentCommands(get<unknown>(KEY_AGENT_COMMANDS)),
     shortcuts:
       get<Record<ShortcutId, KeyBinding[]>>(KEY_SHORTCUTS) ??
@@ -557,6 +563,10 @@ export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
 }
 
+export async function setAgentCheckpoints(value: boolean): Promise<void> {
+  await writePref(KEY_AGENT_CHECKPOINTS, value);
+}
+
 export async function setAgentCommands(value: string[]): Promise<void> {
   await writePref(KEY_AGENT_COMMANDS, normalizeAgentCommands(value));
 }
@@ -604,6 +614,7 @@ export async function onPreferencesChange(
     [KEY_TERMINAL_SCROLLBACK]: "terminalScrollback",
     [KEY_ZOOM_LEVEL]: "zoomLevel",
     [KEY_AGENT_NOTIFICATIONS]: "agentNotifications",
+    [KEY_AGENT_CHECKPOINTS]: "agentCheckpoints",
     [KEY_AGENT_COMMANDS]: "agentCommands",
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",

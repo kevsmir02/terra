@@ -3,6 +3,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import type { GitDiffContentResult } from "@/lib/native";
 import {
+  getChunks,
+  getOriginalDoc,
   goToNextChunk,
   goToPreviousChunk,
   unifiedMergeView,
@@ -10,24 +12,46 @@ import {
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { gitIpc } from "@/modules/source-control/lib/gitIpc";
 import { useReviewAutoRefresh } from "@/modules/source-control/lib/reviewRefresh";
+import { HunkBar } from "./HunkBar";
 import {
   commitDiffKey,
   fetchCommitDiff,
+  fetchTurnDiff,
   fetchWorkingDiff,
   getCachedDiff,
+  invalidateRepoDiffs,
   sameDiff,
   subscribeDiffInvalidation,
+  turnDiffKey,
   workingDiffKey,
 } from "./lib/diffCache";
+import {
+  chunkAt,
+  chunkToHunk,
+  type HunkAction,
+  type HunkLines,
+  hunkActionsFor,
+} from "./lib/hunks";
 import {
   buildSharedExtensions,
   DEFAULT_INDENT,
   languageCompartment,
 } from "./lib/extensions";
 import { resolveLanguage, resolveLanguageSync } from "./lib/languageResolver";
-import { registerDiffChunkStepper } from "./lib/diffNavigation";
+import {
+  registerDiffChunkStepper,
+  registerHunkRunner,
+} from "./lib/diffNavigation";
 import { patchStats } from "./lib/patchStats";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 
@@ -47,8 +71,18 @@ type CommitSource = {
   originalPath: string | null;
 };
 
+/** A file as a turn's checkpoint had it, against the working tree now. */
+type TurnSource = {
+  kind: "turn";
+  repoRoot: string;
+  checkpoint: string;
+  path: string;
+};
+
+type Source = WorkingSource | CommitSource | TurnSource;
+
 type Props = {
-  source: WorkingSource | CommitSource;
+  source: Source;
   chipLabel?: string;
   active: boolean;
   /** A working diff saw the repo change under it; the status should follow. */
@@ -112,13 +146,35 @@ type LoadState =
     }
   | { kind: "error"; message: string };
 
-function cacheKey(source: WorkingSource | CommitSource): string {
-  return source.kind === "working"
-    ? workingDiffKey(source.repoRoot, source.path, source.mode)
-    : commitDiffKey(source.repoRoot, source.sha, source.path);
+function cacheKey(source: Source): string {
+  switch (source.kind) {
+    case "working":
+      return workingDiffKey(source.repoRoot, source.path, source.mode);
+    case "commit":
+      return commitDiffKey(source.repoRoot, source.sha, source.path);
+    case "turn":
+      return turnDiffKey(source.repoRoot, source.checkpoint, source.path);
+  }
 }
 
-function loadStateFromCache(source: WorkingSource | CommitSource): LoadState {
+function fetchDiff(src: Source, force: boolean) {
+  switch (src.kind) {
+    case "working":
+      return fetchWorkingDiff(
+        src.repoRoot,
+        src.path,
+        src.mode,
+        src.originalPath,
+        force,
+      );
+    case "commit":
+      return fetchCommitDiff(src.repoRoot, src.sha, src.path, src.originalPath);
+    case "turn":
+      return fetchTurnDiff(src.repoRoot, src.checkpoint, src.path, force);
+  }
+}
+
+function loadStateFromCache(source: Source): LoadState {
   const hit = getCachedDiff(cacheKey(source));
   if (!hit) return { kind: "idle" };
   return {
@@ -150,8 +206,8 @@ export function GitDiffPane({
   sourceRef.current = source;
 
   const key = cacheKey(source);
-  const isWorking = source.kind === "working";
-  const watchedRoot = active && isWorking ? source.repoRoot : null;
+  const followsWorktree = source.kind !== "commit";
+  const watchedRoot = active && followsWorktree ? source.repoRoot : null;
 
   useEffect(() => {
     if (!watchedRoot) return;
@@ -183,16 +239,7 @@ export function GitDiffPane({
     }
     let cancelled = false;
     setState((prev) => (prev.kind === "loaded" ? prev : { kind: "loading" }));
-    const promise =
-      src.kind === "working"
-        ? fetchWorkingDiff(
-            src.repoRoot,
-            src.path,
-            src.mode,
-            src.originalPath,
-            hasCached,
-          )
-        : fetchCommitDiff(src.repoRoot, src.sha, src.path, src.originalPath);
+    const promise = fetchDiff(src, hasCached);
     Promise.all([promise, resolveLanguage(src.path).catch(() => null)])
       .then(([res, lang]) => {
         if (cancelled) return;
@@ -271,6 +318,92 @@ export function GitDiffPane({
       return (dir > 0 ? goToNextChunk : goToPreviousChunk)(view);
     });
   }, [showsMergeView]);
+
+  const hunkMode =
+    showsMergeView && source.kind === "working" && !isConflict
+      ? source.mode
+      : null;
+  const [hunkSel, setHunkSel] = useState({ index: -1, total: 0 });
+  const [hunkBusy, setHunkBusy] = useState(false);
+  const [hunkError, setHunkError] = useState<string | null>(null);
+  const [pendingDiscard, setPendingDiscard] = useState<HunkLines | null>(null);
+
+  const trackHunk = useCallback((view: EditorView) => {
+    const chunks = getChunks(view.state)?.chunks ?? [];
+    const index = chunkAt(chunks, view.state.selection.main.head);
+    setHunkSel((prev) =>
+      prev.index === index && prev.total === chunks.length
+        ? prev
+        : { index, total: chunks.length },
+    );
+  }, []);
+
+  const selectedHunk = useCallback((): HunkLines | null => {
+    const view = cmRef.current?.view;
+    if (!view) return null;
+    const chunks = getChunks(view.state)?.chunks ?? [];
+    const chunk = chunks[chunkAt(chunks, view.state.selection.main.head)];
+    const original = getOriginalDoc(view.state);
+    return chunk ? chunkToHunk(original, view.state.doc, chunk) : null;
+  }, []);
+
+  const applyHunk = useCallback(
+    async (action: HunkAction, hunk: HunkLines) => {
+      const src = sourceRef.current;
+      if (src.kind !== "working") return;
+      setHunkBusy(true);
+      setHunkError(null);
+      try {
+        await gitIpc.gitApplyHunk(src.repoRoot, {
+          path: src.path,
+          originalPath: src.originalPath,
+          action,
+          ...hunk,
+        });
+        setPendingDiscard(null);
+      } catch (err) {
+        setHunkError(errorMessage(err));
+      } finally {
+        setHunkBusy(false);
+        // A refused hunk usually means the view is stale, so refresh either way.
+        invalidateRepoDiffs(src.repoRoot);
+        onRepoChanged?.();
+        cmRef.current?.view?.focus();
+      }
+    },
+    [onRepoChanged],
+  );
+
+  const runPrimary = useCallback(() => {
+    if (!hunkMode || hunkBusy) return false;
+    const hunk = selectedHunk();
+    if (!hunk) return false;
+    void applyHunk(hunkActionsFor(hunkMode).primary, hunk);
+    return true;
+  }, [hunkMode, hunkBusy, selectedHunk, applyHunk]);
+
+  const askDiscard = useCallback(() => {
+    if (!hunkMode || !hunkActionsFor(hunkMode).discard || hunkBusy)
+      return false;
+    const hunk = selectedHunk();
+    if (!hunk) return false;
+    setHunkError(null);
+    setPendingDiscard(hunk);
+    return true;
+  }, [hunkMode, hunkBusy, selectedHunk]);
+
+  useEffect(() => {
+    if (!hunkMode) return;
+    return registerHunkRunner((kind) =>
+      kind === "stage" ? runPrimary() : askDiscard(),
+    );
+  }, [hunkMode, runPrimary, askDiscard]);
+
+  // A new diff can move or drop the change a discard was asked for.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `state` is the re-run trigger
+  useEffect(() => {
+    setPendingDiscard(null);
+  }, [state]);
 
   const stats = useMemo(
     () => (useFallback ? patchStats(fallbackPatch) : { added: 0, removed: 0 }),
@@ -355,12 +488,33 @@ export function GitDiffPane({
                 Source Control.
               </DiffNotice>
             ) : null}
+            {hunkMode ? (
+              <HunkBar
+                mode={hunkMode}
+                index={hunkSel.index}
+                total={hunkSel.total}
+                busy={hunkBusy}
+                error={hunkError}
+                confirmingDiscard={pendingDiscard !== null}
+                onPrimary={runPrimary}
+                onDiscard={askDiscard}
+                onConfirmDiscard={() => {
+                  if (pendingDiscard) void applyHunk("discard", pendingDiscard);
+                }}
+                onCancelDiscard={() => {
+                  setPendingDiscard(null);
+                  cmRef.current?.view?.focus();
+                }}
+              />
+            ) : null}
             <div className="min-h-0 flex-1">
               <CodeMirror
                 ref={cmRef}
                 value={modifiedContent}
                 theme={themeExt}
                 extensions={extensions}
+                onCreateEditor={trackHunk}
+                onUpdate={(update) => trackHunk(update.view)}
                 editable={false}
                 height="100%"
                 className="h-full"

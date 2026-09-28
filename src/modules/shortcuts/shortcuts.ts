@@ -53,6 +53,8 @@ export type ShortcutId =
   | "git.fileHistory"
   | "git.toggleBlame"
   | "git.openLineCommit"
+  | "diff.stageHunk"
+  | "diff.discardHunk"
   | "editor.undo"
   | "editor.redo"
   | "editor.codeComplete";
@@ -413,6 +415,20 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Open the current line's commit",
     group: "Git",
     defaultBindings: [{ ctrl: true, alt: true, shift: true, key: "g" }],
+  },
+  // Act on the change F7 selected: stage it on the unstaged side, unstage it
+  // on the staged side. Discard asks first.
+  {
+    id: "diff.stageHunk",
+    label: "Stage or unstage the selected change",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "s" }],
+  },
+  {
+    id: "diff.discardHunk",
+    label: "Discard the selected change",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "d" }],
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface

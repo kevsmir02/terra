@@ -95,6 +95,19 @@ describe("on-demand panels stay lazy", () => {
     expect(files).not.toContain("src/modules/terminal/BroadcastInput.tsx");
   });
 
+  it("reaches the checkpoint shell but not the listener, IPC or dialog", () => {
+    expect(files).toContain("src/modules/checkpoints/CheckpointBridge.tsx");
+    for (const lazyFile of [
+      "src/modules/checkpoints/lib/listener.ts",
+      "src/modules/checkpoints/lib/checkpointIpc.ts",
+      "src/modules/checkpoints/TurnChangesDialog.tsx",
+      "src/modules/editor/HunkBar.tsx",
+      "src/modules/editor/lib/hunks.ts",
+    ]) {
+      expect(files).not.toContain(lazyFile);
+    }
+  });
+
   it("reaches the search button but not the open panel", () => {
     expect(files).toContain("src/modules/header/SearchInline.tsx");
     expect(files).not.toContain("src/modules/header/SearchPanel.tsx");

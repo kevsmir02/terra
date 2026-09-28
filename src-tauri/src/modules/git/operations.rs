@@ -238,7 +238,7 @@ fn read_source(git_path: &str, worktree_path: &Path, source: &DiffSource) -> Res
     }
 }
 
-fn is_unmerged(git_path: &str, rel_path: &str) -> Result<bool> {
+pub(crate) fn is_unmerged(git_path: &str, rel_path: &str) -> Result<bool> {
     let output = run_git(
         Some(git_path),
         [
@@ -253,7 +253,7 @@ fn is_unmerged(git_path: &str, rel_path: &str) -> Result<bool> {
     Ok(!output.stdout.is_empty())
 }
 
-fn content_result(
+pub(crate) fn content_result(
     original: TextSource,
     modified: TextSource,
     fallback_patch: String,
@@ -348,7 +348,7 @@ pub fn unstage(
     ensure_success(&output, "git rm --cached failed")
 }
 
-fn looks_like_no_head(output: &GitOutput) -> bool {
+pub(crate) fn looks_like_no_head(output: &GitOutput) -> bool {
     let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
     stderr.contains("ambiguous argument 'head'")
         || stderr.contains("unknown revision")
@@ -1204,12 +1204,12 @@ fn resolve_pathspecs(repo_root: &Path, paths: &[String]) -> Result<Vec<String>> 
     Ok(out)
 }
 
-fn pathspec_from_input(repo_root: &Path, rel: &str) -> Result<String> {
+pub(crate) fn pathspec_from_input(repo_root: &Path, rel: &str) -> Result<String> {
     let resolved = resolve_within_repo(repo_root, rel)?;
     Ok(pathspec(repo_root, &resolved))
 }
 
-fn pathspec(repo_root: &Path, absolute: &Path) -> String {
+pub(crate) fn pathspec(repo_root: &Path, absolute: &Path) -> String {
     absolute
         .strip_prefix(repo_root)
         .map(|rel| rel.to_string_lossy().replace('\\', "/"))

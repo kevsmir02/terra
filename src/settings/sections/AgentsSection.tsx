@@ -6,6 +6,7 @@ import {
 } from "@/modules/settings/agentCommands";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
+  setAgentCheckpoints,
   setAgentCommands,
   setAgentNotifications,
 } from "@/modules/settings/store";
@@ -17,6 +18,7 @@ import { SettingRow } from "../components/SettingRow";
 
 export function AgentsSection() {
   const agentNotifications = usePreferencesStore((s) => s.agentNotifications);
+  const agentCheckpoints = usePreferencesStore((s) => s.agentCheckpoints);
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,6 +36,19 @@ export function AgentsSection() {
           <Switch
             checked={agentNotifications}
             onCheckedChange={(v) => void setAgentNotifications(v)}
+          />
+        </SettingRow>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Checkpoints</Label>
+        <SettingRow
+          title="Turn checkpoints"
+          description="When an agent starts a turn in a git repo, snapshot its working tree under refs/terra so you can review or revert what the turn changed. Your index, branch and stash are never touched; snapshots are dropped when Terra quits."
+        >
+          <Switch
+            checked={agentCheckpoints}
+            onCheckedChange={(v) => void setAgentCheckpoints(v)}
           />
         </SettingRow>
       </div>

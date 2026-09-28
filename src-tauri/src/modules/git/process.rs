@@ -203,10 +203,44 @@ where
     run_git_uncached(cwd, args, timeout_secs)
 }
 
+/// Extra process inputs for the few commands that need them: a patch on
+/// stdin, or a private index through `GIT_INDEX_FILE`.
+#[derive(Default)]
+pub struct GitInput<'a> {
+    pub stdin: Option<&'a [u8]>,
+    pub env: &'a [(&'a str, &'a OsStr)],
+}
+
+pub fn run_git_with<I, S>(
+    cwd: Option<&str>,
+    args: I,
+    timeout_secs: u64,
+    input: GitInput<'_>,
+) -> Result<GitOutput>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_git_inner(cwd, args, timeout_secs, input)
+}
+
 fn run_git_uncached<I, S>(
     cwd: Option<&str>,
     args: I,
     timeout_secs: u64,
+) -> Result<GitOutput>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_git_inner(cwd, args, timeout_secs, GitInput::default())
+}
+
+fn run_git_inner<I, S>(
+    cwd: Option<&str>,
+    args: I,
+    timeout_secs: u64,
+    input: GitInput<'_>,
 ) -> Result<GitOutput>
 where
     I: IntoIterator<Item = S>,
@@ -218,6 +252,9 @@ where
         .map(|arg| arg.as_ref().to_os_string())
         .collect();
     let mut cmd = build_git_command(cwd, &args)?;
+    for (key, value) in input.env {
+        cmd.env(key, value);
+    }
     cmd.env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", "")
         .env("SSH_ASKPASS", "")
@@ -228,11 +265,26 @@ where
         // stdin is null, so an editor could only hang until the timeout; a
         // continued merge or rebase keeps the message git prepared.
         .env("GIT_EDITOR", "true")
-        .stdin(Stdio::null())
+        .stdin(if input.stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     let child = Arc::new(SharedChild::spawn(&mut cmd).map_err(|e| GitError::Spawn(e.to_string()))?);
+    if let Some(bytes) = input.stdin {
+        let mut pipe = child
+            .take_stdin()
+            .ok_or_else(|| GitError::Spawn("no stdin pipe".into()))?;
+        let owned = bytes.to_vec();
+        // Its own thread, so a child that stops reading cannot hold us past
+        // the timeout; dropping the pipe is the EOF.
+        thread::spawn(move || {
+            let _ = std::io::Write::write_all(&mut pipe, &owned);
+        });
+    }
     let mut stdout_pipe = child
         .take_stdout()
         .ok_or_else(|| GitError::Spawn("no stdout pipe".into()))?;

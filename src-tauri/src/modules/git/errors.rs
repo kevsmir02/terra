@@ -17,6 +17,9 @@ pub enum GitError {
     HostKeyUnverified,
     TimedOut(&'static str),
     EmptyCommitMessage,
+    /// The hunk the UI showed is no longer where it was, on either side.
+    StaleHunk,
+    Unsupported(&'static str),
     CommandFailed {
         context: &'static str,
         detail: String,
@@ -69,6 +72,11 @@ impl Display for GitError {
             ),
             GitError::TimedOut(op) => write!(f, "{op} timed out"),
             GitError::EmptyCommitMessage => write!(f, "commit message cannot be empty"),
+            GitError::StaleHunk => write!(
+                f,
+                "this change no longer matches the file; the diff has been refreshed, try again"
+            ),
+            GitError::Unsupported(what) => write!(f, "{what}"),
             GitError::CommandFailed { context, detail } => {
                 if detail.is_empty() {
                     write!(f, "{context}")
