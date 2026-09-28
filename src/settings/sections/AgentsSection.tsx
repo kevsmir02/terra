@@ -2,7 +2,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   BUILTIN_AGENT_COMMANDS,
   MAX_AGENT_COMMANDS,
-  parseAgentCommands,
+  addAgentCommands,
 } from "@/modules/settings/agentCommands";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -53,12 +53,11 @@ function AgentCommandsField() {
   const full = commands.length >= MAX_AGENT_COMMANDS;
 
   const add = () => {
-    const parsed = parseAgentCommands(`${commands.join(" ")} ${draft}`);
-    setRefused(parsed.refused);
-    setDraft(parsed.refused.join(" "));
-    if (parsed.accepted.join(" ") !== commands.join(" ")) {
-      void setAgentCommands(parsed.accepted);
-    }
+    const rejected: string[] = [];
+    const next = addAgentCommands(commands, draft.split(/[\s,]+/), rejected);
+    setRefused(rejected);
+    setDraft(rejected.join(" "));
+    if (next.length !== commands.length) void setAgentCommands(next);
   };
 
   const remove = (name: string) => {

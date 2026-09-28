@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  addAgentCommands,
   isAgentCommand,
   MAX_AGENT_COMMANDS,
   normalizeAgentCommands,
-  parseAgentCommands,
 } from "./agentCommands";
 
 describe("isAgentCommand", () => {
@@ -33,12 +33,13 @@ describe("isAgentCommand", () => {
   });
 });
 
-describe("parseAgentCommands", () => {
-  it("splits on commas and whitespace, dropping built-ins and repeats", () => {
-    expect(parseAgentCommands(" gemini, aider  claude\ngemini ")).toEqual({
-      accepted: ["gemini", "aider"],
-      refused: [],
-    });
+describe("addAgentCommands", () => {
+  it("skips built-ins and repeats without refusing them", () => {
+    const refused: string[] = [];
+    expect(
+      addAgentCommands(["gemini"], ["aider", "claude", "gemini", ""], refused),
+    ).toEqual(["gemini", "aider"]);
+    expect(refused).toEqual([]);
   });
 
   it("refuses invalid names and anything past the cap", () => {
@@ -46,15 +47,20 @@ describe("parseAgentCommands", () => {
       { length: MAX_AGENT_COMMANDS + 2 },
       (_, i) => `a${i}`,
     );
-    const { accepted, refused } = parseAgentCommands(
-      `${names.join(",")} ../evil`,
-    );
-    expect(accepted).toHaveLength(MAX_AGENT_COMMANDS);
+    const refused: string[] = [];
+    const out = addAgentCommands([], [...names, "../evil"], refused);
+    expect(out).toHaveLength(MAX_AGENT_COMMANDS);
     expect(refused).toEqual([
       `a${MAX_AGENT_COMMANDS}`,
       `a${MAX_AGENT_COMMANDS + 1}`,
       "../evil",
     ]);
+  });
+
+  it("never mutates the list it starts from", () => {
+    const start = ["gemini"];
+    addAgentCommands(start, ["aider"]);
+    expect(start).toEqual(["gemini"]);
   });
 });
 
@@ -62,6 +68,7 @@ describe("normalizeAgentCommands", () => {
   it("keeps only valid names from whatever the store held", () => {
     expect(normalizeAgentCommands(undefined)).toEqual([]);
     expect(normalizeAgentCommands("gemini")).toEqual([]);
+    expect(normalizeAgentCommands({ 0: "gemini" })).toEqual([]);
     expect(
       normalizeAgentCommands(["gemini", 3, "a b", "-x", "codex", "gemini"]),
     ).toEqual(["gemini"]);

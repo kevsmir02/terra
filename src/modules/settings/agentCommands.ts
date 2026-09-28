@@ -1,5 +1,5 @@
 // Mirrors `is_safe_agent_name` and the caps in `pty/agent_detect.rs`, which
-// re-validates on every pty_open: this copy only shapes what the UI accepts.
+// re-validates on every pty_open: this copy only shapes what the UI keeps.
 export const MAX_AGENT_COMMANDS = 16;
 const AGENT_COMMAND = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/;
 
@@ -9,35 +9,26 @@ export function isAgentCommand(name: string): boolean {
   return AGENT_COMMAND.test(name);
 }
 
-/** Split typed text on commas and whitespace into accepted and refused names.
- * Built-ins and repeats are dropped silently; past the cap names are refused. */
-export function parseAgentCommands(text: string): {
-  accepted: string[];
-  refused: string[];
-} {
-  const accepted: string[] = [];
-  const refused: string[] = [];
-  for (const token of text.split(/[\s,]+/)) {
-    if (!token) continue;
-    if (!isAgentCommand(token) || accepted.length === MAX_AGENT_COMMANDS) {
-      refused.push(token);
-      continue;
-    }
-    if (
-      (BUILTIN_AGENT_COMMANDS as readonly string[]).includes(token) ||
-      accepted.includes(token)
-    )
-      continue;
-    accepted.push(token);
+/** Folds names into a valid list: plain command names only, no built-ins or
+ * repeats, at most the cap. `refused` collects what did not fit. */
+export function addAgentCommands(
+  into: string[],
+  names: readonly unknown[],
+  refused?: string[],
+): string[] {
+  const out = [...into];
+  for (const v of names) {
+    if (typeof v !== "string" || !v) continue;
+    if ((BUILTIN_AGENT_COMMANDS as readonly string[]).includes(v)) continue;
+    if (out.includes(v)) continue;
+    if (!isAgentCommand(v) || out.length >= MAX_AGENT_COMMANDS)
+      refused?.push(v);
+    else out.push(v);
   }
-  return { accepted, refused };
+  return out;
 }
 
 /** What a stored value is worth: a valid list, whatever the store held. */
 export function normalizeAgentCommands(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  const names = value.filter(
-    (v): v is string => typeof v === "string" && isAgentCommand(v),
-  );
-  return parseAgentCommands(names.join(" ")).accepted;
+  return Array.isArray(value) ? addAgentCommands([], value) : [];
 }
