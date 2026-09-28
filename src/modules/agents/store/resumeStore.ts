@@ -27,6 +27,10 @@ export function offerResume(leafId: number, agent: ResumableAgent): void {
   useResumeStore.getState().offer(leafId, agent);
 }
 
+export function hasResumeOffer(leafId: number): boolean {
+  return leafId in useResumeStore.getState().offers;
+}
+
 /**
  * The agent to persist for a leaf on a decided close: the one running now, or
  * one still on offer from the previous launch, so ignoring the offer for a

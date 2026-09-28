@@ -14,6 +14,7 @@ import {
   AgentNotificationsBridge,
   AgentStatusCluster,
   acceptResume,
+  hasResumeOffer,
   nextAttentionTarget,
   persistedAgent,
 } from "@/modules/agents";
@@ -759,6 +760,9 @@ export default function App() {
           ? leafIds(activeTab.paneTree).length
           : null;
       if (shouldDisablePaneSwapShortcut(id, terminalPaneCount)) return true;
+      // With nothing to resume the chord falls through to the shell.
+      if (id === "agent.resume")
+        return activeLeafId === null || !hasResumeOffer(activeLeafId);
       if (
         id === "editor.undo" ||
         id === "editor.redo" ||
@@ -796,7 +800,7 @@ export default function App() {
       }
       return false;
     },
-    [activeTab],
+    [activeTab, activeLeafId],
   );
 
   useGlobalShortcuts(shortcutHandlers, { isDisabled: shortcutsDisabled });
