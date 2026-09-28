@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{agent, device, fs, git, lsp, pty, updater, workspace};
+use modules::{agent, app_store, device, fs, git, lsp, pty, updater, workspace};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -168,6 +168,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_autostart::Builder::new().build())
+        // Driven from Rust only: no capability grants its path-taking commands.
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
@@ -283,6 +284,11 @@ pub fn run() {
             open_preview_tab,
             agent::agent_enable_hooks,
             agent::agent_hooks_status,
+            app_store::app_store_entries,
+            app_store::app_store_get,
+            app_store::app_store_set,
+            app_store::app_store_delete,
+            app_store::app_store_save,
             device::commands::device_list,
             device::commands::device_list_avds,
             device::commands::device_launch_avd,

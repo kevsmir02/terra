@@ -66,7 +66,6 @@
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-os": "~2.3.2",
     "@tauri-apps/plugin-process": "~2.3.1",
-    "@tauri-apps/plugin-store": "~2.4.4",
     "@tauri-apps/plugin-window-state": "~2.4.1",
     "@uiw/codemirror-theme-atomone": "^4.25.11",
     "@uiw/codemirror-theme-aura": "^4.25.11",

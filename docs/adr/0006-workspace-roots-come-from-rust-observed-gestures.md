@@ -96,3 +96,11 @@ fully compromised webview, and this decision does not pretend otherwise.
 - The `/proc` match proves the path is a live process's cwd, not that the user
   typed the `cd`: a foreground program can `chdir` itself, print a fake OSC 133
   D and then an OSC 7 naming its own cwd, and the check passes.
+
+Update 2026-09-28: the store plugin is closed
+([0011](0011-the-webview-reaches-stores-by-name.md)). No capability grants
+`store:*` any more; the webview reaches the settings and spaces stores through
+`app_store_*` commands that take a store name, never a path, so script can no
+longer write JSON outside the app data dir. It can still rewrite the saved
+spaces the next launch restores: that store is the webview's to write by design,
+and the bullet above holds for it.
