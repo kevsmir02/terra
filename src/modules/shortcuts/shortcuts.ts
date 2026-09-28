@@ -49,6 +49,8 @@ export type ShortcutId =
   | "diff.prevChange"
   | "diff.nextFile"
   | "diff.prevFile"
+  | "diff.stageHunk"
+  | "diff.discardHunk"
   | "editor.undo"
   | "editor.redo"
   | "editor.codeComplete";
@@ -384,6 +386,20 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Previous changed file",
     group: "Git",
     defaultBindings: [{ ctrl: true, shift: true, key: "F7" }],
+  },
+  // Act on the change F7 selected: stage it on the unstaged side, unstage it
+  // on the staged side. Discard asks first.
+  {
+    id: "diff.stageHunk",
+    label: "Stage or unstage the selected change",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "s" }],
+  },
+  {
+    id: "diff.discardHunk",
+    label: "Discard the selected change",
+    group: "Git",
+    defaultBindings: [{ ctrl: true, alt: true, key: "d" }],
   },
   // Editor entries are display-only: CodeMirror's historyKeymap binds these
   // keys natively. We register them here so the shortcuts dialog can surface

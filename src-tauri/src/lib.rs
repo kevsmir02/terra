@@ -274,6 +274,7 @@ pub fn run() {
             git::commands::git_operation_abort,
             git::commands::git_operation_continue,
             git::commands::git_mark_resolved,
+            git::commands::git_apply_hunk,
             updater::updater_package_kind,
             updater::updater_download,
             updater::updater_install,

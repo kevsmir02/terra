@@ -59,7 +59,9 @@ import {
   useSourceControlContext,
 } from "@/modules/source-control";
 import {
+  canRunHunkShortcut,
   canStepDiffChunk,
+  runHunkShortcut,
   stepDiffChunk,
 } from "@/modules/editor/lib/diffNavigation";
 import {
@@ -772,6 +774,8 @@ export default function App() {
       "diff.prevChange": () => stepDiffChunk(-1),
       "diff.nextFile": () => stepFile(1),
       "diff.prevFile": () => stepFile(-1),
+      "diff.stageHunk": () => runHunkShortcut("stage"),
+      "diff.discardHunk": () => runHunkShortcut("discard"),
       "editor.undo": () => editorRefs.current.get(activeId)?.undo(),
       "editor.redo": () => editorRefs.current.get(activeId)?.redo(),
       "editor.codeComplete": () =>
@@ -819,6 +823,9 @@ export default function App() {
       }
       if (id === "diff.nextFile" || id === "diff.prevFile") {
         return !canStepFile;
+      }
+      if (id === "diff.stageHunk" || id === "diff.discardHunk") {
+        return !canRunHunkShortcut();
       }
       if (
         id === "editor.undo" ||
@@ -1100,6 +1107,8 @@ export default function App() {
             canStepFile,
             stepChange: stepDiffChunk,
             stepFile,
+            canRunHunk: canRunHunkShortcut(),
+            runHunk: (kind) => void runHunkShortcut(kind),
             closeActiveTabOrPane: handleCloseTabOrPane,
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),

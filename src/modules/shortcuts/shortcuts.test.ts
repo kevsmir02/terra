@@ -185,4 +185,20 @@ describe("diff review defaults", () => {
       "diff.nextFile",
     ]);
   });
+
+  it("give the hunk actions chords no other shortcut claims", () => {
+    for (const id of ["diff.stageHunk", "diff.discardHunk"] as const) {
+      const [binding] = byId(id).defaultBindings;
+      const e = event({
+        key: binding.key,
+        code: `Key${binding.key.toUpperCase()}`,
+        ctrlKey: !!binding.ctrl,
+        altKey: !!binding.alt,
+      });
+      const claims = SHORTCUTS.filter((s) =>
+        s.defaultBindings.some((b) => matchBinding(e, b, s.id)),
+      ).map((s) => s.id);
+      expect(claims).toEqual([id]);
+    }
+  });
 });

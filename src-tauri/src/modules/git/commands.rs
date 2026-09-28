@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
 use crate::modules::blocking::on_registry as blocking;
+use crate::modules::git::hunk::{self, HunkRequest};
 use crate::modules::git::operations;
 use crate::modules::git::review::OperationStep;
 use crate::modules::git::types::{
@@ -349,6 +350,18 @@ pub async fn git_mark_resolved(
 ) -> Result<(), String> {
     blocking(app, move |r| {
         operations::mark_resolved(r, &repo_root, &path).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_apply_hunk(
+    repo_root: String,
+    hunk: HunkRequest,
+    app: AppHandle,
+) -> Result<(), String> {
+    blocking(app, move |r| {
+        hunk::apply_hunk(r, &repo_root, &hunk).map_err(Into::into)
     })
     .await
 }

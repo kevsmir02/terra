@@ -47,6 +47,8 @@ export type CommandPaletteActionContext = {
   canStepFile: boolean;
   stepChange: (dir: 1 | -1) => void;
   stepFile: (dir: 1 | -1) => void;
+  canRunHunk: boolean;
+  runHunk: (kind: "stage" | "discard") => void;
   closeActiveTabOrPane: () => void;
   splitPaneRight: () => void;
   splitPaneDown: () => void;
@@ -262,6 +264,21 @@ export function createCommandItems(
         run: () => (file ? ctx.stepFile : ctx.stepChange)(dir),
       };
     }),
+    ...(
+      [
+        ["diff.stageHunk", "Stage or unstage the selected change", "stage"],
+        ["diff.discardHunk", "Discard the selected change", "discard"],
+      ] as const
+    ).map(([id, title, kind]) => ({
+      id,
+      title,
+      group: "Git",
+      keywords: ["git", "diff", "hunk", "change", kind, "partial"],
+      icon: SourceCodeIcon,
+      shortcutId: id,
+      disabledReason: ctx.canRunHunk ? undefined : "No working diff open",
+      run: () => ctx.runHunk(kind),
+    })),
     {
       id: "search.content",
       title: "Find content in files",

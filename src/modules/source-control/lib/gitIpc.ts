@@ -111,4 +111,17 @@ export const gitIpc = {
       repoRoot,
       name,
     }),
+  /** The backend re-reads both sides and refuses a hunk that has moved. */
+  gitApplyHunk: (
+    repoRoot: string,
+    hunk: {
+      path: string;
+      originalPath: string | null;
+      action: "stage" | "unstage" | "discard";
+      oldFrom: number;
+      oldLines: string[];
+      newFrom: number;
+      newLines: string[];
+    },
+  ) => invoke<void>("git_apply_hunk", { repoRoot, hunk }),
 };
