@@ -201,6 +201,7 @@ pub fn run() {
         .manage(lsp::LspState::default())
         .manage(device::DeviceState::default())
         .manage(fs::grep::ContentSearchState::default())
+        .manage(git::checkpoint::CheckpointState::default())
         .manage({
             let registry = workspace::WorkspaceRegistry::default();
             workspace::bootstrap_registry(&registry);
@@ -275,6 +276,10 @@ pub fn run() {
             git::commands::git_operation_continue,
             git::commands::git_mark_resolved,
             git::commands::git_apply_hunk,
+            git::commands::git_checkpoint_create,
+            git::commands::git_checkpoint_changes,
+            git::commands::git_checkpoint_file_diff,
+            git::commands::git_checkpoint_revert,
             updater::updater_package_kind,
             updater::updater_download,
             updater::updater_install,
@@ -315,6 +320,10 @@ pub fn run() {
                     // Only tears down emulators Terra started; ones the
                     // user launched elsewhere are left running.
                     state.kill_launched_avds();
+                }
+                // Checkpoints are session-scoped (docs/adr/0012).
+                if let Some(state) = app.try_state::<git::checkpoint::CheckpointState>() {
+                    state.drop_all();
                 }
             }
         });

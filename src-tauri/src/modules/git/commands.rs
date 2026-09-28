@@ -1,8 +1,12 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
-use crate::modules::blocking::on_registry as blocking;
+use crate::modules::blocking::{on_app, on_registry as blocking};
+use crate::modules::git::checkpoint::{
+    self, CheckpointOutcome, CheckpointState, RevertOutcome, TurnChanges,
+};
 use crate::modules::git::hunk::{self, HunkRequest};
 use crate::modules::git::operations;
+use crate::modules::workspace::WorkspaceRegistry;
 use crate::modules::git::review::OperationStep;
 use crate::modules::git::types::{
     DiscardEntry, GitBranchListResult, GitCommitFileChange, GitCommitResult,
@@ -362,6 +366,77 @@ pub async fn git_apply_hunk(
 ) -> Result<(), String> {
     blocking(app, move |r| {
         hunk::apply_hunk(r, &repo_root, &hunk).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_checkpoint_create(
+    cwd: String,
+    pane: u32,
+    app: AppHandle,
+) -> Result<CheckpointOutcome, String> {
+    on_app(app, move |app| {
+        let state = app.state::<CheckpointState>();
+        let outcome = checkpoint::create(
+            &app.state::<WorkspaceRegistry>(),
+            &cwd,
+            state.session(),
+            pane,
+            checkpoint::now_ms(),
+            checkpoint::DEFAULT_LIMITS,
+        )?;
+        if let CheckpointOutcome::Ready { repo_root, .. } = &outcome {
+            state.remember(repo_root);
+        }
+        Ok(outcome)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_checkpoint_changes(
+    repo_root: String,
+    id: String,
+    app: AppHandle,
+) -> Result<TurnChanges, String> {
+    blocking(app, move |r| {
+        checkpoint::changes(r, &repo_root, &id, checkpoint::DEFAULT_LIMITS).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_checkpoint_file_diff(
+    repo_root: String,
+    id: String,
+    path: String,
+    app: AppHandle,
+) -> Result<GitDiffContentResult, String> {
+    blocking(app, move |r| {
+        checkpoint::file_diff(r, &repo_root, &id, &path).map_err(Into::into)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_checkpoint_revert(
+    repo_root: String,
+    id: String,
+    paths: Vec<String>,
+    restore_index: bool,
+    app: AppHandle,
+) -> Result<RevertOutcome, String> {
+    blocking(app, move |r| {
+        checkpoint::revert(
+            r,
+            &repo_root,
+            &id,
+            &paths,
+            restore_index,
+            checkpoint::DEFAULT_LIMITS,
+        )
+        .map_err(Into::into)
     })
     .await
 }
