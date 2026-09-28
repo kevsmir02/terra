@@ -46,3 +46,14 @@ describe("mermaid stays behind the fence check", () => {
     expect([...hits.keys()]).toEqual([]);
   });
 });
+
+// Desktop alerts are live state of the agents module: the notification
+// plugin's client loads with the first one, never at startup.
+describe("agent alerts load on demand", () => {
+  it("main window does not statically import the notification plugin", () => {
+    const { hits } = traceEager("src/main.tsx", [
+      "@tauri-apps/plugin-notification",
+    ]);
+    expect([...hits.keys()]).toEqual([]);
+  });
+});
