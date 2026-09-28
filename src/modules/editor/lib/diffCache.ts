@@ -1,4 +1,5 @@
-import { type GitDiffContentResult, native } from "@/lib/native";
+import type { GitDiffContentResult } from "@/lib/native";
+import { gitIpc } from "@/modules/source-control/lib/gitIpc";
 
 const DIFF_CACHE_LIMIT = 6;
 const inflight = new Map<string, Promise<GitDiffContentResult>>();
@@ -119,7 +120,7 @@ export function fetchWorkingDiff(
     repoRoot,
     workingDiffKey(repoRoot, path, mode),
     force,
-    () => native.gitDiffContent(repoRoot, path, mode === "+", originalPath),
+    () => gitIpc.gitDiffContent(repoRoot, path, mode === "+", originalPath),
   );
 }
 
@@ -130,7 +131,7 @@ export function fetchCommitDiff(
   originalPath: string | null,
 ): Promise<GitDiffContentResult> {
   return cachedFetch(repoRoot, commitDiffKey(repoRoot, sha, path), false, () =>
-    native.gitCommitFileDiff(repoRoot, sha, path, originalPath),
+    gitIpc.gitCommitFileDiff(repoRoot, sha, path, originalPath),
   );
 }
 

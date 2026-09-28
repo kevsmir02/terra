@@ -7,11 +7,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  native,
-  type GitCommitFileChange,
-  type GitLogEntry,
-} from "@/lib/native";
+import type { GitCommitFileChange, GitLogEntry } from "@/lib/native";
+import { gitIpc } from "@/modules/source-control/lib/gitIpc";
 import {
   FileIconView,
   useIconProvider,
@@ -323,7 +320,7 @@ export function GitHistoryPane({
     setError(null);
     setEndReached(false);
     try {
-      const entries = await native.gitLog(repoRoot, { limit: PAGE_SIZE });
+      const entries = await gitIpc.gitLog(repoRoot, { limit: PAGE_SIZE });
       if (requestId !== requestIdRef.current) return;
       setCommits(entries);
       setLoadStatus("idle");
@@ -343,7 +340,7 @@ export function GitHistoryPane({
     inflightMoreRef.current = true;
     setLoadStatus("more");
     try {
-      const entries = await native.gitLog(repoRoot, {
+      const entries = await gitIpc.gitLog(repoRoot, {
         limit: PAGE_SIZE,
         skip: commits.length,
         anchorSha: head.sha,
@@ -375,7 +372,7 @@ export function GitHistoryPane({
 
   useEffect(() => {
     let cancelled = false;
-    native
+    gitIpc
       .gitRemoteUrl(repoRoot)
       .then((url) => {
         if (cancelled) return;
@@ -436,7 +433,7 @@ export function GitHistoryPane({
       cache.set(sha, { state: "loading" });
       bumpFiles();
       try {
-        const files = await native.gitCommitFiles(repoRoot, sha);
+        const files = await gitIpc.gitCommitFiles(repoRoot, sha);
         cache.set(sha, { state: "loaded", files });
         while (cache.size > FILES_CACHE_LIMIT) {
           const oldest = cache.keys().next().value;

@@ -1,10 +1,10 @@
-import {
-  native,
-  type GitChangedFile,
-  type GitDiscardEntry,
-  type GitRepoInfo,
-  type GitStatusSnapshot,
+import type {
+  GitChangedFile,
+  GitDiscardEntry,
+  GitRepoInfo,
+  GitStatusSnapshot,
 } from "@/lib/native";
+import { gitIpc } from "./lib/gitIpc";
 import {
   invalidateDiff,
   invalidateRepoDiffs,
@@ -597,7 +597,7 @@ export function useSourceControlPanel(
       await runMutation(
         `stage:${entry.path}`,
         (s) => optimisticStage(s, paths),
-        () => native.gitStage(repo.repoRoot, [entry.path]),
+        () => gitIpc.gitStage(repo.repoRoot, [entry.path]),
         [entry.path],
       );
     },
@@ -611,7 +611,7 @@ export function useSourceControlPanel(
       await runMutation(
         `unstage:${entry.path}`,
         (s) => optimisticUnstage(s, paths),
-        () => native.gitUnstage(repo.repoRoot, [entry.path]),
+        () => gitIpc.gitUnstage(repo.repoRoot, [entry.path]),
         [entry.path],
       );
     },
@@ -652,7 +652,7 @@ export function useSourceControlPanel(
         ? `discard:${list[0].path}`
         : "discard:all",
       (s) => optimisticDiscard(s, paths),
-      () => native.gitDiscard(repo.repoRoot, entries),
+      () => gitIpc.gitDiscard(repo.repoRoot, entries),
       [...paths],
     );
   }, [pendingDiscard, repo, runMutation]);
@@ -663,7 +663,7 @@ export function useSourceControlPanel(
     await runMutation(
       "stage:all",
       (s) => optimisticStage(s, paths),
-      () => native.gitStage(repo.repoRoot, [...paths]),
+      () => gitIpc.gitStage(repo.repoRoot, [...paths]),
       [...paths],
     );
   }, [repo, runMutation, unstagedEntries]);
@@ -674,7 +674,7 @@ export function useSourceControlPanel(
     await runMutation(
       "unstage:all",
       (s) => optimisticUnstage(s, paths),
-      () => native.gitUnstage(repo.repoRoot, [...paths]),
+      () => gitIpc.gitUnstage(repo.repoRoot, [...paths]),
       [...paths],
     );
   }, [repo, runMutation, stagedEntries]);
@@ -726,14 +726,14 @@ export function useSourceControlPanel(
         await runMutation(
           `unstage:${entry.path}`,
           (s) => optimisticUnstage(s, paths),
-          () => native.gitUnstage(repo.repoRoot, [entry.path]),
+          () => gitIpc.gitUnstage(repo.repoRoot, [entry.path]),
           [entry.path],
         );
       } else {
         await runMutation(
           `stage:${entry.path}`,
           (s) => optimisticStage(s, paths),
-          () => native.gitStage(repo.repoRoot, [entry.path]),
+          () => gitIpc.gitStage(repo.repoRoot, [entry.path]),
           [entry.path],
         );
       }
@@ -778,8 +778,8 @@ export function useSourceControlPanel(
     setActionError(null);
     try {
       const result = amend
-        ? await native.gitCommitAmend(repo.repoRoot, commitMessage)
-        : await native.gitCommit(repo.repoRoot, commitMessage);
+        ? await gitIpc.gitCommitAmend(repo.repoRoot, commitMessage)
+        : await gitIpc.gitCommit(repo.repoRoot, commitMessage);
       setCommitMessage("");
       setAmend(false);
       setActionMessage(
@@ -819,7 +819,7 @@ export function useSourceControlPanel(
     if (!repo) return;
     const root = repo.repoRoot;
     await runTreeAction("stash", async () =>
-      (await native.gitStashPush(root, ""))
+      (await gitIpc.gitStashPush(root, ""))
         ? "Stashed the working tree"
         : "Nothing to stash",
     );
@@ -829,7 +829,7 @@ export function useSourceControlPanel(
     if (!repo) return;
     const root = repo.repoRoot;
     await runTreeAction("stash", async () => {
-      await native.gitStashPop(root);
+      await gitIpc.gitStashPop(root);
       return "Applied the latest stash";
     });
   }, [repo, runTreeAction]);
@@ -839,7 +839,7 @@ export function useSourceControlPanel(
       if (!repo) return false;
       const root = repo.repoRoot;
       return runTreeAction("branch", async () => {
-        await native.gitCreateBranch(root, name);
+        await gitIpc.gitCreateBranch(root, name);
         return `Switched to new branch ${name}`;
       });
     },

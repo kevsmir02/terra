@@ -1,6 +1,6 @@
+import { invalidateRepoDiffs } from "@/modules/editor/lib/diffCache";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
-import { invalidateRepoDiffs } from "@/modules/editor/lib/diffCache";
 
 /** An agent handing the turn back is when its edits are worth re-reading. */
 export function isReviewSignal(kind: unknown): boolean {

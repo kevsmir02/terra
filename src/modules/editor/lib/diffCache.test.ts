@@ -4,8 +4,8 @@ import type { GitDiffContentResult } from "@/lib/native";
 const gitDiffContent =
   vi.fn<(...args: unknown[]) => Promise<GitDiffContentResult>>();
 
-vi.mock("@/lib/native", () => ({
-  native: {
+vi.mock("@/modules/source-control/lib/gitIpc", () => ({
+  gitIpc: {
     gitDiffContent: (...args: unknown[]) => gitDiffContent(...args),
     gitCommitFileDiff: vi.fn(),
   },

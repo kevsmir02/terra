@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { GitRepoOperation } from "@/lib/native";
+import { invoke } from "@tauri-apps/api/core";
 
 const LABELS: Record<GitRepoOperation, string> = {
   merge: "Merge",

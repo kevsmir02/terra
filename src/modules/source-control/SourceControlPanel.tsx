@@ -36,7 +36,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { type GitBranchEntry, type GitStashEntry, native } from "@/lib/native";
+import type { GitBranchEntry, GitStashEntry } from "@/lib/native";
+import { gitIpc } from "./lib/gitIpc";
 import {
   copyToClipboard,
   revealInFinder,
@@ -194,7 +195,7 @@ function BranchDropdown({
     setLoading(true);
     setError(null);
     try {
-      const result = await native.gitListBranches(repoRoot);
+      const result = await gitIpc.gitListBranches(repoRoot);
       if (id !== requestRef.current) return;
       setBranches(result.branches);
     } catch (e) {
@@ -220,7 +221,7 @@ function BranchDropdown({
       checkoutInFlight.current = true;
       setCheckingOut(true);
       try {
-        await native.gitCheckoutBranch(repoRoot, branch);
+        await gitIpc.gitCheckoutBranch(repoRoot, branch);
         setBranches([]);
         setOpen(false);
         onRefresh();
@@ -390,7 +391,7 @@ function StashDropdown({
     if (!open || !repoRoot) return;
     let alive = true;
     setStashes(null);
-    native
+    gitIpc
       .gitStashList(repoRoot)
       .then((list) => {
         if (alive) setStashes(list);
