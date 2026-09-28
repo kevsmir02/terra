@@ -1,4 +1,4 @@
-# 0012. Turn checkpoints are session-scoped refs under refs/terra
+# 0008. Turn checkpoints are session-scoped refs under refs/terra
 
 Status: accepted.
 

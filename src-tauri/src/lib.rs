@@ -332,7 +332,7 @@ pub fn run() {
                     // user launched elsewhere are left running.
                     state.kill_launched_avds();
                 }
-                // Checkpoints are session-scoped (docs/adr/0012).
+                // Checkpoints are session-scoped (docs/adr/0008).
                 if let Some(state) = app.try_state::<git::checkpoint::CheckpointState>() {
                     state.drop_all();
                 }

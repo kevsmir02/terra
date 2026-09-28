@@ -1,4 +1,4 @@
-# 0011. The webview reaches stores by name, never by path
+# 0007. The webview reaches stores by name, never by path
 
 Status: accepted.
 

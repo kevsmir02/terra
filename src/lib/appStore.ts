@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 /** The stores the backend exposes, by name. The webview never names a path:
- * the store plugin's own commands are withheld (ADR 0011). */
+ * the store plugin's own commands are withheld (ADR 0007). */
 export type AppStoreName = "settings" | "spaces";
 
 const FILE_NAME: Record<AppStoreName, string> = {

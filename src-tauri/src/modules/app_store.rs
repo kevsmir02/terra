@@ -11,7 +11,7 @@ use crate::modules::blocking::on_app;
 /// The only stores the webview can reach, named rather than pathed. The store
 /// plugin's own `load` joins any path onto the app data dir and accepts an
 /// absolute one, so granting it would let script write JSON anywhere the user
-/// can (ADR 0011). Its commands are withheld from every capability and these
+/// can (ADR 0007). Its commands are withheld from every capability and these
 /// wrap the Rust API instead.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

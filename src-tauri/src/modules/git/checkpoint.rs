@@ -2,7 +2,7 @@
 //! starts a turn, so the turn's changes can be listed, diffed and reverted.
 //! Snapshots go through a private index and land under `refs/terra/`, so the
 //! user's index, HEAD, stash and worktree are never touched to take one.
-//! Retention and cost are recorded in docs/adr/0012.
+//! Retention and cost are recorded in docs/adr/0008.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
